@@ -6,6 +6,7 @@ local_config.py, which is git-ignored so `git pull` never overwrites them.
 Copy local_config.example.py to local_config.py and edit that.
 """
 import fcntl
+import json
 import os
 import re
 import sys
@@ -38,9 +39,11 @@ AVERAGE_ABOVE = 2     # "auto" averages when width or height > this many times t
 # (the menu's "k" option does this for you).
 WIRING_CONFIRMED = False
 
-# Web control service (server.py)
-WEB_PORT = 8080
-STARTUP_IMAGE = None  # e.g. "knight_4fps.png" to play when the service starts
+# Images saved from Glow Grid carry the simulator's brightness and gamma, and
+# play.py uses them for that image. BRIGHTNESS/GAMMA above are the defaults for
+# images without them (Piskel, GIFs, photos).
+USE_IMAGE_LIGHT = True
+MAX_BRIGHTNESS = 0.4  # safety cap on any image's brightness; 0.4 = ~6 A for full white
 
 try:
     from local_config import *  # noqa: F401,F403
@@ -72,8 +75,8 @@ def acquire_panel():
     except BlockingIOError:
         handle.close()
         raise PanelBusy(
-            "The panel is in use by another glow-grid program (usually the web service). "
-            "Stop playback from the web page, or run: sudo systemctl stop glow-grid-web"
+            "The panel is already in use by another glow-grid program (the menu, or\n"
+            "play.py in another terminal). Stop that one first (Ctrl+C, or q in the menu)."
         )
     _lock_handle = handle
 
@@ -85,14 +88,11 @@ def release_panel():
         _lock_handle = None
 
 
-def get_strip(exit_if_busy=True):
-    """Open the panel. Scripts exit with a clear message if another program
-    holds it; the web service passes exit_if_busy=False and handles PanelBusy."""
+def get_strip():
+    """Open the panel. Exits with a clear message if another program holds it."""
     try:
         acquire_panel()
     except PanelBusy as e:
-        if not exit_if_busy:
-            raise
         print(e)
         sys.exit(1)
     strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=LED_COUNT).get_strip()
@@ -118,10 +118,14 @@ def xy_to_index(x, y):
 _LUT = []
 
 
-def set_brightness(value):
-    """Change brightness at runtime (rebuilds the lookup table)."""
-    global BRIGHTNESS
-    BRIGHTNESS = max(0.01, min(1.0, float(value)))
+def set_light(brightness=None, gamma=None):
+    """Set brightness/gamma (None keeps the current value) and rebuild the
+    lookup table. Brightness is capped at MAX_BRIGHTNESS."""
+    global BRIGHTNESS, GAMMA
+    if brightness is not None:
+        BRIGHTNESS = max(0.01, min(float(MAX_BRIGHTNESS), float(brightness)))
+    if gamma is not None:
+        GAMMA = max(1.0, min(3.0, float(gamma)))
     table = []
     for c in range(256):
         v = round(255 * BRIGHTNESS * (c / 255) ** GAMMA)
@@ -129,7 +133,7 @@ def set_brightness(value):
     _LUT[:] = table
 
 
-set_brightness(BRIGHTNESS)
+set_light(BRIGHTNESS, GAMMA)
 
 
 def correct(r, g, b):
@@ -207,6 +211,24 @@ def load_frames(path, fps=None):
     if fps or not delays:
         delays = [1 / (fps or DEFAULT_FPS)] * len(frames)
     return frames, delays
+
+
+LIGHT_KEY = "glow-grid"  # PNG text chunk written by the Glow Grid simulator
+
+
+def image_light(path):
+    """Return {"brightness": b, "gamma": g} saved in a Glow Grid PNG, or {}."""
+    try:
+        with Image.open(path) as img:
+            raw = getattr(img, "text", {}).get(LIGHT_KEY) or img.info.get(LIGHT_KEY)
+        data = json.loads(raw) if raw else {}
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for key in ("brightness", "gamma"):
+        if isinstance(data.get(key), (int, float)):
+            out[key] = float(data[key])
+    return out
 
 
 def draw(strip, img):

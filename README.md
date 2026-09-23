@@ -7,9 +7,11 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 ## The workflow
 
 1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below), or in [Piskel](#piskel).
-2. **Simulate**: switch to *LED sim* to see what survives the Pi's brightness cap and gamma curve. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
-3. **Export** a still PNG or an animation sprite sheet (frames side by side, frame rate in the filename, e.g. `knight_4fps.png`).
-4. **Copy** it to the Pi's `images/` folder and pick it from the `glow-grid` menu, or skip the copy: with [web control](#web-control-run-from-your-phone-or-pc) running, press *Send to panel*.
+2. **Simulate and adjust**: switch to *LED sim* to see what survives on real LEDs, and tune *Brightness* and *Gamma* until it looks right. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
+3. **Export** a still PNG or an animation sprite sheet (frames side by side, frame rate in the filename, e.g. `knight_4fps.png`). The PNG remembers the brightness and gamma you picked.
+4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight_4fps.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
+
+The simulator never talks to the panel. It's a preview tool; the Pi's Python program is what lights the LEDs.
 
 ## The simulator
 
@@ -22,7 +24,21 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 
 Your drawings are saved in that browser's local storage, so re-import a sprite sheet to move work between browsers.
 
-The LED model matches `grid_common.py` exactly: `round(255 * BRIGHTNESS * (c/255) ** GAMMA)`, with any non-zero channel kept at 1 or above. Keep the simulator's brightness and gamma in sync with `local_config.py`.
+The LED model matches `grid_common.py` exactly: `round(255 * BRIGHTNESS * (c/255) ** GAMMA)`, with any non-zero channel kept at 1 or above.
+
+### Light settings travel with the image
+
+When you save a PNG, Glow Grid writes its current *Brightness* and *Gamma* into the file (a PNG text chunk named `glow-grid`; the pixels are unchanged). On the Pi, `play.py` reads them and uses them for that image, and prints what it used:
+
+```
+knight_4fps.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
+```
+
+- Images without them (Piskel exports, GIFs, photos, older Glow Grid saves) use `BRIGHTNESS` and `GAMMA` from `local_config.py`.
+- `MAX_BRIGHTNESS` in `local_config.py` (default 0.4) caps every image, so a design saved at 0.9 can't overload a 6A supply. The Pi says when it capped one. Raise it only with a bigger supply.
+- `USE_IMAGE_LIGHT = False` ignores the saved settings and always uses `local_config.py`.
+- Importing a Glow Grid PNG back into the simulator restores its brightness and gamma too.
+- Editing the PNG in another app may drop the settings; it then falls back to `local_config.py`.
 
 ## Hardware
 
@@ -131,48 +147,13 @@ python3 play.py images/photo.jpg     # photos are averaged automatically
 
 A still stays up until you press Ctrl+C; an animation loops. Either way the panel is cleared on exit.
 
-## Web control (run from your phone or PC)
-
-`server.py` turns the Pi into a small web server: it hosts the Glow Grid simulator and adds a **Panel on this Pi** card, so you can design on your PC or phone and press **Send to panel**.
-
-```bash
-cd ~/glow-grid
-git pull
-./run.sh                          # once, if you haven't: creates the venv (then q to quit)
-sudo bash install-service.sh      # installs and starts the glow-grid-web service
-```
-
-Then open **http://raspberrypi.local:8080** in a browser on the same network. The service starts at every boot.
-
-On that page:
-
-- **Send to panel** plays whatever is on the canvas (a still, or all frames as an animation) without saving it.
-- **Save to Pi & play** also keeps it in `images/`, so it shows up in the menu.
-- The image list plays anything already in `images/`. **Stop** clears the panel.
-- The brightness slider changes the panel live. It isn't saved; set `BRIGHTNESS` in `local_config.py` for the default.
-
-Settings in `local_config.py`: `WEB_PORT` (default 8080) and `STARTUP_IMAGE` (a file in `images/` to play at boot). Restart the service after changing them: `sudo systemctl restart glow-grid-web`.
-
-**Sharing the panel with the menu.** Only one program can drive the panel at a time. While the web service is playing something, anything you pick in the `glow-grid` menu (and `play.py`, `probe.py`, `off.py` run by hand) stops straight away with a message saying so. Press **Stop** on the web page first (the service lets go of the panel), or stop the service entirely:
-
-```bash
-sudo systemctl stop glow-grid-web      # until next boot
-sudo systemctl disable glow-grid-web   # don't start at boot
-journalctl -u glow-grid-web -f         # logs
-sudo bash install-service.sh --remove  # uninstall
-```
-
-**Security:** there is no login. Anyone on your network can change the lights or upload images (5 MB max, image types only). Don't forward port 8080 on your router.
-
 ## Architecture
 
-- **`grid_common.py`**: panel config and defaults, `get_strip()`, `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, named sprite sheet or animated GIF → frames + delays), and `draw()`.
-- **`play.py`**: plays one file. A still is held until stopped; an animation loops.
+- **`grid_common.py`**: panel config and defaults, `get_strip()` (also takes a lock so only one glow-grid program drives the panel at a time), `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `set_light()` / `image_light()` (per-image brightness and gamma, capped by `MAX_BRIGHTNESS`), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, named sprite sheet or animated GIF → frames + delays), and `draw()`.
+- **`play.py`**: plays one file with its saved light settings. A still is held until stopped; an animation loops.
 - **`probe.py`**: wiring diagnostics (markers / walk / check).
 - **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` / `probe.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
 - **`off.py`**: clears the panel.
-- **`server.py`**: the web control service. Serves `web/` and a JSON API (`/api/status`, `/api/play`, `/api/show`, `/api/stop`, `/api/brightness`); standard library only. `install-service.sh` writes the systemd unit `glow-grid-web`.
-- **Panel lock**: `get_strip()` takes a file lock (`/tmp/glow-grid-panel.lock`), so two programs never write to the panel at once.
 - **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/`.
 - **`web/`**: the simulator (static site / installable app).
 

@@ -15,9 +15,17 @@ SERPENTINE = True
 FLIP_X = False
 FLIP_Y = False
 
-# Keep these the same as the LED settings in the Glow Grid simulator
+# Default light for images that don't carry their own. PNGs saved from the
+# Glow Grid simulator include its brightness/gamma, and play.py uses those.
 BRIGHTNESS = 0.3
 GAMMA = 2.2
+
+# Set False to ignore the settings saved in Glow Grid images.
+USE_IMAGE_LIGHT = True
+
+# Safety cap on brightness from any source. With a 5V 6A supply, 0.4 keeps
+# even a full-white frame near 6 A. Raise it only with a bigger supply.
+MAX_BRIGHTNESS = 0.4
 
 # How images are shrunk: "auto" (average photos, keep pixel art sharp),
 # "nearest", or "average"
@@ -27,7 +35,3 @@ RESIZE = "auto"
 # top-left, red along the top, green down the left and a blue diagonal.
 # The menu's "k" option sets this for you.
 WIRING_CONFIRMED = False
-
-# Web control service (server.py / glow-grid-web)
-# WEB_PORT = 8080
-# STARTUP_IMAGE = "knight_4fps.png"   # play this file from images/ at boot
