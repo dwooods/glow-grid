@@ -296,12 +296,20 @@
         <div class="form-row">
           <label class="grow">Name <input id="nameInput" type="text" value="smiley" spellcheck="false"></label>
           <label class="grow">Pi login <input id="piInput" type="text" value="user@raspberrypi.local" spellcheck="false"></label>
+          <label>Scale
+            <select id="scaleInput">
+              <option value="1">1× for the Pi</option>
+              <option value="8">8× to view</option>
+              <option value="16">16× to view</option>
+              <option value="32">32× to view</option>
+            </select>
+          </label>
         </div>
         <div class="btn-row">
           <button id="exportPngBtn" class="btn" type="button">Save this frame</button>
           <button id="exportSheetBtn" class="btn btn-quiet" type="button">Save animation (sprite sheet)</button>
         </div>
-        <p class="hint">Saved PNGs include this brightness and gamma. Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
+        <p class="hint">Use 1× for the Pi: one pixel per LED. Larger scales make sharp, blocky copies for viewing and sharing, named <code>_x16</code> etc.; don't copy a scaled animation to the Pi, it would play as one squashed still. Saved PNGs include this brightness and gamma. Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
         <code class="cmd" id="cmdOut"></code>
         <button id="copyCmdBtn" class="btn btn-quiet" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
@@ -758,6 +766,16 @@
   const safeName = () => (state.name || '').trim().replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'sprite';
   const frameFile = () => `${safeName()}.png`;
   const sheetFile = () => `${safeName()}_${state.fps}fps.png`;
+  const exportScale = () => Number($('scaleInput').value) || 1;
+  const scaledName = (file) => exportScale() > 1 ? file.replace(/\.png$/, `_x${exportScale()}.png`) : file;
+  // Enlarge each pixel into a sharp block (no smoothing) for viewing/sharing
+  function scaled(canvas) {
+    const k = exportScale(); if (k === 1) return canvas;
+    const c = document.createElement('canvas'); c.width = canvas.width * k; c.height = canvas.height * k;
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+    x.drawImage(canvas, 0, 0, c.width, c.height);
+    return c;
+  }
   function updateCmd() {
     const anim = state.frames.length > 1;
     const f = anim ? sheetFile() : frameFile();
@@ -794,13 +812,13 @@
   $('exportPngBtn').addEventListener('click', () => {
     const c = document.createElement('canvas'); c.width = state.cols; c.height = state.rows;
     paintCanvas(c.getContext('2d'), state.frames[state.currentFrame], 0);
-    saveCanvas(c, frameFile());
+    saveCanvas(scaled(c), scaledName(frameFile()));
   });
   $('exportSheetBtn').addEventListener('click', () => {
     const c = document.createElement('canvas'); c.width = state.cols * state.frames.length; c.height = state.rows;
     const ctx = c.getContext('2d');
     state.frames.forEach((f, i) => paintCanvas(ctx, f, i * state.cols));
-    saveCanvas(c, sheetFile());
+    saveCanvas(scaled(c), scaledName(sheetFile()));
   });
   $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
   $('piInput').addEventListener('input', (e) => { sim.pi = e.target.value; updateCmd(); saveSim(); });
