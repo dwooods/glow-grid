@@ -250,13 +250,14 @@
         <div class="form-row">
           <label class="grow">Mode
             <select id="importMode">
+              <option value="auto">Auto: same as the Pi</option>
               <option value="pixel">Pixel art: exact pixels</option>
               <option value="photo">Photo: average each cell</option>
             </select>
           </label>
           <label class="file-btn">Choose image<input id="imageInput" type="file" accept="image/*" hidden></label>
         </div>
-        <p class="hint">Fit without stretching, transparency becomes black, same as <code>fit()</code> on the Pi. A sprite sheet exported from here (frames side by side) loads back as separate frames.</p>
+        <p class="hint">Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet whose name has <code>_8fps</code> or <code>_sheet</code> loads back as separate frames.</p>
       </section>
 
       <section class="card">
@@ -275,16 +276,16 @@
           <h3>Works well</h3>
           <ul>
             <li><strong>Pixel art at or near grid size</strong> (drawn here, in Piskel, or the examples) comes out pixel-perfect.</li>
-            <li><strong>Animations:</strong> a sprite sheet (frames side by side, as tall as the grid) or an animated GIF. Put the speed in the name: <code>walk_8fps.png</code>.</li>
+            <li><strong>Photos and large images:</strong> anything more than 2× the grid is averaged per cell, so photos come out smooth instead of noisy.</li>
+            <li><strong>Animations:</strong> an animated GIF, or a sprite sheet (frames side by side, as tall as the grid) named with the speed, <code>walk_8fps.png</code>, or <code>_sheet</code>.</li>
             <li><strong>Transparency</strong> becomes "off" LEDs.</li>
             <li><strong>Non-square images</strong> are centered and fitted without stretching.</li>
           </ul>
           <h3>Watch out for</h3>
           <ol>
-            <li><strong>Photos and large images:</strong> the Pi shrinks by picking single pixels, which keeps pixel art sharp but makes photos noisy. Import them here with mode <em>Photo</em> (averages each cell), check <em>LED sim</em>, then save the grid-size PNG.</li>
-            <li><strong>File types:</strong> the Pi menu lists only <code>.png</code> and <code>.gif</code>. <code>play.py</code> opens JPG/WEBP directly, but they won't show in the menu. Saving from here always gives a PNG.</li>
-            <li><strong>Wide strips:</strong> an image exactly as tall as the grid and a whole multiple wide (32, 48… px for 16×16) plays as an animation, one frame per grid width.</li>
-            <li><strong>Wiring:</strong> until the probe settings are in <code>local_config.py</code> on the Pi, every image looks scrambled on the real panel.</li>
+            <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
+            <li><strong>Unnamed sprite sheets</strong> play as one squashed still. Add <code>_8fps</code> or <code>_sheet</code> to the name. Sheets saved from here already have it.</li>
+            <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (menu <code>p</code>, <code>c</code>, then <code>k</code>), images may look scrambled; the menu warns you.</li>
             <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
           </ol>
         </details>
@@ -300,7 +301,7 @@
           <button id="exportPngBtn" class="btn" type="button">Save this frame</button>
           <button id="exportSheetBtn" class="btn btn-quiet" type="button">Save animation (sprite sheet)</button>
         </div>
-        <p class="hint">Copy to the Pi from PowerShell, then pick it from the <code>glowgrid</code> menu:</p>
+        <p class="hint">Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
         <code class="cmd" id="cmdOut"></code>
         <button id="copyCmdBtn" class="btn btn-quiet" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
@@ -377,7 +378,7 @@
     state = { cols: 16, rows: 16, frames: [sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, true)], currentFrame: 0, recentColors: [], fps: 6, name: 'smiley' };
   }
   state.color = '#e63946'; state.tool = 'paint';
-  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', importMode: 'pixel' }, recall('glowgrid-sim') || {});
+  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', importMode: 'auto' }, recall('glowgrid-sim') || {});
 
   function saveState() {
     store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name });
@@ -610,6 +611,7 @@
   // Fit like grid_common.fit(): keep aspect, center, composite alpha over black
   function fitImage(src, sw, sh, mode) {
     const cols = state.cols, rows = state.rows;
+    if (mode === 'auto') mode = (sw > 2 * cols || sh > 2 * rows) ? 'photo' : 'pixel';
     const s = Math.min(cols / sw, rows / sh);
     const nw = Math.max(1, pyRound(sw * s)), nh = Math.max(1, pyRound(sh * s));
     const ox = Math.floor((cols - nw) / 2), oy = Math.floor((rows - nh) / 2);
@@ -651,7 +653,7 @@
       img.onload = () => {
         stopPlay(); pushUndo();
         const w = img.naturalWidth, h = img.naturalHeight, n = w / state.cols;
-        if (h === state.rows && Number.isInteger(n) && n > 1) {
+        if (h === state.rows && Number.isInteger(n) && n > 1 && /_(\d+(\.\d+)?)fps|_sheet/i.test(file.name)) {
           // Sprite sheet: split into frames
           const c = document.createElement('canvas'); c.width = w; c.height = h;
           const x = c.getContext('2d'); x.drawImage(img, 0, 0);
@@ -664,12 +666,13 @@
           state.currentFrame = 0;
           const m = /_(\d+)fps/i.exec(file.name);
           if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
-          const base = file.name.replace(/\.[^.]+$/, '').replace(/_\d+fps$/i, '');
+          const base = file.name.replace(/\.[^.]+$/, '').replace(/_(\d+fps|sheet)$/i, '');
           if (base) { state.name = base; $('nameInput').value = base; }
           setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
         } else {
           state.frames[state.currentFrame] = fitImage(img, w, h, sim.importMode);
-          setStatus(`Image fitted onto frame ${state.currentFrame + 1} (${sim.importMode === 'photo' ? 'averaged' : 'exact pixels'}). Undo reverts.`);
+          const used = sim.importMode === 'auto' ? ((w > 2 * state.cols || h > 2 * state.rows) ? 'photo' : 'pixel') : sim.importMode;
+          setStatus(`Image fitted onto frame ${state.currentFrame + 1} (${used === 'photo' ? 'averaged' : 'exact pixels'}). Undo reverts.`);
         }
         afterFrameChange();
       };
@@ -705,7 +708,7 @@
     const pi = (sim.pi || '').trim() || 'user@raspberrypi.local';
     $('cmdOut').textContent =
       `scp $HOME\\Downloads\\${f} ${pi}:~/glow-grid/images/\n` +
-      `# then run glowgrid, press r to rescan, and pick ${f}`;
+      `# then run glow-grid, press r to rescan, and pick ${f}`;
   }
   async function saveCanvas(canvas, filename) {
     const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
