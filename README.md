@@ -6,7 +6,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 
 ## The workflow
 
-1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below).
+1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below), or in [Piskel](#piskel).
 2. **Simulate**: switch to *LED sim* to see what survives the Pi's brightness cap and gamma curve. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
 3. **Export** a still PNG or an animation sprite sheet (frames side by side, frame rate in the filename, e.g. `knight_4fps.png`).
 4. **Copy** it to the Pi's `images/` folder and pick it from the `glow-grid` menu.
@@ -106,6 +106,27 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 - **Near-black isn't off.** `#0d1117` lights every pixel faintly. Use pure `#000000` for "off".
 - **Dark colors disappear.** After brightness 0.3 and gamma 2.2, anything with a max channel under about 70 ends up at 1–3 out of 255. Separate shapes with contrasting colors instead of dark outlines.
 - **16x16 is small.** Downscaled detail (eye highlights, thin lines) usually doesn't survive. Draw at 16x16 rather than shrinking something bigger.
+
+## Related tools
+
+### Piskel
+
+[Piskel](https://www.piskelapp.com/) is a free, browser-based sprite editor with layers, onion skinning and frame-by-frame animation. It's a good choice when you want more drawing tools than Glow Grid has, and its exports work here directly:
+
+1. Create a sprite, then **Resize** the canvas to **16×16**.
+2. Draw. Leave the background transparent (it becomes "off" on the panel) or use pure black.
+3. Export:
+   - **Still:** Export → PNG, one frame.
+   - **Animation:** Export → PNG as a spritesheet laid out in **one row**, so it's 16 px tall with frames side by side. Rename it to add the frame rate, e.g. `walk_8fps.png`. Or export a **GIF**; `play.py` uses the GIF's own timing.
+4. Import the file into Glow Grid and switch to *LED sim* to check it before copying it to the Pi. A one-row spritesheet loads back as separate frames.
+
+### WLED
+
+[WLED](https://kno.wled.ge/) is popular open-source firmware for driving addressable LEDs from an **ESP32** over Wi-Fi. It has a web UI, a phone app, 2D matrix support, and (since v16) GIF and pixel-art playback. It runs on the ESP32, not on the Pi, so it's an alternative way to drive this same panel rather than part of this project.
+
+- To use WLED with a 16×16 panel, set *LED Preferences → 2D configuration* (panel size, first LED corner, orientation, serpentine). These are the same four facts `probe.py` finds.
+- Glow Grid's LED sim is still useful for WLED art: it shows what survives on real LEDs regardless of which board drives them.
+- Possible future directions (not built yet): a "Send to WLED" button in Glow Grid using WLED's JSON API, streaming animations from the Pi to WLED over DDP, and a standalone port of glow-grid to an ESP32-C3 board.
 
 ## License
 
