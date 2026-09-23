@@ -79,13 +79,45 @@ Glow Grid (16x16)
 
 Images in `images/` are numbered automatically. Type a number to play one; add a number after it to override the frame rate (`2 8` plays file 2 at 8 fps). Like led-strip, whatever you pick runs in the background, and picking something else stops it cleanly first (SIGINT, so the panel is always cleared).
 
-Copying a new image over from Windows:
+To add your own images, see the next section.
+
+## Using your own images
+
+Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png` and `.gif` there, numbered.
+
+**Copy from Windows** (PowerShell, not the SSH window):
 
 ```powershell
-scp $HOME\Downloads\knight_4fps.png user@raspberrypi.local:~/glow-grid/images/
+scp $HOME\Downloads\walk_8fps.png user@raspberrypi.local:~/glow-grid/images/
+scp $HOME\Downloads\*.png user@raspberrypi.local:~/glow-grid/images/   # several at once
 ```
 
-Then press `r` in the menu.
+Then press `r` in the menu (or restart `glow-grid`) and type the file's number.
+
+**What works best**
+
+| You have | Do this |
+|---|---|
+| 16×16 pixel art (Glow Grid, Piskel) | Copy it as-is. Exact result. |
+| An animation | Animated GIF, or a sprite sheet 16 px tall with frames side by side. Put the speed in the name: `walk_8fps.png`. |
+| A photo or large image | Import it into the Glow Grid simulator with **Photo** mode (averages each cell), check *LED sim*, save the 16×16 PNG, and copy that. The Pi's own resize picks single pixels, which is right for pixel art and noisy for photos. |
+| A JPG/WEBP | `play.py` opens it directly (below), but the menu only lists PNG and GIF. |
+
+- Avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
+- An image exactly 16 px tall and 32, 48… px wide is treated as an animation (one frame per 16 px).
+- Transparent areas become "off" LEDs. Near-black is **not** off (see *Designing for LEDs*).
+- Set the wiring order first (`p`, then `c`) or every image will look scrambled.
+
+**Without the menu:** `play.py` is what the menu runs for each image, and you can call it directly to test one file:
+
+```bash
+cd ~/glow-grid && source venv/bin/activate
+python3 play.py knight.png           # bare names are looked up in images/
+python3 play.py knight_4fps.png 10   # override the frame rate
+python3 play.py images/photo.jpg     # any format Pillow opens
+```
+
+A still stays up until you press Ctrl+C; an animation loops. Either way the panel is cleared on exit.
 
 ## Architecture
 
