@@ -94,19 +94,26 @@ scp $HOME\Downloads\*.png user@raspberrypi.local:~/glow-grid/images/   # several
 
 Then press `r` in the menu (or restart `glow-grid`) and type the file's number.
 
-**What works best**
+### What to expect when you give it an image
 
-| You have | Do this |
-|---|---|
-| 16×16 pixel art (Glow Grid, Piskel) | Copy it as-is. Exact result. |
-| An animation | Animated GIF, or a sprite sheet 16 px tall with frames side by side. Put the speed in the name: `walk_8fps.png`. |
-| A photo or large image | Import it into the Glow Grid simulator with **Photo** mode (averages each cell), check *LED sim*, save the 16×16 PNG, and copy that. The Pi's own resize picks single pixels, which is right for pixel art and noisy for photos. |
-| A JPG/WEBP | `play.py` opens it directly (below), but the menu only lists PNG and GIF. |
+The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.
 
-- Avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
-- An image exactly 16 px tall and 32, 48… px wide is treated as an animation (one frame per 16 px).
-- Transparent areas become "off" LEDs. Near-black is **not** off (see *Designing for LEDs*).
-- Set the wiring order first (`p`, then `c`) or every image will look scrambled.
+**Works well**
+
+- **Pixel art at or near 16×16** (Glow Grid exports, Piskel sprites, the examples) comes out pixel-perfect.
+- **Animations:** a sprite sheet (frames side by side, 16 px tall) or an animated GIF. Put the speed in the name: `walk_8fps.png`.
+- **Transparency** becomes "off" LEDs.
+- **Non-square images** are centered and fitted without stretching.
+
+**Current limits**
+
+1. **Photos and large images look messy.** The Pi shrinks images by picking single pixels, which keeps pixel art sharp but makes a big photo noisy. Workaround: import the photo into the Glow Grid simulator with Import mode set to **Photo** (averages each cell), check it in *LED sim*, then save the 16×16 PNG and copy that.
+2. **The menu lists only `.png` and `.gif`.** `play.py` opens JPG and WEBP directly (`python3 play.py images/photo.jpg`), but those files won't appear in the `glow-grid` menu.
+3. **Wide strips play as animations.** An image exactly 16 px tall and 32, 48… px wide is split into frames, one per 16 px. That's only a surprise if you meant it as a single wide still.
+4. **Wiring comes first.** Until the probe settings are in `local_config.py`, every image looks scrambled on the real panel.
+5. **Near-black isn't off, and dark shades can vanish.** See *Designing for LEDs*; the simulator's Panel check flags both.
+
+Tip: avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
 
 **Without the menu:** `play.py` is what the menu runs for each image, and you can call it directly to test one file:
 
