@@ -16,7 +16,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 `web/` is a static site with no build step: one `index.html`, plus a manifest and service worker so it can be installed as an app.
 
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
-- **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI from `examples/sprites.py`).
+- **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI from `examples/sprites.py`). One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 - **Install as an app**: open the hosted page in Chrome or Edge and click *Install app* (or the install icon in the address bar). It then runs in its own window and works offline.
 - **Download**: *Download for offline* on the hosted page saves the single-file simulator.
 
@@ -45,6 +45,7 @@ sudo raspi-config   # Interface Options -> SPI -> Enable, then reboot
 
 git clone https://github.com/dwooods/glow-grid.git ~/glow-grid
 cd ~/glow-grid
+chmod +x run.sh
 ./run.sh            # first run: creates venv, installs deps, writes examples, opens menu
 ln -s ~/glow-grid/run.sh ~/.local/bin/glowgrid   # then just type: glowgrid
 ```
