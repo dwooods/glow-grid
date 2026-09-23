@@ -111,7 +111,7 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 
 ### Piskel
 
-[Piskel](https://www.piskelapp.com/) is a free, browser-based sprite editor with layers, onion skinning and frame-by-frame animation. It's a good choice when you want more drawing tools than Glow Grid has, and its exports work here directly:
+[Piskel](https://www.piskelapp.com/) is a free, open-source ([source on GitHub](https://github.com/piskelapp/piskel), Apache-2.0) sprite editor with layers, onion skinning and frame-by-frame animation. It runs in the browser, and offline desktop builds are available from its repo. It's a good choice when you want more drawing tools than Glow Grid has, and its exports work here directly:
 
 1. Create a sprite, then **Resize** the canvas to **16×16**.
 2. Draw. Leave the background transparent (it becomes "off" on the panel) or use pure black.
