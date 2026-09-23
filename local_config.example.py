@@ -27,3 +27,7 @@ RESIZE = "auto"
 # top-left, red along the top, green down the left and a blue diagonal.
 # The menu's "k" option sets this for you.
 WIRING_CONFIRMED = False
+
+# Web control service (server.py / glow-grid-web)
+# WEB_PORT = 8080
+# STARTUP_IMAGE = "knight_4fps.png"   # play this file from images/ at boot

@@ -5,8 +5,10 @@ Per-panel settings (wiring order, brightness, gamma) belong in
 local_config.py, which is git-ignored so `git pull` never overwrites them.
 Copy local_config.example.py to local_config.py and edit that.
 """
+import fcntl
 import os
 import re
+import sys
 
 from PIL import Image, ImageSequence
 from rpi5_ws2812.ws2812 import Color, WS2812SpiDriver
@@ -36,6 +38,10 @@ AVERAGE_ABOVE = 2     # "auto" averages when width or height > this many times t
 # (the menu's "k" option does this for you).
 WIRING_CONFIRMED = False
 
+# Web control service (server.py)
+WEB_PORT = 8080
+STARTUP_IMAGE = None  # e.g. "knight_4fps.png" to play when the service starts
+
 try:
     from local_config import *  # noqa: F401,F403
 except ImportError:
@@ -46,7 +52,49 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IMAGES_DIR = os.path.join(BASE_DIR, "images")
 
 
-def get_strip():
+# ---- Panel lock: only one program may drive the panel at a time ----
+LOCK_PATH = "/tmp/glow-grid-panel.lock"
+_lock_handle = None
+
+
+class PanelBusy(RuntimeError):
+    pass
+
+
+def acquire_panel():
+    """Take the panel lock (no-op if this process already holds it)."""
+    global _lock_handle
+    if _lock_handle is not None:
+        return
+    handle = open(LOCK_PATH, "w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        raise PanelBusy(
+            "The panel is in use by another glow-grid program (usually the web service). "
+            "Stop playback from the web page, or run: sudo systemctl stop glow-grid-web"
+        )
+    _lock_handle = handle
+
+
+def release_panel():
+    global _lock_handle
+    if _lock_handle is not None:
+        _lock_handle.close()  # closing the file releases the lock
+        _lock_handle = None
+
+
+def get_strip(exit_if_busy=True):
+    """Open the panel. Scripts exit with a clear message if another program
+    holds it; the web service passes exit_if_busy=False and handles PanelBusy."""
+    try:
+        acquire_panel()
+    except PanelBusy as e:
+        if not exit_if_busy:
+            raise
+        print(e)
+        sys.exit(1)
     strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=LED_COUNT).get_strip()
     strip.set_brightness(1.0)  # brightness is applied in correct() instead
     return strip
@@ -68,9 +116,20 @@ def xy_to_index(x, y):
 # Gamma + brightness lookup table; any non-zero channel stays at least 1.
 # The Glow Grid simulator (web/index.html) uses this exact formula.
 _LUT = []
-for _c in range(256):
-    _v = round(255 * BRIGHTNESS * (_c / 255) ** GAMMA)
-    _LUT.append(1 if (_c > 0 and _v == 0) else _v)
+
+
+def set_brightness(value):
+    """Change brightness at runtime (rebuilds the lookup table)."""
+    global BRIGHTNESS
+    BRIGHTNESS = max(0.01, min(1.0, float(value)))
+    table = []
+    for c in range(256):
+        v = round(255 * BRIGHTNESS * (c / 255) ** GAMMA)
+        table.append(1 if (c > 0 and v == 0) else v)
+    _LUT[:] = table
+
+
+set_brightness(BRIGHTNESS)
 
 
 def correct(r, g, b):

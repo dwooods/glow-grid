@@ -9,7 +9,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below), or in [Piskel](#piskel).
 2. **Simulate**: switch to *LED sim* to see what survives the Pi's brightness cap and gamma curve. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
 3. **Export** a still PNG or an animation sprite sheet (frames side by side, frame rate in the filename, e.g. `knight_4fps.png`).
-4. **Copy** it to the Pi's `images/` folder and pick it from the `glow-grid` menu.
+4. **Copy** it to the Pi's `images/` folder and pick it from the `glow-grid` menu, or skip the copy: with [web control](#web-control-run-from-your-phone-or-pc) running, press *Send to panel*.
 
 ## The simulator
 
@@ -131,6 +131,39 @@ python3 play.py images/photo.jpg     # photos are averaged automatically
 
 A still stays up until you press Ctrl+C; an animation loops. Either way the panel is cleared on exit.
 
+## Web control (run from your phone or PC)
+
+`server.py` turns the Pi into a small web server: it hosts the Glow Grid simulator and adds a **Panel on this Pi** card, so you can design on your PC or phone and press **Send to panel**.
+
+```bash
+cd ~/glow-grid
+git pull
+./run.sh                          # once, if you haven't: creates the venv (then q to quit)
+sudo bash install-service.sh      # installs and starts the glow-grid-web service
+```
+
+Then open **http://raspberrypi.local:8080** in a browser on the same network. The service starts at every boot.
+
+On that page:
+
+- **Send to panel** plays whatever is on the canvas (a still, or all frames as an animation) without saving it.
+- **Save to Pi & play** also keeps it in `images/`, so it shows up in the menu.
+- The image list plays anything already in `images/`. **Stop** clears the panel.
+- The brightness slider changes the panel live. It isn't saved; set `BRIGHTNESS` in `local_config.py` for the default.
+
+Settings in `local_config.py`: `WEB_PORT` (default 8080) and `STARTUP_IMAGE` (a file in `images/` to play at boot). Restart the service after changing them: `sudo systemctl restart glow-grid-web`.
+
+**Sharing the panel with the menu.** Only one program can drive the panel at a time. While the web service is playing something, anything you pick in the `glow-grid` menu (and `play.py`, `probe.py`, `off.py` run by hand) stops straight away with a message saying so. Press **Stop** on the web page first (the service lets go of the panel), or stop the service entirely:
+
+```bash
+sudo systemctl stop glow-grid-web      # until next boot
+sudo systemctl disable glow-grid-web   # don't start at boot
+journalctl -u glow-grid-web -f         # logs
+sudo bash install-service.sh --remove  # uninstall
+```
+
+**Security:** there is no login. Anyone on your network can change the lights or upload images (5 MB max, image types only). Don't forward port 8080 on your router.
+
 ## Architecture
 
 - **`grid_common.py`**: panel config and defaults, `get_strip()`, `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, named sprite sheet or animated GIF → frames + delays), and `draw()`.
@@ -138,6 +171,8 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 - **`probe.py`**: wiring diagnostics (markers / walk / check).
 - **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` / `probe.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
 - **`off.py`**: clears the panel.
+- **`server.py`**: the web control service. Serves `web/` and a JSON API (`/api/status`, `/api/play`, `/api/show`, `/api/stop`, `/api/brightness`); standard library only. `install-service.sh` writes the systemd unit `glow-grid-web`.
+- **Panel lock**: `get_strip()` takes a file lock (`/tmp/glow-grid-panel.lock`), so two programs never write to the panel at once.
 - **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/`.
 - **`web/`**: the simulator (static site / installable app).
 
