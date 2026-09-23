@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch the Glow Grid menu. Safe to symlink onto PATH:
-#   ln -s ~/glow-grid/run.sh ~/.local/bin/glowgrid
+#   ln -s ~/glow-grid/run.sh ~/.local/bin/glow-grid
 set -e
 cd "$(dirname "$(readlink -f "$0")")"
 

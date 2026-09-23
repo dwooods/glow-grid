@@ -9,7 +9,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below).
 2. **Simulate**: switch to *LED sim* to see what survives the Pi's brightness cap and gamma curve. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
 3. **Export** a still PNG or an animation sprite sheet (frames side by side, frame rate in the filename, e.g. `knight_4fps.png`).
-4. **Copy** it to the Pi's `images/` folder and pick it from the `glowgrid` menu.
+4. **Copy** it to the Pi's `images/` folder and pick it from the `glow-grid` menu.
 
 ## The simulator
 
@@ -47,7 +47,7 @@ git clone https://github.com/dwooods/glow-grid.git ~/glow-grid
 cd ~/glow-grid
 chmod +x run.sh
 ./run.sh            # first run: creates venv, installs deps, writes examples, opens menu
-ln -s ~/glow-grid/run.sh ~/.local/bin/glowgrid   # then just type: glowgrid
+ln -s ~/glow-grid/run.sh ~/.local/bin/glow-grid  # then just type: glow-grid
 ```
 
 On first run `run.sh` creates `local_config.py` from `local_config.example.py`. That's where your panel's wiring order, brightness and gamma live. It's git-ignored, so `git pull` never overwrites it.
