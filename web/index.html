@@ -143,6 +143,16 @@
   .guide strong, .guide code { color: var(--text); }
   @media (prefers-reduced-motion: reduce) { .guide summary::before { transition: none; } }
 
+  .warn-text { color: var(--warn); }
+  .pi-bright input { flex: 1; min-width: 120px; accent-color: var(--accent); }
+  .pi-bright .frame-readout { margin-left: 0; }
+  .pi-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+  .pi-list li { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; }
+  .pi-list li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .pi-list li small { color: var(--text-dim); }
+  .pi-list .btn { padding: 4px 10px; }
+  .pi-list li.playing span { color: var(--accent); }
+
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
     .device-col, .panel-col { flex-basis: auto; width: 100%; max-width: 100%; }
@@ -178,6 +188,25 @@
         <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         <span class="frame-readout" id="frameReadout">Frame 1 / 1</span>
       </div>
+
+      <section class="card" id="piCard" hidden aria-labelledby="piTitle">
+        <h2 id="piTitle">Panel on this Pi</h2>
+        <p class="hint" id="piState">Checking the panel…</p>
+        <p class="hint warn-text" id="piWiring" hidden>Wiring isn't confirmed on the Pi yet, so images may look scrambled. In the <code>glow-grid</code> menu run <code>p</code>, set the flags, run <code>c</code>, then press <code>k</code>.</p>
+        <div class="btn-row">
+          <button id="piSendBtn" class="btn" type="button">Send to panel</button>
+          <button id="piSaveBtn" class="btn btn-quiet" type="button">Save to Pi &amp; play</button>
+          <button id="piStopBtn" class="btn btn-quiet danger" type="button">Stop</button>
+        </div>
+        <label class="field-inline pi-bright">Panel brightness
+          <input id="piBright" type="range" min="0.05" max="1" step="0.05" value="0.3">
+          <span id="piBrightVal" class="frame-readout">0.30</span>
+        </label>
+        <div class="pi-images">
+          <div class="metric-label">Images on the Pi</div>
+          <ul id="piImages" class="pi-list"></ul>
+        </div>
+      </section>
 
       <section class="card" aria-labelledby="diagTitle">
         <h2 id="diagTitle">Panel check</h2>
@@ -796,6 +825,81 @@
     });
   }
 
+  /* ---------- panel control (only when served by the Pi's server.py) ---------- */
+  async function api(path, opts) {
+    const r = await fetch(path, Object.assign({ cache: 'no-store' }, opts || {}));
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+  function renderPi(s) {
+    const p = s.playing;
+    let text = p ? `Playing ${p.name}` + (p.frames > 1 ? ` (${p.frames} frames, ${p.fps} fps).` : '.') : 'Panel is idle.';
+    if (s.error) text += ` Last error: ${s.error}`;
+    $('piState').textContent = text;
+    $('piWiring').hidden = !!s.wiring_confirmed;
+    $('piBright').value = s.brightness;
+    $('piBrightVal').textContent = Number(s.brightness).toFixed(2);
+    const list = $('piImages'); list.innerHTML = '';
+    if (!s.images.length) {
+      const li = document.createElement('li'); li.textContent = 'No images yet. Use "Save to Pi & play".'; list.appendChild(li);
+    }
+    s.images.forEach((img) => {
+      const li = document.createElement('li');
+      if (p && p.name === img.name) li.className = 'playing';
+      const name = document.createElement('span'); name.textContent = img.name;
+      const info = document.createElement('small');
+      info.textContent = img.error ? `can't read (${img.error})` : (img.frames > 1 ? `${img.frames} frames, ${img.fps} fps` : 'still');
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn btn-quiet'; btn.textContent = '▶'; btn.setAttribute('aria-label', 'Play ' + img.name);
+      btn.disabled = !!img.error;
+      btn.addEventListener('click', async () => {
+        try { renderPi(await api('/api/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: img.name }) })); }
+        catch (e) { piError(e); }
+      });
+      li.append(name, info, btn); list.appendChild(li);
+    });
+  }
+  function piError(e) { $('piState').textContent = e.message; setStatus('Panel: ' + e.message); }
+  function uploadCanvas() {
+    const n = state.frames.length;
+    const c = document.createElement('canvas'); c.width = state.cols * n; c.height = state.rows;
+    const ctx = c.getContext('2d');
+    state.frames.forEach((f, i) => paintCanvas(ctx, f, i * state.cols));
+    return { canvas: c, name: n > 1 ? sheetFile() : frameFile() };
+  }
+  async function sendToPi(save) {
+    const { canvas, name } = uploadCanvas();
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    try {
+      const s = await api(`/api/show?name=${encodeURIComponent(name)}&save=${save ? 1 : 0}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+      renderPi(s);
+      let msg = save ? `Saved ${name} on the Pi and playing it.` : `Sent ${name} to the panel.`;
+      if (s.grid && (s.grid.cols !== state.cols || s.grid.rows !== state.rows)) msg += ` Note: the Pi's grid is ${s.grid.cols}×${s.grid.rows}, so it was fitted.`;
+      setStatus(msg);
+    } catch (e) { piError(e); }
+  }
+  async function initPi() {
+    if (window.claude || !/^https?:$/.test(location.protocol)) return;
+    let s;
+    try { s = await api('/api/status'); } catch (e) { return; } // not served by the Pi
+    $('piCard').hidden = false;
+    renderPi(s);
+    $('piSendBtn').addEventListener('click', () => sendToPi(false));
+    $('piSaveBtn').addEventListener('click', () => sendToPi(true));
+    $('piStopBtn').addEventListener('click', async () => {
+      try { renderPi(await api('/api/stop', { method: 'POST' })); } catch (e) { piError(e); }
+    });
+    $('piBright').addEventListener('input', () => { $('piBrightVal').textContent = Number($('piBright').value).toFixed(2); });
+    $('piBright').addEventListener('change', async () => {
+      const v = Number($('piBright').value);
+      try {
+        renderPi(await api('/api/brightness', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: v }) }));
+        $('brightInput').value = v; readLedSettings(); // keep the LED sim in step with the panel
+      } catch (e) { piError(e); }
+    });
+  }
+
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
   $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
@@ -805,6 +909,7 @@
   buildLut(); buildGridDOM(); renderSwatches(); updateUndoBtns();
   setView(sim.view === 'sim' ? 'sim' : 'design');
   afterFrameChange();
+  initPi();
 })();
 </script>
 
