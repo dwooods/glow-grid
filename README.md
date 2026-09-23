@@ -40,6 +40,10 @@ knight_4fps.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
 - Importing a Glow Grid PNG back into the simulator restores its brightness and gamma too.
 - Editing the PNG in another app may drop the settings; it then falls back to `local_config.py`.
 
+### Export size: 1× for the Pi, bigger to share
+
+Exports are 16×16 by default: one pixel per LED, which is exactly what the Pi plays. The *Scale* option in the export card also saves 8×, 16× or 32× copies for viewing and sharing: each pixel becomes a sharp block, and the name gets `_x16` etc. Copy the **1×** file to the Pi. A scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
+
 ## Hardware
 
 - Raspberry Pi 5
@@ -62,6 +66,7 @@ sudo raspi-config   # Interface Options -> SPI -> Enable, then reboot
 git clone https://github.com/dwooods/glow-grid.git ~/glow-grid
 cd ~/glow-grid
 chmod +x run.sh
+git config core.fileMode false   # so the chmod doesn't block future git pulls
 ./run.sh            # first run: creates venv, installs deps, writes examples, opens menu
 ln -s ~/glow-grid/run.sh ~/.local/bin/glow-grid  # then just type: glow-grid
 ```
@@ -191,3 +196,5 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+The build story, decisions and lessons are in [JOURNEY.md](JOURNEY.md).
