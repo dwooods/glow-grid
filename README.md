@@ -59,6 +59,7 @@ Panels are wired in different orders, and a wrong mapping scrambles images into 
 1. Pick `p` in the menu (or run `python3 probe.py`). Five raw indexes light up: 0 red, 1 green, 15 white, 16 yellow, 255 blue.
 2. Set `FLIP_X`, `FLIP_Y`, `COLUMN_MAJOR` and `SERPENTINE` in `local_config.py`. The comments there map what you see to each setting.
 3. Pick `c` (or `python3 probe.py check`). You should see white at the top-left, red along the top, green down the left, and a blue diagonal. If so, images will display correctly.
+4. Press `k` in the menu to mark the wiring as confirmed. This sets `WIRING_CONFIRMED = True` in `local_config.py`. Until then the menu (and `play.py`) show a "wiring not checked yet" warning, so a scrambled image never looks like a mystery.
 
 `w` walks a single dot through every index, which helps if the markers are ambiguous.
 
@@ -66,24 +67,27 @@ Panels are wired in different orders, and a wrong mapping scrambles images into 
 
 ```
 Glow Grid (16x16)
+  ! Wiring not checked yet: images may look scrambled.
+    Run p, set the flags in local_config.py, then c. If c looks right, press k.
   1. knight.png  (still)
   2. knight_4fps.png  (4 frames, 4 fps)
   3. smiley_3fps.png  (4 frames, 3 fps)
   p. Wiring probe (markers)
   w. Wiring probe (walk every index)
   c. Check wiring settings
+  k. Wiring looks right: mark it confirmed
   r. Rescan images
   o. Turn off
   q. Quit
 ```
 
-Images in `images/` are numbered automatically. Type a number to play one; add a number after it to override the frame rate (`2 8` plays file 2 at 8 fps). Like led-strip, whatever you pick runs in the background, and picking something else stops it cleanly first (SIGINT, so the panel is always cleared).
+The warning and `k` disappear once the wiring is confirmed. Images in `images/` are numbered automatically. Type a number to play one; add a number after it to override the frame rate (`2 8` plays file 2 at 8 fps). Like led-strip, whatever you pick runs in the background, and picking something else stops it cleanly first (SIGINT, so the panel is always cleared).
 
 To add your own images, see the next section.
 
 ## Using your own images
 
-Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png` and `.gif` there, numbered.
+Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png`, `.gif`, `.jpg`/`.jpeg`, `.webp` and `.bmp` there, numbered.
 
 **Copy from Windows** (PowerShell, not the SSH window):
 
@@ -100,18 +104,19 @@ The Pi fits any image to the grid and plays it. How good it looks depends on wha
 
 **Works well**
 
-- **Pixel art at or near 16×16** (Glow Grid exports, Piskel sprites, the examples) comes out pixel-perfect.
-- **Animations:** a sprite sheet (frames side by side, 16 px tall) or an animated GIF. Put the speed in the name: `walk_8fps.png`.
+- **Pixel art at 16×16** (Glow Grid exports, Piskel sprites, the examples) comes out pixel-perfect. So does pixel art at an exact 2×, 3×, 4×… upscale.
+- **Photos and large images:** anything more than 2× the grid in either direction is averaged per cell, so photos come out smooth instead of noisy. Smaller images keep exact pixels, which keeps pixel-art edges hard. Change this with `RESIZE` in `local_config.py` (`"auto"`, `"nearest"` or `"average"`).
+- **Animations:** an animated GIF, or a sprite sheet (frames side by side, 16 px tall) whose name contains the speed or `_sheet`: `walk_8fps.png`, `walk_sheet.png`. Sheets saved from Glow Grid are already named this way.
 - **Transparency** becomes "off" LEDs.
 - **Non-square images** are centered and fitted without stretching.
+- **Formats:** PNG, GIF, JPG, WEBP and BMP all show in the menu.
 
-**Current limits**
+**Things to watch**
 
-1. **Photos and large images look messy.** The Pi shrinks images by picking single pixels, which keeps pixel art sharp but makes a big photo noisy. Workaround: import the photo into the Glow Grid simulator with Import mode set to **Photo** (averages each cell), check it in *LED sim*, then save the 16×16 PNG and copy that.
-2. **The menu lists only `.png` and `.gif`.** `play.py` opens JPG and WEBP directly (`python3 play.py images/photo.jpg`), but those files won't appear in the `glow-grid` menu.
-3. **Wide strips play as animations.** An image exactly 16 px tall and 32, 48… px wide is split into frames, one per 16 px. That's only a surprise if you meant it as a single wide still.
-4. **Wiring comes first.** Until the probe settings are in `local_config.py`, every image looks scrambled on the real panel.
-5. **Near-black isn't off, and dark shades can vanish.** See *Designing for LEDs*; the simulator's Panel check flags both.
+1. **Name your sprite sheets.** A 16-px-tall strip *without* `_8fps` or `_sheet` in its name is treated as one wide still and squashed to fit. (This rule stops ordinary wide images from turning into accidental animations.)
+2. **Mid-size pixel art** (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at 16×16, or export at an exact multiple.
+3. **Wiring comes first.** Until the probe settings are set and confirmed (`p`, `c`, then `k`), images may look scrambled; the menu warns you.
+4. **Near-black isn't off, and dark shades can vanish.** See *Designing for LEDs*; the simulator's Panel check flags both.
 
 Tip: avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
 
@@ -121,17 +126,17 @@ Tip: avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
 cd ~/glow-grid && source venv/bin/activate
 python3 play.py knight.png           # bare names are looked up in images/
 python3 play.py knight_4fps.png 10   # override the frame rate
-python3 play.py images/photo.jpg     # any format Pillow opens
+python3 play.py images/photo.jpg     # photos are averaged automatically
 ```
 
 A still stays up until you press Ctrl+C; an animation loops. Either way the panel is cleared on exit.
 
 ## Architecture
 
-- **`grid_common.py`**: panel config and defaults, `get_strip()`, `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `fit()` (fit any image to the grid without stretching; transparency becomes black), `load_frames()` (still PNG, sprite sheet or animated GIF → frames + delays), and `draw()`.
+- **`grid_common.py`**: panel config and defaults, `get_strip()`, `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, named sprite sheet or animated GIF → frames + delays), and `draw()`.
 - **`play.py`**: plays one file. A still is held until stopped; an animation loops.
 - **`probe.py`**: wiring diagnostics (markers / walk / check).
-- **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` / `probe.py` as a background subprocess, and runs only one at a time.
+- **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` / `probe.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
 - **`off.py`**: clears the panel.
 - **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/`.
 - **`web/`**: the simulator (static site / installable app).
@@ -156,8 +161,8 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 2. Draw. Leave the background transparent (it becomes "off" on the panel) or use pure black.
 3. Export:
    - **Still:** Export → PNG, one frame.
-   - **Animation:** Export → PNG as a spritesheet laid out in **one row**, so it's 16 px tall with frames side by side. Rename it to add the frame rate, e.g. `walk_8fps.png`. Or export a **GIF**; `play.py` uses the GIF's own timing.
-4. Import the file into Glow Grid and switch to *LED sim* to check it before copying it to the Pi. A one-row spritesheet loads back as separate frames.
+   - **Animation:** Export → PNG as a spritesheet laid out in **one row**, so it's 16 px tall with frames side by side. Rename it to add the frame rate, e.g. `walk_8fps.png` (required: without `_8fps` or `_sheet` in the name it plays as one squashed still). Or export a **GIF**; `play.py` uses the GIF's own timing.
+4. Import the file into Glow Grid and switch to *LED sim* to check it before copying it to the Pi. A named one-row spritesheet loads back as separate frames.
 
 ### WLED
 

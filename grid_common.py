@@ -24,6 +24,18 @@ BRIGHTNESS = 0.3      # overall cap; keeps current draw sane
 GAMMA = 2.2           # makes LED colors match what you drew on screen
 DEFAULT_FPS = 6
 
+# How images are shrunk to the grid:
+#   "auto"    average each cell when the image is much bigger than the grid
+#             (photos), pick single pixels otherwise (pixel art)
+#   "nearest" always pick single pixels
+#   "average" always average
+RESIZE = "auto"
+AVERAGE_ABOVE = 2     # "auto" averages when width or height > this many times the grid
+
+# Set to True once `probe.py check` shows the expected pattern
+# (the menu's "k" option does this for you).
+WIRING_CONFIRMED = False
+
 try:
     from local_config import *  # noqa: F401,F403
 except ImportError:
@@ -65,14 +77,25 @@ def correct(r, g, b):
     return Color(_LUT[r], _LUT[g], _LUT[b])
 
 
+def resize_method(w, h):
+    """Which resampling fit() uses for a w x h image (see RESIZE)."""
+    if RESIZE == "average":
+        return "average"
+    if RESIZE == "nearest":
+        return "nearest"
+    return "average" if (w > AVERAGE_ABOVE * COLS or h > AVERAGE_ABOVE * ROWS) else "nearest"
+
+
 def fit(src):
-    """Fit an image to the grid without stretching (nearest-neighbor, no blur),
-    centered, with transparent areas composited onto black."""
+    """Fit an image to the grid without stretching, centered, with transparent
+    areas composited onto black. Pixel art keeps hard edges (nearest); large
+    images such as photos are averaged per cell (see RESIZE)."""
     src = src.convert("RGBA")
     w, h = src.size
     s = min(COLS / w, ROWS / h)
     nw, nh = max(1, round(w * s)), max(1, round(h * s))
-    src = src.resize((nw, nh), Image.Resampling.NEAREST)
+    method = Image.Resampling.BOX if resize_method(w, h) == "average" else Image.Resampling.NEAREST
+    src = src.resize((nw, nh), method)
     canvas = Image.new("RGBA", (COLS, ROWS), (0, 0, 0, 255))
     canvas.alpha_composite(src, ((COLS - nw) // 2, (ROWS - nh) // 2))
     return canvas.convert("RGB")
@@ -89,9 +112,17 @@ def resolve_path(path):
     return os.path.join(BASE_DIR, path)
 
 
+SHEET_NAME = re.compile(r"_(\d+(?:\.\d+)?)fps|_sheet", re.IGNORECASE)
+
+
+def is_sheet_name(path):
+    """Sprite sheets are opted in by name: "_8fps" or "_sheet" in the filename."""
+    return bool(SHEET_NAME.search(os.path.basename(path)))
+
+
 def load_frames(path, fps=None):
-    """Return (frames, delays) for a still PNG, a sprite sheet (frames side by
-    side, each COLS x ROWS), or an animated GIF.
+    """Return (frames, delays) for a still image, a sprite sheet (frames side by
+    side, each COLS x ROWS, named with "_<n>fps" or "_sheet"), or an animated GIF.
 
     Frame rate, in priority order: the fps argument, "_<n>fps" in the
     filename, the GIF's own timing, DEFAULT_FPS."""
@@ -104,7 +135,7 @@ def load_frames(path, fps=None):
     else:
         sheet = img.convert("RGBA")
         w, h = sheet.size
-        if h == ROWS and w % COLS == 0:
+        if h == ROWS and w % COLS == 0 and w > COLS and is_sheet_name(path):
             for i in range(w // COLS):
                 frames.append(fit(sheet.crop((i * COLS, 0, (i + 1) * COLS, ROWS))))
         else:

@@ -18,3 +18,12 @@ FLIP_Y = False
 # Keep these the same as the LED settings in the Glow Grid simulator
 BRIGHTNESS = 0.3
 GAMMA = 2.2
+
+# How images are shrunk: "auto" (average photos, keep pixel art sharp),
+# "nearest", or "average"
+RESIZE = "auto"
+
+# Set to True after `python3 probe.py check` (menu option c) shows white
+# top-left, red along the top, green down the left and a blue diagonal.
+# The menu's "k" option sets this for you.
+WIRING_CONFIRMED = False
