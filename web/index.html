@@ -134,6 +134,15 @@
   .cmd { display: block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 0.74rem; white-space: pre-wrap; word-break: break-all; user-select: all; }
   .check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text); }
 
+  .guide summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
+  .guide summary::-webkit-details-marker { display: none; }
+  .guide summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+  .guide details[open] summary::before { transform: rotate(90deg); }
+  .guide h3 { font-size: 0.78rem; margin: 12px 0 4px; color: var(--text); font-weight: 600; }
+  .guide ul, .guide ol { margin: 0; padding-left: 18px; font-size: 0.76rem; line-height: 1.55; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+  .guide strong, .guide code { color: var(--text); }
+  @media (prefers-reduced-motion: reduce) { .guide summary::before { transition: none; } }
+
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
     .device-col, .panel-col { flex-basis: auto; width: 100%; max-width: 100%; }
@@ -257,6 +266,28 @@
           <label>Rows <input id="rowsInput" type="number" min="1" max="64" value="16"></label>
           <button id="resizeBtn" class="btn btn-quiet" type="button">Apply</button>
         </div>
+      </section>
+
+      <section class="card guide">
+        <details id="guideDetails">
+          <summary><h2>How images turn out on the panel</h2></summary>
+          <p class="hint">The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.</p>
+          <h3>Works well</h3>
+          <ul>
+            <li><strong>Pixel art at or near grid size</strong> (drawn here, in Piskel, or the examples) comes out pixel-perfect.</li>
+            <li><strong>Animations:</strong> a sprite sheet (frames side by side, as tall as the grid) or an animated GIF. Put the speed in the name: <code>walk_8fps.png</code>.</li>
+            <li><strong>Transparency</strong> becomes "off" LEDs.</li>
+            <li><strong>Non-square images</strong> are centered and fitted without stretching.</li>
+          </ul>
+          <h3>Watch out for</h3>
+          <ol>
+            <li><strong>Photos and large images:</strong> the Pi shrinks by picking single pixels, which keeps pixel art sharp but makes photos noisy. Import them here with mode <em>Photo</em> (averages each cell), check <em>LED sim</em>, then save the grid-size PNG.</li>
+            <li><strong>File types:</strong> the Pi menu lists only <code>.png</code> and <code>.gif</code>. <code>play.py</code> opens JPG/WEBP directly, but they won't show in the menu. Saving from here always gives a PNG.</li>
+            <li><strong>Wide strips:</strong> an image exactly as tall as the grid and a whole multiple wide (32, 48… px for 16×16) plays as an animation, one frame per grid width.</li>
+            <li><strong>Wiring:</strong> until the probe settings are in <code>local_config.py</code> on the Pi, every image looks scrambled on the real panel.</li>
+            <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
+          </ol>
+        </details>
       </section>
 
       <section class="card">
