@@ -143,16 +143,6 @@
   .guide strong, .guide code { color: var(--text); }
   @media (prefers-reduced-motion: reduce) { .guide summary::before { transition: none; } }
 
-  .warn-text { color: var(--warn); }
-  .pi-bright input { flex: 1; min-width: 120px; accent-color: var(--accent); }
-  .pi-bright .frame-readout { margin-left: 0; }
-  .pi-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
-  .pi-list li { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; }
-  .pi-list li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-  .pi-list li small { color: var(--text-dim); }
-  .pi-list .btn { padding: 4px 10px; }
-  .pi-list li.playing span { color: var(--accent); }
-
   @media (max-width: 760px) {
     .layout { flex-direction: column; }
     .device-col, .panel-col { flex-basis: auto; width: 100%; max-width: 100%; }
@@ -188,25 +178,6 @@
         <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         <span class="frame-readout" id="frameReadout">Frame 1 / 1</span>
       </div>
-
-      <section class="card" id="piCard" hidden aria-labelledby="piTitle">
-        <h2 id="piTitle">Panel on this Pi</h2>
-        <p class="hint" id="piState">Checking the panel…</p>
-        <p class="hint warn-text" id="piWiring" hidden>Wiring isn't confirmed on the Pi yet, so images may look scrambled. In the <code>glow-grid</code> menu run <code>p</code>, set the flags, run <code>c</code>, then press <code>k</code>.</p>
-        <div class="btn-row">
-          <button id="piSendBtn" class="btn" type="button">Send to panel</button>
-          <button id="piSaveBtn" class="btn btn-quiet" type="button">Save to Pi &amp; play</button>
-          <button id="piStopBtn" class="btn btn-quiet danger" type="button">Stop</button>
-        </div>
-        <label class="field-inline pi-bright">Panel brightness
-          <input id="piBright" type="range" min="0.05" max="1" step="0.05" value="0.3">
-          <span id="piBrightVal" class="frame-readout">0.30</span>
-        </label>
-        <div class="pi-images">
-          <div class="metric-label">Images on the Pi</div>
-          <ul id="piImages" class="pi-list"></ul>
-        </div>
-      </section>
 
       <section class="card" aria-labelledby="diagTitle">
         <h2 id="diagTitle">Panel check</h2>
@@ -261,7 +232,7 @@
           <label>Gamma <input id="gammaInput" type="number" min="1" max="3" step="0.1" value="2.2"></label>
           <label>PSU amps <input id="psuInput" type="number" min="1" max="60" step="1" value="6"></label>
         </div>
-        <p class="hint">Keep brightness and gamma the same as <code>BRIGHTNESS</code> / <code>GAMMA</code> on the Pi (<code>local_config.py</code>). The sim uses the same rounding and "keep non-black pixels lit" rule. It's scaled so full white looks full on screen, so judge shapes and colors, not how bright it is.</p>
+        <p class="hint">Adjust these until the LED sim looks right. Saved PNGs remember them, and <code>play.py</code> on the Pi uses them for that image, so the panel matches what you see here. The Pi caps brightness at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white). The sim uses the same rounding and "keep non-black pixels lit" rule. It's scaled so full white looks full on screen, so judge shapes and colors, not how bright it is.</p>
       </section>
 
       <section class="card">
@@ -330,7 +301,7 @@
           <button id="exportPngBtn" class="btn" type="button">Save this frame</button>
           <button id="exportSheetBtn" class="btn btn-quiet" type="button">Save animation (sprite sheet)</button>
         </div>
-        <p class="hint">Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
+        <p class="hint">Saved PNGs include this brightness and gamma. Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
         <code class="cmd" id="cmdOut"></code>
         <button id="copyCmdBtn" class="btn btn-quiet" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
@@ -632,6 +603,7 @@
     sim.gamma = clamp(Number($('gammaInput').value) || 2.2, 1, 3);
     sim.psu = clamp(Number($('psuInput').value) || 6, 1, 60);
     saveSim(); buildLut(); renderFrame();
+    if (sim.brightness > 0.4) setStatus(`Note: the Pi caps brightness at MAX_BRIGHTNESS (0.4 unless you raised it in local_config.py), so ${sim.brightness} will play at 0.4.`);
   }
   ['brightInput', 'gammaInput', 'psuInput'].forEach((id) => $(id).addEventListener('change', readLedSettings));
 
@@ -676,10 +648,11 @@
   }
   $('imageInput').addEventListener('change', (e) => {
     const file = e.target.files[0]; if (!file) return;
+    const lightP = file.arrayBuffer().then((b) => readPngText(b, LIGHT_KEY)).catch(() => null);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         stopPlay(); pushUndo();
         const w = img.naturalWidth, h = img.naturalHeight, n = w / state.cols;
         if (h === state.rows && Number.isInteger(n) && n > 1 && /_(\d+(\.\d+)?)fps|_sheet/i.test(file.name)) {
@@ -704,6 +677,8 @@
           setStatus(`Image fitted onto frame ${state.currentFrame + 1} (${used === 'photo' ? 'averaged' : 'exact pixels'}). Undo reverts.`);
         }
         afterFrameChange();
+        const raw = await lightP;
+        if (raw && applySavedLight(raw)) setStatus($('statusEl').textContent + ` Loaded its light settings: brightness ${sim.brightness}, gamma ${sim.gamma}.`);
       };
       img.onerror = () => setStatus('That file couldn’t be read as an image.');
       img.src = ev.target.result;
@@ -726,6 +701,58 @@
     buildGridDOM(); afterFrameChange();
   });
 
+  /* ---------- light settings stored in the PNG (read by grid_common.image_light) ---------- */
+  const LIGHT_KEY = 'glow-grid';
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  function crc32(bytes) {
+    let c = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  }
+  const ascii = (str) => Uint8Array.from(str, (ch) => ch.charCodeAt(0) & 0xff);
+  const lightJson = () => JSON.stringify({ brightness: Math.round(sim.brightness * 1000) / 1000, gamma: Math.round(sim.gamma * 1000) / 1000 });
+  // Insert a tEXt chunk right after IHDR (8-byte signature + 25-byte IHDR chunk)
+  function withPngText(buf, key, text) {
+    const src = new Uint8Array(buf);
+    const data = ascii(key + '\0' + text), type = ascii('tEXt');
+    const chunk = new Uint8Array(12 + data.length);
+    const view = new DataView(chunk.buffer);
+    view.setUint32(0, data.length);
+    chunk.set(type, 4); chunk.set(data, 8);
+    const body = new Uint8Array(4 + data.length); body.set(type, 0); body.set(data, 4);
+    view.setUint32(8 + data.length, crc32(body));
+    const out = new Uint8Array(src.length + chunk.length);
+    out.set(src.subarray(0, 33), 0); out.set(chunk, 33); out.set(src.subarray(33), 33 + chunk.length);
+    return out;
+  }
+  function readPngText(buf, key) {
+    const b = new Uint8Array(buf), view = new DataView(b.buffer);
+    if (b.length < 8 || b[1] !== 0x50 || b[2] !== 0x4e || b[3] !== 0x47) return null; // not a PNG
+    for (let off = 8; off + 12 <= b.length;) {
+      const len = view.getUint32(off), type = String.fromCharCode(...b.subarray(off + 4, off + 8));
+      if (type === 'IEND') break;
+      if (type === 'tEXt') {
+        const text = String.fromCharCode(...b.subarray(off + 8, off + 8 + len));
+        const nul = text.indexOf('\0');
+        if (text.slice(0, nul) === key) return text.slice(nul + 1);
+      }
+      off += 12 + len;
+    }
+    return null;
+  }
+  function applySavedLight(raw) {
+    let l; try { l = JSON.parse(raw); } catch (e) { return false; }
+    if (typeof l.brightness !== 'number' && typeof l.gamma !== 'number') return false;
+    if (typeof l.brightness === 'number') $('brightInput').value = l.brightness;
+    if (typeof l.gamma === 'number') $('gammaInput').value = l.gamma;
+    readLedSettings();
+    return true;
+  }
+
   /* ---------- export ---------- */
   function setStatus(msg) { $('statusEl').textContent = msg; }
   const safeName = () => (state.name || '').trim().replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'sprite';
@@ -740,7 +767,8 @@
       `# then run glow-grid, press r to rescan, and pick ${f}`;
   }
   async function saveCanvas(canvas, filename) {
-    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    const blob = new Blob([withPngText(await png.arrayBuffer(), LIGHT_KEY, lightJson())], { type: 'image/png' });
     if (!downloadsCap && !window.claude) {
       // Opened as a plain file (web/index.html from the repo): ordinary browser download
       const a = document.createElement('a');
@@ -825,81 +853,6 @@
     });
   }
 
-  /* ---------- panel control (only when served by the Pi's server.py) ---------- */
-  async function api(path, opts) {
-    const r = await fetch(path, Object.assign({ cache: 'no-store' }, opts || {}));
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
-    return j;
-  }
-  function renderPi(s) {
-    const p = s.playing;
-    let text = p ? `Playing ${p.name}` + (p.frames > 1 ? ` (${p.frames} frames, ${p.fps} fps).` : '.') : 'Panel is idle.';
-    if (s.error) text += ` Last error: ${s.error}`;
-    $('piState').textContent = text;
-    $('piWiring').hidden = !!s.wiring_confirmed;
-    $('piBright').value = s.brightness;
-    $('piBrightVal').textContent = Number(s.brightness).toFixed(2);
-    const list = $('piImages'); list.innerHTML = '';
-    if (!s.images.length) {
-      const li = document.createElement('li'); li.textContent = 'No images yet. Use "Save to Pi & play".'; list.appendChild(li);
-    }
-    s.images.forEach((img) => {
-      const li = document.createElement('li');
-      if (p && p.name === img.name) li.className = 'playing';
-      const name = document.createElement('span'); name.textContent = img.name;
-      const info = document.createElement('small');
-      info.textContent = img.error ? `can't read (${img.error})` : (img.frames > 1 ? `${img.frames} frames, ${img.fps} fps` : 'still');
-      const btn = document.createElement('button');
-      btn.type = 'button'; btn.className = 'btn btn-quiet'; btn.textContent = '▶'; btn.setAttribute('aria-label', 'Play ' + img.name);
-      btn.disabled = !!img.error;
-      btn.addEventListener('click', async () => {
-        try { renderPi(await api('/api/play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: img.name }) })); }
-        catch (e) { piError(e); }
-      });
-      li.append(name, info, btn); list.appendChild(li);
-    });
-  }
-  function piError(e) { $('piState').textContent = e.message; setStatus('Panel: ' + e.message); }
-  function uploadCanvas() {
-    const n = state.frames.length;
-    const c = document.createElement('canvas'); c.width = state.cols * n; c.height = state.rows;
-    const ctx = c.getContext('2d');
-    state.frames.forEach((f, i) => paintCanvas(ctx, f, i * state.cols));
-    return { canvas: c, name: n > 1 ? sheetFile() : frameFile() };
-  }
-  async function sendToPi(save) {
-    const { canvas, name } = uploadCanvas();
-    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-    try {
-      const s = await api(`/api/show?name=${encodeURIComponent(name)}&save=${save ? 1 : 0}`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
-      renderPi(s);
-      let msg = save ? `Saved ${name} on the Pi and playing it.` : `Sent ${name} to the panel.`;
-      if (s.grid && (s.grid.cols !== state.cols || s.grid.rows !== state.rows)) msg += ` Note: the Pi's grid is ${s.grid.cols}×${s.grid.rows}, so it was fitted.`;
-      setStatus(msg);
-    } catch (e) { piError(e); }
-  }
-  async function initPi() {
-    if (window.claude || !/^https?:$/.test(location.protocol)) return;
-    let s;
-    try { s = await api('/api/status'); } catch (e) { return; } // not served by the Pi
-    $('piCard').hidden = false;
-    renderPi(s);
-    $('piSendBtn').addEventListener('click', () => sendToPi(false));
-    $('piSaveBtn').addEventListener('click', () => sendToPi(true));
-    $('piStopBtn').addEventListener('click', async () => {
-      try { renderPi(await api('/api/stop', { method: 'POST' })); } catch (e) { piError(e); }
-    });
-    $('piBright').addEventListener('input', () => { $('piBrightVal').textContent = Number($('piBright').value).toFixed(2); });
-    $('piBright').addEventListener('change', async () => {
-      const v = Number($('piBright').value);
-      try {
-        renderPi(await api('/api/brightness', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: v }) }));
-        $('brightInput').value = v; readLedSettings(); // keep the LED sim in step with the panel
-      } catch (e) { piError(e); }
-    });
-  }
-
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
   $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
@@ -909,7 +862,6 @@
   buildLut(); buildGridDOM(); renderSwatches(); updateUndoBtns();
   setView(sim.view === 'sim' ? 'sim' : 'design');
   afterFrameChange();
-  initPi();
 })();
 </script>
 
