@@ -88,6 +88,33 @@ def release_panel():
         _lock_handle = None
 
 
+SPI_BUFSIZ_PATH = "/sys/module/spidev/parameters/bufsiz"
+SPI_FRAME_BYTES = 42 + LED_COUNT * 24  # rpi5-ws2812: preamble + 8 SPI bytes per colour bit
+
+
+def spi_buffer_warning():
+    """Return a warning string if the kernel SPI buffer can't hold one whole frame, else None.
+
+    spidev splits a write bigger than bufsiz (default 4096 bytes) into several
+    transfers with a pause in between. For 256 LEDs a frame is 6186 bytes, so the
+    pause lands mid-LED and the panel shows random stray/yellow pixels that look
+    exactly like a wiring or power fault. Fix: spidev.bufsiz=65536 on the kernel
+    command line.
+    """
+    try:
+        with open(SPI_BUFSIZ_PATH) as f:
+            bufsiz = int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+    if bufsiz >= SPI_FRAME_BYTES:
+        return None
+    return (
+        f"SPI buffer is {bufsiz} bytes but one frame needs {SPI_FRAME_BYTES}. The frame\n"
+        "gets split and the panel will show random stray pixels. Fix (once, then reboot):\n"
+        "  sudo sed -i 's/$/ spidev.bufsiz=65536/' /boot/firmware/cmdline.txt && sudo reboot"
+    )
+
+
 def get_strip():
     """Open the panel. Exits with a clear message if another program holds it."""
     try:
@@ -95,6 +122,9 @@ def get_strip():
     except PanelBusy as e:
         print(e)
         sys.exit(1)
+    warning = spi_buffer_warning()
+    if warning:
+        print(f"WARNING: {warning}\n", file=sys.stderr)
     strip = WS2812SpiDriver(spi_bus=0, spi_device=0, led_count=LED_COUNT).get_strip()
     strip.set_brightness(1.0)  # brightness is applied in correct() instead
     return strip

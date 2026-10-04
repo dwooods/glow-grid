@@ -61,7 +61,11 @@ As with led-strip, the Pi 5's RP1 chip breaks `rpi_ws281x` / Adafruit `neopixel`
 ## Setup
 
 ```bash
-sudo raspi-config   # Interface Options -> SPI -> Enable, then reboot
+sudo raspi-config   # Interface Options -> SPI -> Enable
+
+# Let the SPI driver send a whole 256-LED frame in one go (see "Stray pixels" below)
+sudo sed -i 's/$/ spidev.bufsiz=65536/' /boot/firmware/cmdline.txt
+sudo reboot
 
 git clone https://github.com/dwooods/glow-grid.git ~/glow-grid
 cd ~/glow-grid
@@ -83,6 +87,18 @@ Panels are wired in different orders, and a wrong mapping scrambles images into 
 4. Press `k` in the menu to mark the wiring as confirmed. This sets `WIRING_CONFIRMED = True` in `local_config.py`. Until then the menu (and `play.py`) show a "wiring not checked yet" warning, so a scrambled image never looks like a mystery.
 
 `w` walks a single dot through every index, which helps if the markers are ambiguous.
+
+### Stray pixels? Check the SPI buffer before touching the wiring
+
+If the check pattern is *mostly* right but has random wrong-coloured pixels, pixels missing from the top row or left column, or red that comes out orange, and the errors change every time you run it, the cause is almost certainly this:
+
+```
+cat /sys/module/spidev/parameters/bufsiz   # 4096 = problem, 65536 = fine
+```
+
+The `rpi5-ws2812` driver sends 42 + 24 bytes per LED, so a 256-LED frame is 6186 bytes. The kernel's default SPI buffer is 4096, so `spidev` splits every frame into two transfers with an unpredictable pause between them. The pause lands in the middle of LED 168's data, and depending on its length the panel either ignores it or treats it as end-of-frame. Either way the result is intermittent garbage that is indistinguishable from a bad ground, a weak 3.3V data signal or an undersized power supply, and none of those fixes help. The `cmdline.txt` line in Setup raises the limit; `run.sh` and every script warn if it's still 4096. A 60-LED strip is 1482 bytes and never hits this, which is why the same driver can work on a strip and glitch on a panel.
+
+If `bufsiz` is already 65536 and you still see strays, *then* it's hardware: common ground between the Pi, the supply and the panel; the 330Ω resistor in the data line; a supply rated for LED strips (not a generic 2A adapter).
 
 ## The menu
 

@@ -109,9 +109,29 @@ It follows the led-strip pattern that already worked:
 - **A screenshot of transparency isn't transparency.** An editor's gray checkerboard gets imported as gray pixels.
 - **JPEG noise becomes pixels.** Compression speckles in a downloaded image turn into off-color LEDs after fitting. Start from PNG, or clean the background to pure black.
 
+## The first real run: a 4096-byte trap
+
+The panel went on the bench with the wiring from the strip project, and the probe lit red at index 0 and green right below it. Good. Then the `check` pattern came up with a few red LEDs missing from the top row, two greens dark on the left, and stray red and blue dots scattered where nothing should be lit. Every run, a different set.
+
+That is exactly what a bad ground looks like. It is also what a marginal 3.3V data signal looks like, and what an undersized power supply looks like, and that last one had been the real cause on the 8x32 panel. So the next few hours were spent on hardware: the breadboard came out of the data path, a 330Ω resistor went in, a 1000µF capacitor across the supply, a 74AHCT125 level shifter sat ready. The resistor turned orange LEDs back to red and did nothing for the strays.
+
+What finally pointed the right way was an A/B test: a bare 20-line script that fills all 256 LEDs solid red, with no image loading, no wiring map, no gamma table. It glitched too, so it was not Glow Grid's code. But it was clean for the first five seconds and only then started throwing yellow columns at the input end, with nobody touching anything. Thermal? Intermittent contact? Neither felt right for something that reset itself every run.
+
+The answer was in the driver source. `rpi5-ws2812` encodes each colour bit as one SPI byte, so a frame is 42 preamble bytes plus 24 per LED: **6186 bytes for 256 LEDs**. The `spidev` library splits any write bigger than the kernel's SPI buffer, and that buffer defaults to **4096 bytes**. Every frame was going out as two transfers, with a pause between them of whatever length the Linux scheduler felt like, landing seven bits into LED 168. Sometimes the LEDs rode through the pause; sometimes they took it as end-of-frame and the second half re-applied from LED 0. A solid-red frame shifted by a few bits reads as red-plus-green, which is yellow. A 60-LED strip is 1482 bytes and never splits, which is why the same driver had always worked on the strip and glitched on panels.
+
+One line in `/boot/firmware/cmdline.txt`:
+
+```
+spidev.bufsiz=65536
+```
+
+and a reboot. Solid red for thirty seconds, then a perfect check pattern, then the knight. The capacitor and the level shifter went back in the drawer. `run.sh` and every script now read that sysfs value on startup and print the fix if it is still 4096, so nobody has to find this twice.
+
+The lesson that stings: the symptom was a near-perfect match for three hardware faults, and all three had plausible fixes to try, so that is where the time went. A software limit that happens to sit between 1482 and 6186 bytes never made the list. Reading the driver first would have taken fifteen minutes.
+
 ## What's next
 
-- First run on the real panel: probe the wiring, confirm it, then play a Glow Grid PNG and check the printed brightness.
+- Play a Glow Grid PNG saved at brightness 0.35 and check the printed "from the image" line matches.
 - A 3D-printed grid and diffuser, so each LED reads as a square pixel instead of a dot.
 - A "WLED JSON" export, so the same art can run on an ESP32 with [WLED](https://kno.wled.ge/).
 - A current limiter that dims a frame based on its actual estimated draw rather than a flat cap.
