@@ -90,12 +90,28 @@ ln -s ~/glow-grid/run.sh ~/.local/bin/glow-grid  # then just type: glow-grid
 
 On first run `run.sh` creates `local_config.py` from `local_config.example.py`. That's where your panel's wiring order, brightness and gamma live. It's git-ignored, so `git pull` never overwrites it.
 
+**Before you play anything, find your panel's wiring order (next section).** `run.sh` opens the menu straight away, but until the wiring is set and confirmed, images can look scrambled. The menu shows a warning until you've done it. Quit the menu (`q`), run the probe, then come back.
+
 ### Find your panel's wiring order (do this first)
 
 Panels are wired in different orders, and a wrong mapping scrambles images into noise that looks like a hardware fault. The probe is a separate command, not part of the menu:
 
 1. Run `glow-grid probe`. Five raw indexes light up: 0 red, 1 green, 15 white, 16 yellow, 255 blue. (`glow-grid probe walk` walks one dot through every index if the markers are ambiguous.) Press Ctrl+C to stop.
-2. Set `FLIP_X`, `FLIP_Y`, `COLUMN_MAJOR` and `SERPENTINE` in `local_config.py`. The comments there map what you see to each setting.
+2. Set `FLIP_X`, `FLIP_Y`, `COLUMN_MAJOR` and `SERPENTINE` in `local_config.py` (`nano ~/glow-grid/local_config.py`). Use what you saw in step 1:
+
+   | What you see | Setting |
+   |---|---|
+   | Red (index 0) in the top-left corner | no flips |
+   | Red in the top-right corner | `FLIP_X = True` |
+   | Red in the bottom-left corner | `FLIP_Y = True` |
+   | Red in the bottom-right corner | both `True` |
+   | Green (index 1) next to red, along the row | `COLUMN_MAJOR = False` |
+   | Green directly above or below red, down the column | `COLUMN_MAJOR = True` |
+   | Yellow (16) next to white (15), snaking back | `SERPENTINE = True` |
+   | Yellow back on the same edge as red, jumping across | `SERPENTINE = False` |
+
+   Not every marker will always be visible. If some don't light or land where you can't tell, `glow-grid probe walk` shows the whole path.
+
 3. Run `glow-grid probe check`. You should see white at the top-left, red along the top, green down the left, and a blue diagonal. If so, images will display correctly.
 4. Start `glow-grid` and press `k` to mark the wiring as confirmed. This sets `WIRING_CONFIRMED = True` in `local_config.py`. Until then the menu (and `play.py`) show a "wiring not checked yet" warning, so a scrambled image never looks like a mystery.
 
