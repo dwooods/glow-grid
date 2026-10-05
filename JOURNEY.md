@@ -8,7 +8,7 @@ This is the story of turning a flexible 16x16 WS2812B panel and a Raspberry Pi 5
 
 The led-strip project had already solved the hard Pi 5 problem: the Pi 5's GPIO lives on the **RP1** chip, so the classic `rpi_ws281x` / Adafruit `neopixel` libraries don't work, and the fix is to drive the LEDs over **hardware SPI** with [`rpi5-ws2812`](https://pypi.org/project/rpi5-ws2812/). A 256-LED panel uses exactly the same wiring:
 
-- Panel **DIN** → 330Ω resistor → Pi **GPIO10 / MOSI** (physical pin 19)
+- Panel **DIN** → Pi **GPIO10 / MOSI** (physical pin 19), direct (no resistor needed, as it turned out)
 - Panel **GND** → the power supply's ground **and** a Pi ground pin (common ground)
 - Panel **5V** → an external 5V supply, never the Pi
 
@@ -37,7 +37,7 @@ So the project never assumes. `probe.py` lights five raw indexes in distinct col
 | Green beside red, or above/below it | `COLUMN_MAJOR` |
 | Yellow next to white, or back on red's edge | `SERPENTINE` |
 
-A `check` pattern (white top-left, red along the top, green down the left, blue diagonal) confirms it. Until you press `k` to confirm, the menu shows a "wiring not checked yet" warning, so a scrambled image never becomes a mystery. WLED's 2D matrix settings ask for the same four facts, which was a nice confirmation that this is the right model.
+A `check` pattern (white top-left, red along the top, green down the left, blue diagonal) confirms it. Until you press `k` in the menu to confirm, the menu shows a "wiring not checked yet" warning, so a scrambled image never becomes a mystery. WLED's 2D matrix settings ask for the same four facts, which was a nice confirmation that this is the right model.
 
 ## Why a simulator at all
 
@@ -99,7 +99,7 @@ It follows the led-strip pattern that already worked:
 - **`glowgrid.py`**: the menu. It numbers whatever is in `images/`, runs one thing at a time in the background, and stops the old one cleanly before starting the next.
 - **`local_config.py`**: your panel's wiring and defaults, git-ignored so `git pull` never overwrites it.
 - **`run.sh`**, symlinked as `glow-grid`: creates the venv on first run and opens the menu.
-- **`examples/sprites.py`**: the example sprites (an original knight and a smiley) stored as text grids, so they're diffable source instead of binary files.
+- **`examples/sprites.py`**: the example sprites (an original knight) stored as text grids, so they're diffable source instead of binary files.
 - **`web/`**: the simulator, a single HTML file that also installs as an offline app.
 
 ## Small things that cost time
@@ -125,7 +125,7 @@ One line in `/boot/firmware/cmdline.txt`:
 spidev.bufsiz=65536
 ```
 
-and a reboot. Solid red for thirty seconds, then a perfect check pattern, then the knight. The capacitor and the level shifter went back in the drawer. `run.sh` and every script now read that sysfs value on startup and print the fix if it is still 4096, so nobody has to find this twice.
+and a reboot. Solid red for thirty seconds, then a perfect check pattern, then the knight. The resistor, the capacitor and the level shifter all came back out: the final build has none of them. `run.sh` and every script now read that sysfs value on startup and print the fix if it is still 4096, so nobody has to find this twice.
 
 The lesson that stings: the symptom was a near-perfect match for three hardware faults, and all three had plausible fixes to try, so that is where the time went. A software limit that happens to sit between 1482 and 6186 bytes never made the list. Reading the driver first would have taken fifteen minutes.
 
