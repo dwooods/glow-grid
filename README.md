@@ -52,6 +52,32 @@ knight_4fps.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
 - Importing a Glow Grid PNG back into the simulator restores its brightness and gamma too.
 - Editing the PNG in another app may drop the settings; it then falls back to `local_config.py`.
 
+### Animation files: sheets, fps and file names
+
+An animation is a **sprite sheet**: one PNG with every frame side by side, like a strip of film. For a 16×16 panel it is 16 px tall and 16 px wide per frame, so 4 frames make a 64×16 image. The Pi cuts it into 16 px pieces and plays them in order. **fps** (frames per second) is how fast it plays: at 4 fps each frame shows for a quarter of a second. The sheet says *what the file is*; fps says *how fast to play it*.
+
+```
+[ frame 1 ][ frame 2 ][ frame 3 ][ frame 4 ]     = one 64x16 PNG, played at 4 fps
+```
+
+**Sheets saved from Glow Grid** (*Save animation (sprite sheet)*) store the frame count and fps inside the PNG, next to brightness and gamma, so the file name can be anything: `ghost.png`, `red_ghost_v2.png`. The suggested name (`ghost_4fps_bright35_gamma2.2.png`) is only there so you can read the settings in a file list.
+
+**Sheets from other tools** (Piskel, hand-made strips) carry no metadata, so the Pi uses the file name:
+
+| File name | What the Pi does |
+|---|---|
+| `walk_4fps.png` | Plays as an animation at 4 fps. `_Nfps` marks it as a sheet and sets the speed, so `_sheet` isn't needed as well. |
+| `walk_sheet.png` | Plays as an animation at the default 6 fps. |
+| `walk.png` (16 px tall, wider than 16 px) | Treated as one wide still and squashed to fit. |
+
+Why the name is needed here: a 16 px tall, 48 px wide image could be three frames or just a wide picture, and a PNG has no frame-rate field. This opt-in stops ordinary wide images turning into accidental animations.
+
+**Speed, in priority order:** the number you type in the menu or `play.py`, then the fps stored in the PNG, then `_Nfps` in the name, then a GIF's own timing, then `DEFAULT_FPS` (6).
+
+**What can lose the stored data:** re-saving the PNG in another editor, and scaled exports (`_x8` etc.), which are no longer 16 px tall and play as stills. A sheet without its metadata falls back to the file name rules above. Copying with `scp` keeps everything intact.
+
+Other rules: avoid spaces in names (they complicate `scp`), and use `.png`, `.gif`, `.jpg`, `.webp` or `.bmp`.
+
 ### Export size: 1× for the Pi, bigger to share
 
 Exports are 16×16 by default: one pixel per LED, which is exactly what the Pi plays. The *Scale* option in the export card also saves 8×, 16× or 32× copies for viewing and sharing: each pixel becomes a sharp block, and the name gets `_x16` etc. Copy the **1×** file to the Pi. A scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
@@ -204,7 +230,7 @@ The Pi fits any image to the grid and plays it. How good it looks depends on wha
 
 - **Pixel art at 16×16** (Glow Grid exports, Piskel sprites, the examples) comes out pixel-perfect. So does pixel art at an exact 2×, 3×, 4×… upscale.
 - **Photos and large images:** anything more than 2× the grid in either direction is averaged per cell, so photos come out smooth instead of noisy. Smaller images keep exact pixels, which keeps pixel-art edges hard. Change this with `RESIZE` in `local_config.py` (`"auto"`, `"nearest"` or `"average"`).
-- **Animations:** an animated GIF, or a sprite sheet (frames side by side, 16 px tall) whose name contains the speed or `_sheet`: `walk_8fps.png`, `walk_sheet.png`. Sheets saved from Glow Grid also carry their frame count and speed inside the PNG, so they play under any name.
+- **Animations:** an animated GIF, or a sprite sheet (frames side by side, 16 px tall). Sheets saved from Glow Grid carry their frame count and speed inside the PNG, so they play under any name. Sheets from other tools need the speed or `_sheet` in the name: `walk_8fps.png`, `walk_sheet.png`. See *Animation files* above.
 - **Transparency** becomes "off" LEDs.
 - **Non-square images** are centered and fitted without stretching.
 - **Formats:** PNG, GIF, JPG, WEBP and BMP all show in the menu.
@@ -231,7 +257,7 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 
 ## Architecture
 
-- **`grid_common.py`**: panel config and defaults, `get_strip()` (also takes a lock so only one glow-grid program drives the panel at a time), `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `set_light()` / `image_light()` (per-image brightness and gamma, capped by `MAX_BRIGHTNESS`), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, named sprite sheet or animated GIF → frames + delays), and `draw()`.
+- **`grid_common.py`**: panel config and defaults, `get_strip()` (also takes a lock so only one glow-grid program drives the panel at a time), `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `set_light()` / `image_light()` (per-image brightness and gamma, capped by `MAX_BRIGHTNESS`), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, sprite sheet or animated GIF → frames + delays), and `draw()`.
 - **`play.py`**: plays one file with its saved light settings. A still is held until stopped; an animation loops.
 - **`probe.py`**: wiring diagnostics (markers / walk / check), run with `glow-grid probe`.
 - **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
@@ -239,7 +265,7 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 - **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/` (the knight, as a still and as an animation).
 - **`web/`**: the simulator (static site / installable app).
 
-Frame rate for an animation comes from, in order: the menu argument, `_<n>fps` in the filename, the GIF's own timing, then `DEFAULT_FPS` (6).
+Frame rate for an animation comes from, in order: the menu argument, the fps stored in the PNG, `_<n>fps` in the filename, the GIF's own timing, then `DEFAULT_FPS` (6).
 
 ## Designing for LEDs
 
