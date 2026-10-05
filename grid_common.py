@@ -213,12 +213,27 @@ def is_sheet_name(path):
     return bool(SHEET_NAME.search(os.path.basename(path)))
 
 
+def _png_meta(path):
+    """The JSON the Glow Grid simulator stores in a PNG text chunk, or {}."""
+    try:
+        with Image.open(path) as img:
+            raw = getattr(img, "text", {}).get(LIGHT_KEY) or img.info.get(LIGHT_KEY)
+        data = json.loads(raw) if raw else {}
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def load_frames(path, fps=None):
     """Return (frames, delays) for a still image, a sprite sheet (frames side by
     side, each COLS x ROWS, named with "_<n>fps" or "_sheet"), or an animated GIF.
 
-    Frame rate, in priority order: the fps argument, "_<n>fps" in the
-    filename, the GIF's own timing, DEFAULT_FPS."""
+    A sheet is recognised by the "frames" count the simulator stores inside the
+    PNG, or failing that by "_<n>fps" / "_sheet" in the filename.
+
+    Frame rate, in priority order: the fps argument, the "fps" stored in the
+    PNG, "_<n>fps" in the filename, the GIF's own timing, DEFAULT_FPS."""
+    meta = _png_meta(path)
     img = Image.open(path)
     frames, delays = [], []
     if getattr(img, "is_animated", False):
@@ -228,12 +243,16 @@ def load_frames(path, fps=None):
     else:
         sheet = img.convert("RGBA")
         w, h = sheet.size
-        if h == ROWS and w % COLS == 0 and w > COLS and is_sheet_name(path):
+        n = meta.get("frames")
+        by_meta = isinstance(n, int) and n > 1 and w == n * COLS and h == ROWS
+        if by_meta or (h == ROWS and w % COLS == 0 and w > COLS and is_sheet_name(path)):
             for i in range(w // COLS):
                 frames.append(fit(sheet.crop((i * COLS, 0, (i + 1) * COLS, ROWS))))
         else:
             frames.append(fit(sheet))
 
+    if fps is None and isinstance(meta.get("fps"), (int, float)) and meta["fps"] > 0:
+        fps = float(meta["fps"])
     if fps is None:
         m = re.search(r"_(\d+(?:\.\d+)?)fps", os.path.basename(path), re.IGNORECASE)
         if m:
@@ -248,12 +267,7 @@ LIGHT_KEY = "glow-grid"  # PNG text chunk written by the Glow Grid simulator
 
 def image_light(path):
     """Return {"brightness": b, "gamma": g} saved in a Glow Grid PNG, or {}."""
-    try:
-        with Image.open(path) as img:
-            raw = getattr(img, "text", {}).get(LIGHT_KEY) or img.info.get(LIGHT_KEY)
-        data = json.loads(raw) if raw else {}
-    except (OSError, ValueError):
-        return {}
+    data = _png_meta(path)
     out = {}
     for key in ("brightness", "gamma"):
         if isinstance(data.get(key), (int, float)):
