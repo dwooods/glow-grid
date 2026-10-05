@@ -56,6 +56,7 @@
   .view-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
   .device {
+    box-sizing: border-box;
     background: var(--grid-gap-bg); border-radius: 18px; padding: 18px;
     border: 1px solid var(--border);
     box-shadow: inset 0 0 30px rgba(0,0,0,0.6), 0 10px 30px rgba(0,0,0,0.4);
@@ -148,6 +149,48 @@
     .device-col, .panel-col { flex-basis: auto; width: 100%; max-width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+
+  /* Touch targets: fingers need bigger hit areas than a mouse */
+  .grid { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  @media (pointer: coarse) {
+    .btn, .tool-btn, .view-toggle button, .file-btn { min-height: 44px; }
+    .swatch { width: 36px; height: 36px; }
+    .swatches { gap: 8px; }
+    .frame-thumb { width: 48px; height: 48px; }
+    input[type=number], input[type=text], select { font-size: 16px; min-height: 40px; box-sizing: border-box; } /* 16px stops iOS zooming on focus */
+    input[type=number] { width: 76px; }
+    .check input { width: 22px; height: 22px; }
+  }
+  @media (max-width: 480px) { .page { padding-inline: 12px; } .device { padding: 12px; } }
+
+  /* Photo to grid dialog */
+  .photo-dlg { padding: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); width: min(760px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); font-family: inherit; }
+  .photo-dlg::backdrop { background: rgba(0,0,0,.7); }
+  .photo-wrap { display: flex; flex-direction: column; max-height: calc(100dvh - 18px); }
+  .photo-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .photo-head h2 { margin: 0; font-size: 0.9rem; font-family: 'Sora', sans-serif; }
+  .photo-body { overflow: auto; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .photo-view { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .photo-view .crop-box { flex: none; }
+  .photo-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .crop-box { background: #000; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  #cropCanvas { display: block; width: 100%; height: auto; touch-action: none; cursor: grab; }
+  #cropCanvas.picking { cursor: crosshair; }
+  #photoPreview { display: block; width: 100%; max-width: 256px; height: auto; image-rendering: pixelated; border-radius: 10px; border: 1px solid var(--border); background: #000; align-self: center; }
+  .photo-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--border); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+  .range-row { display: flex; flex-direction: column; gap: 2px; font-size: 0.78rem; color: var(--text-dim); }
+  .bg-swatch { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); display: inline-block; vertical-align: middle; }
+  @media (max-width: 600px) {
+    .photo-dlg { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; }
+    .photo-wrap { max-height: 100dvh; height: 100dvh; }
+    .photo-body { grid-template-columns: minmax(0, 1fr); gap: 12px; padding-top: 0; }
+    .photo-view { position: sticky; top: 0; z-index: 2; flex-direction: row; align-items: flex-start; background: var(--panel); padding-block: 12px; gap: 10px; }
+    .photo-view .crop-box { flex: 1 1 62%; min-width: 0; }
+    #photoPreview { flex: 1 1 38%; min-width: 0; align-self: flex-start; max-width: none; width: auto; }
+    .photo-foot .btn { flex: 1 1 0; }
+  }
 </style>
 
 </head>
@@ -256,8 +299,9 @@
             </select>
           </label>
           <label class="file-btn">Choose image<input id="imageInput" type="file" accept="image/*" hidden></label>
+          <label class="btn file-photo">Photo to grid…<input id="photoInput" type="file" accept="image/*" hidden></label>
         </div>
-        <p class="hint">Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet whose name has <code>_8fps</code> or <code>_sheet</code> loads back as separate frames.</p>
+        <p class="hint"><strong>Photo to grid…</strong> opens a crop-and-zoom editor with background removal and dithering (on a phone it offers the camera too). <em>Choose image</em> is the quick path for pixel art and sprite sheets. Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet whose name has <code>_8fps</code> or <code>_sheet</code> loads back as separate frames.</p>
       </section>
 
       <section class="card">
@@ -318,6 +362,51 @@
     </aside>
   </main>
 </div>
+
+<dialog id="photoDlg" class="photo-dlg" aria-labelledby="photoTitle">
+  <div class="photo-wrap">
+    <div class="photo-head">
+      <h2 id="photoTitle">Photo to grid</h2>
+      <button id="photoCancel" class="btn btn-quiet" type="button">Cancel</button>
+    </div>
+    <div class="photo-body">
+      <div class="photo-view">
+        <div class="crop-box"><canvas id="cropCanvas" aria-label="Photo crop. Drag to move, pinch or scroll to zoom."></canvas></div>
+        <canvas id="photoPreview" aria-label="Preview of the result on the grid"></canvas>
+      </div>
+      <div class="photo-col">
+        <p class="hint">Drag the photo to move it. Pinch or scroll to zoom. The faint lines are one LED each; the small picture is the result.</p>
+        <label class="range-row">Zoom <input id="photoZoom" type="range" min="0" max="100" value="0"></label>
+        <div class="btn-row">
+          <button id="photoFit" class="btn btn-quiet" type="button">Fit whole photo</button>
+          <button id="photoFill" class="btn btn-quiet" type="button">Fill grid</button>
+        </div>
+        <label class="check"><input id="photoLed" type="checkbox" checked> Preview as LEDs (uses LED settings)</label>
+
+        <label class="check"><input id="bgOn" type="checkbox"> Background off</label>
+        <div class="btn-row" id="bgRow">
+          <button id="bgPick" class="btn btn-quiet" type="button" aria-pressed="false">Pick on photo</button>
+          <button id="bgCorners" class="btn btn-quiet" type="button">Use corners</button>
+          <span class="bg-swatch" id="bgSwatch" title="Background color"></span>
+        </div>
+        <label class="range-row">Background tolerance <input id="bgTol" type="range" min="0" max="160" value="45"></label>
+
+        <label class="form-row" style="flex-direction:column;align-items:stretch">Dithering
+          <select id="ditherMode">
+            <option value="none">None</option>
+            <option value="fs">Floyd–Steinberg (smooth)</option>
+            <option value="bayer">Ordered (patterned)</option>
+          </select>
+        </label>
+        <p class="hint" id="photoHint">Dithering is baked in at the current brightness and gamma. Change those later and re-run this.</p>
+      </div>
+    </div>
+    <div class="photo-foot">
+      <button id="photoApply" class="btn" type="button">Apply to this frame</button>
+      <button id="photoAdd" class="btn btn-quiet" type="button">Add as new frame</button>
+    </div>
+  </div>
+</dialog>
 
 <script>
 (function () {
@@ -565,7 +654,9 @@
     if (!painting || state.tool === 'fill') return;
     const idx = cellAt(e.clientX, e.clientY); if (idx !== null) applyTool(idx);
   });
-  window.addEventListener('pointerup', () => { if (!painting) return; painting = false; renderDiagnostics(); renderFrameStrip(); saveState(); });
+  const endPaint = () => { if (!painting) return; painting = false; renderDiagnostics(); renderFrameStrip(); saveState(); };
+  window.addEventListener('pointerup', endPaint);
+  window.addEventListener('pointercancel', endPaint);
 
   document.querySelectorAll('.tool-btn').forEach((btn) => btn.addEventListener('click', () => {
     document.querySelectorAll('.tool-btn').forEach((b) => b.classList.remove('active'));
@@ -694,6 +785,262 @@
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  });
+
+
+  /* ---------- photo to grid: crop, zoom, background-off, dither ---------- */
+  // Exact area average of a source rectangle onto cols x rows, like PIL's BOX filter.
+  // Anything outside the photo counts as transparent black. With bg set, pixels near
+  // bg.rgb (or transparent) are "background": a cell is off if under half foreground,
+  // otherwise it takes the foreground-only average, so edges don't get a muddy halo.
+  function boxCrop(d, w, h, view, cols, rows, bg) {
+    const out = new Float32Array(cols * rows * 3);
+    const cw = view.vw / cols, ch = view.vh / rows;
+    const tol2 = bg ? bg.tol * bg.tol : 0;
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const x0 = view.x0 + cx * cw, x1 = x0 + cw, y0 = view.y0 + cy * ch, y1 = y0 + ch;
+      const ix0 = Math.max(0, Math.floor(x0)), ix1 = Math.min(w, Math.ceil(x1));
+      const iy0 = Math.max(0, Math.floor(y0)), iy1 = Math.min(h, Math.ceil(y1));
+      let sr = 0, sg = 0, sb = 0, fr = 0, fg = 0, fb = 0, wFg = 0;
+      for (let y = iy0; y < iy1; y++) {
+        const wy = Math.min(y1, y + 1) - Math.max(y0, y);
+        for (let x = ix0; x < ix1; x++) {
+          const wgt = (Math.min(x1, x + 1) - Math.max(x0, x)) * wy;
+          const i = (y * w + x) * 4, a = d[i + 3] / 255;
+          const r = d[i] * a, g = d[i + 1] * a, b = d[i + 2] * a;
+          sr += r * wgt; sg += g * wgt; sb += b * wgt;
+          if (bg) {
+            const dr = d[i] - bg.rgb[0], dg = d[i + 1] - bg.rgb[1], db = d[i + 2] - bg.rgb[2];
+            if (a < 0.05 || dr * dr + dg * dg + db * db <= tol2) continue;
+            fr += r * wgt; fg += g * wgt; fb += b * wgt; wFg += wgt;
+          }
+        }
+      }
+      const area = cw * ch, o = (cy * cols + cx) * 3;
+      if (bg) {
+        if (wFg / area < 0.5) { out[o] = out[o + 1] = out[o + 2] = 0; }
+        else { out[o] = fr / wFg; out[o + 1] = fg / wFg; out[o + 2] = fb / wFg; }
+      } else { out[o] = sr / area; out[o + 1] = sg / area; out[o + 2] = sb / area; }
+    }
+    return out;
+  }
+
+  // Turn float RGB (0..255) into a frame of hex colors. Dithering works in LED space:
+  // the target is what the LED should emit (brightness and gamma applied, not rounded),
+  // and each channel is snapped to a level the LED can really produce, with the error
+  // spread to neighbors. Pure black stays black so "off" LEDs never speckle.
+  const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  function ditherFrame(rgb, cols, rows, mode, lut, brightness, gamma) {
+    const levels = [], rep = [];
+    for (let v = 0; v < 256; v++) {
+      const L = lut[v], k = levels.length - 1;
+      if (k >= 0 && levels[k] === L) rep[k].push(v); else { levels.push(L); rep.push([v]); }
+    }
+    const repV = rep.map((a) => a[a.length >> 1]);
+    const top = levels.length - 1;
+    const nearest = (X) => { // index of the achievable level closest to X
+      let lo = 0, hi = top;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (levels[m] < X) lo = m + 1; else hi = m; }
+      return lo > 0 && X - levels[lo - 1] <= levels[lo] - X ? lo - 1 : lo;
+    };
+    const target = (c) => 255 * brightness * Math.pow(Math.max(0, Math.min(255, c)) / 255, gamma);
+    const frame = new Array(cols * rows);
+    const n = cols * rows;
+    if (mode === 'none') {
+      for (let p = 0; p < n; p++) frame[p] = toHex(...[0, 1, 2].map((k) => Math.max(0, Math.min(255, Math.round(rgb[p * 3 + k])))));
+      return frame;
+    }
+    const T = new Float32Array(n * 3);
+    const black = new Uint8Array(n);
+    for (let p = 0; p < n; p++) {
+      const r = Math.round(rgb[p * 3]), g = Math.round(rgb[p * 3 + 1]), b = Math.round(rgb[p * 3 + 2]);
+      black[p] = (r + g + b === 0) ? 1 : 0;
+      T[p * 3] = target(rgb[p * 3]); T[p * 3 + 1] = target(rgb[p * 3 + 1]); T[p * 3 + 2] = target(rgb[p * 3 + 2]);
+    }
+    const res = new Uint8Array(n * 3);
+    if (mode === 'bayer') {
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        const p = y * cols + x; if (black[p]) continue;
+        const th = (BAYER4[(y & 3) * 4 + (x & 3)] + 0.5) / 16;
+        for (let k = 0; k < 3; k++) {
+          const X = T[p * 3 + k];
+          let i = 0; while (i < top && levels[i + 1] <= X) i++;      // largest level <= X
+          const j = Math.min(top, i + 1);
+          const frac = j === i ? 0 : (X - levels[i]) / (levels[j] - levels[i]);
+          res[p * 3 + k] = repV[frac > th ? j : i];
+        }
+      }
+    } else { // Floyd–Steinberg, serpentine
+      for (let y = 0; y < rows; y++) {
+        const ltr = (y & 1) === 0;
+        for (let xi = 0; xi < cols; xi++) {
+          const x = ltr ? xi : cols - 1 - xi, p = y * cols + x;
+          if (black[p]) continue;
+          const dir = ltr ? 1 : -1;
+          for (let k = 0; k < 3; k++) {
+            const X = T[p * 3 + k], li = nearest(X), e = X - levels[li];
+            res[p * 3 + k] = repV[li];
+            const push = (xx, yy, wgt) => {
+              if (xx < 0 || xx >= cols || yy >= rows) return;
+              const q = yy * cols + xx; if (black[q]) return;
+              T[q * 3 + k] += e * wgt;
+            };
+            push(x + dir, y, 7 / 16); push(x - dir, y + 1, 3 / 16); push(x, y + 1, 5 / 16); push(x + dir, y + 1, 1 / 16);
+          }
+        }
+      }
+    }
+    for (let p = 0; p < n; p++) frame[p] = black[p] ? '#000000' : toHex(res[p * 3], res[p * 3 + 1], res[p * 3 + 2]);
+    return frame;
+  }
+  window.GlowPhoto = { boxCrop, ditherFrame }; // exposed so the Pi-parity test can call it
+
+  const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', queued: false };
+  const cropCv = $('cropCanvas'), cropCtx = cropCv.getContext('2d');
+  const viewH = () => photo.vw * state.rows / state.cols;
+
+  async function decodeFile(file) {
+    let src;
+    try { src = await createImageBitmap(file); } // honors EXIF rotation
+    catch (e) {
+      src = await new Promise((res, rej) => { const u = URL.createObjectURL(file), im = new Image(); im.onload = () => { URL.revokeObjectURL(u); res(im); }; im.onerror = rej; im.src = u; });
+    }
+    const sw = src.width || src.naturalWidth, sh = src.height || src.naturalHeight;
+    const k = Math.min(1, 1400 / Math.max(sw, sh));
+    const w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, h);
+    if (src.close) src.close();
+    return { canvas: c, w, h, data: x.getImageData(0, 0, w, h).data };
+  }
+  function setZoomFromSlider() {
+    const t = Number($('photoZoom').value) / 100;
+    photo.vw = Math.exp(Math.log(photo.vwMax) * (1 - t) + Math.log(photo.vwMin) * t);
+    schedulePhoto();
+  }
+  function syncSlider() {
+    const t = (Math.log(photo.vwMax) - Math.log(photo.vw)) / (Math.log(photo.vwMax) - Math.log(photo.vwMin));
+    $('photoZoom').value = String(Math.round(clamp(t, 0, 1) * 100));
+  }
+  function fitView(fill) {
+    const need = [photo.w, photo.h * state.cols / state.rows];
+    photo.vw = fill ? Math.min(...need) : Math.max(...need);
+    photo.cx = photo.w / 2; photo.cy = photo.h / 2; syncSlider(); schedulePhoto();
+  }
+  function schedulePhoto() { if (photo.queued) return; photo.queued = true; requestAnimationFrame(() => { photo.queued = false; renderPhoto(); }); }
+  const viewRect = () => ({ x0: photo.cx - photo.vw / 2, y0: photo.cy - viewH() / 2, vw: photo.vw, vh: viewH() });
+
+  function renderPhoto() {
+    if (!photo.data || !$('photoDlg').open) return;
+    const cols = state.cols, rows = state.rows;
+    const W = 480, H = Math.round(480 * rows / cols);
+    if (cropCv.width !== W || cropCv.height !== H) { cropCv.width = W; cropCv.height = H; }
+    const v = viewRect(), s = W / v.vw;
+    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cropCtx.fillStyle = '#15181f'; cropCtx.fillRect(0, 0, W, H);
+    cropCtx.setTransform(s, 0, 0, s, -v.x0 * s, -v.y0 * s);
+    cropCtx.imageSmoothingEnabled = s < 3; cropCtx.imageSmoothingQuality = 'high';
+    cropCtx.drawImage(photo.canvas, 0, 0);
+    cropCtx.setTransform(1, 0, 0, 1, 0, 0);
+    cropCtx.strokeStyle = 'rgba(255,255,255,.2)'; cropCtx.lineWidth = 1; cropCtx.beginPath();
+    for (let i = 1; i < cols; i++) { const x = Math.round(i * W / cols) + .5; cropCtx.moveTo(x, 0); cropCtx.lineTo(x, H); }
+    for (let j = 1; j < rows; j++) { const y = Math.round(j * H / rows) + .5; cropCtx.moveTo(0, y); cropCtx.lineTo(W, y); }
+    cropCtx.stroke();
+
+    const bg = photo.bg.on ? { rgb: photo.bg.rgb, tol: photo.bg.tol } : null;
+    const rgb = boxCrop(photo.data, photo.w, photo.h, v, cols, rows, bg);
+    photo.result = ditherFrame(rgb, cols, rows, photo.dither, LUT, sim.brightness, sim.gamma);
+    const pv = $('photoPreview'); pv.width = cols; pv.height = rows;
+    const px = pv.getContext('2d'), img = px.createImageData(cols, rows), asLed = $('photoLed').checked;
+    photo.result.forEach((hex, p) => { img.data.set([...hexToRgb(asLed ? led(hex).disp : hex), 255], p * 4); });
+    px.putImageData(img, 0, 0);
+    $('bgSwatch').style.background = toHex(...photo.bg.rgb);
+  }
+
+  function sampleAt(clientX, clientY) {
+    const r = cropCv.getBoundingClientRect(), v = viewRect();
+    const x = Math.floor(v.x0 + (clientX - r.left) / r.width * v.vw), y = Math.floor(v.y0 + (clientY - r.top) / r.height * v.vh);
+    if (x < 0 || y < 0 || x >= photo.w || y >= photo.h) return null;
+    const i = (y * photo.w + x) * 4; return [photo.data[i], photo.data[i + 1], photo.data[i + 2]];
+  }
+  function cornerColor() {
+    const m = 3, pts = [];
+    for (const [x0, y0] of [[0, 0], [photo.w - m, 0], [0, photo.h - m], [photo.w - m, photo.h - m]]) {
+      let r = 0, g = 0, b = 0;
+      for (let y = 0; y < m; y++) for (let x = 0; x < m; x++) { const i = ((y0 + y) * photo.w + x0 + x) * 4; r += photo.data[i]; g += photo.data[i + 1]; b += photo.data[i + 2]; }
+      pts.push([r / (m * m), g / (m * m), b / (m * m)]);
+    }
+    return [0, 1, 2].map((k) => { const a = pts.map((p) => p[k]).sort((p, q) => p - q); return Math.round((a[1] + a[2]) / 2); });
+  }
+
+  // Pointer gestures on the crop window: one finger pans, two pinch-zoom, wheel zooms
+  const ptrs = new Map(); let gesture = null;
+  cropCv.addEventListener('pointerdown', (e) => {
+    cropCv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
+    gesture = { moved: false };
+  });
+  cropCv.addEventListener('pointermove', (e) => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    const r = cropCv.getBoundingClientRect(), k = photo.vw / r.width;
+    if (ptrs.size === 1) {
+      photo.cx -= (e.clientX - p.x) * k; photo.cy -= (e.clientY - p.y) * k;
+      if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) > 5) gesture.moved = true;
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()], d0 = Math.hypot(a.x - b.x, a.y - b.y);
+      const o = ptrs.get(e.pointerId); const other = a === o ? b : a;
+      const nx = e.clientX, ny = e.clientY, d1 = Math.hypot(nx - other.x, ny - other.y);
+      if (d0 > 0 && d1 > 0) photo.vw = clamp(photo.vw * d0 / d1, photo.vwMin, photo.vwMax);
+      photo.cx -= ((nx - p.x) / 2) * k; photo.cy -= ((ny - p.y) / 2) * k;
+      gesture.moved = true;
+    }
+    p.x = e.clientX; p.y = e.clientY; syncSlider(); schedulePhoto();
+  });
+  const endPtr = (e) => {
+    const was = ptrs.size; ptrs.delete(e.pointerId);
+    if (was === 1 && gesture && !gesture.moved && photo.picking && e.type === 'pointerup') {
+      const c = sampleAt(e.clientX, e.clientY);
+      if (c) { photo.bg.rgb = c; photo.bg.on = true; photo.bgSet = true; $('bgOn').checked = true; setPick(false); schedulePhoto(); }
+    }
+  };
+  cropCv.addEventListener('pointerup', endPtr); cropCv.addEventListener('pointercancel', endPtr);
+  cropCv.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    photo.vw = clamp(photo.vw * Math.exp(e.deltaY * 0.0015), photo.vwMin, photo.vwMax); syncSlider(); schedulePhoto();
+  }, { passive: false });
+
+  function setPick(on) { photo.picking = on; $('bgPick').setAttribute('aria-pressed', String(on)); $('bgPick').classList.toggle('btn-quiet', !on); cropCv.classList.toggle('picking', on); }
+  $('bgPick').addEventListener('click', () => setPick(!photo.picking));
+  $('bgCorners').addEventListener('click', () => { photo.bg.rgb = cornerColor(); photo.bg.on = true; photo.bgSet = true; $('bgOn').checked = true; schedulePhoto(); });
+  $('bgOn').addEventListener('change', (e) => { photo.bg.on = e.target.checked; if (photo.bg.on && !photo.bgSet) { photo.bg.rgb = cornerColor(); photo.bgSet = true; } schedulePhoto(); });
+  $('bgTol').addEventListener('input', (e) => { photo.bg.tol = Number(e.target.value); schedulePhoto(); });
+  $('ditherMode').addEventListener('change', (e) => { photo.dither = e.target.value; schedulePhoto(); });
+  $('photoLed').addEventListener('change', schedulePhoto);
+  $('photoZoom').addEventListener('input', setZoomFromSlider);
+  $('photoFit').addEventListener('click', () => fitView(false));
+  $('photoFill').addEventListener('click', () => fitView(true));
+  $('photoCancel').addEventListener('click', () => $('photoDlg').close());
+  $('photoDlg').addEventListener('close', () => { setPick(false); ptrs.clear(); photo.data = null; photo.canvas = null; });
+  function applyPhoto(asNew) {
+    if (!photo.result) return;
+    stopPlay(); pushUndo();
+    if (asNew) { state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
+    else state.frames[state.currentFrame] = photo.result;
+    afterFrameChange();
+    const how = photo.dither === 'none' ? 'no dithering' : (photo.dither === 'fs' ? 'Floyd–Steinberg' : 'ordered') + ' dithering';
+    setStatus((asNew ? `Photo added as frame ${state.currentFrame + 1}` : `Photo applied to frame ${state.currentFrame + 1}`) + ` (${how}${photo.bg.on ? ', background off' : ''}). Undo reverts.`);
+    $('photoDlg').close();
+  }
+  $('photoApply').addEventListener('click', () => applyPhoto(false));
+  $('photoAdd').addEventListener('click', () => applyPhoto(true));
+  $('photoInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    try {
+      const d = await decodeFile(file);
+      Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, bgSet: false, result: null });
+      photo.bg.on = false; $('bgOn').checked = false; $('ditherMode').value = photo.dither = 'none';
+      photo.vwMax = Math.max(d.w, d.h * state.cols / state.rows) * 3; photo.vwMin = Math.max(state.cols, Math.min(d.w, d.h * state.cols / state.rows) / 40);
+      $('photoDlg').showModal(); fitView(true);
+    } catch (err) { setStatus('That file couldn’t be read as an image.'); }
   });
 
   /* ---------- resize ---------- */
