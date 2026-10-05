@@ -24,6 +24,17 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 Your drawings are saved in that browser's local storage, so re-import a sprite sheet to move work between browsers.
 
+### Photo to grid
+
+*Import image → Photo to grid…* turns any picture into a 16×16 design. On a phone the file picker offers the camera too.
+
+- **Crop and zoom:** drag the photo to move it, pinch or scroll to zoom. *Fit whole photo* shows everything (letterboxed); *Fill grid* crops to the grid's shape. The faint lines are one LED each, and the small picture is the result.
+- **Background off:** tap *Pick on photo* (or *Use corners*) to choose the background color, then set the tolerance. Background cells go black (LED off). Cells at the edge of the subject keep the subject's own color instead of a muddy blend.
+- **Dithering:** *Floyd–Steinberg* (smooth) or *Ordered* (patterned). It works in LED space, using the brightness and gamma from *LED settings*, so dark gradients that would collapse into a few levels keep their tones. Black stays black. It is baked in at the current brightness and gamma; change them and re-run.
+- *Apply to this frame* replaces the frame; *Add as new frame* appends one, so a few photos make an animation. Undo reverts.
+
+The resize is an exact area average, the same math as the Pi's `BOX` filter, so a photo imported with no dithering matches what `play.py` would make of the original file to within one level of 255.
+
 The LED model matches `grid_common.py` exactly: `round(255 * BRIGHTNESS * (c/255) ** GAMMA)`, with any non-zero channel kept at 1 or above.
 
 ### Light settings travel with the image
