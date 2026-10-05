@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Launch the Glow Grid menu. Safe to symlink onto PATH:
 #   ln -s ~/glow-grid/run.sh ~/.local/bin/glow-grid
+# Usage: glow-grid          (menu)
+#        glow-grid probe    (wiring probe; also: probe walk, probe check)
 set -e
 cd "$(dirname "$(readlink -f "$0")")"
 
@@ -23,6 +25,12 @@ if [ -r "$bufsiz_file" ] && [ "$(cat "$bufsiz_file")" -lt 6186 ]; then
 fi
 if [ -z "$(ls -A images 2>/dev/null | grep -Ei '\.(png|gif)$')" ]; then
     python3 examples/make_examples.py
+fi
+
+# `glow-grid probe [walk|check]` runs the wiring probe instead of the menu.
+if [ "${1:-}" = "probe" ]; then
+    shift
+    exec python3 probe.py "$@"
 fi
 
 exec python3 glowgrid.py

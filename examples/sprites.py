@@ -16,9 +16,6 @@ PALETTE = {
     "V": (48, 224, 255),   # visor glow
     "B": (31, 191, 159),   # shield
     "L": (192, 106, 40),   # leather
-    "Y": (245, 197, 66),   # smiley
-    "E": (40, 40, 110),    # smiley eyes (deep blue, still visible on LEDs)
-    "M": (230, 57, 70),    # smiley mouth
 }
 
 _KNIGHT = [
@@ -55,35 +52,6 @@ def knight_frames():
             g[5][4] = g[5][6] = "s"
         frames.append(["".join(r) for r in g])
     return frames
-
-
-_SMILEY = [
-    "................",
-    ".....YYYYYY.....",
-    "...YYYYYYYYYY...",
-    "..YYYYYYYYYYYY..",
-    "..YYYYYYYYYYYY..",
-    ".YYYYEYYYYEYYYY.",
-    ".YYYYEYYYYEYYYY.",
-    ".YYYYYYYYYYYYYY.",
-    ".YYYYYYYYYYYYYY.",
-    ".YYYMYYYYYYMYYY.",
-    ".YYYYMYYYYMYYYY.",
-    "..YYYYMMMMYYYY..",
-    "..YYYYYYYYYYYY..",
-    "...YYYYYYYYYY...",
-    ".....YYYYYY.....",
-    "................",
-]
-
-
-def smiley_frames():
-    """3 open-eye frames then a blink."""
-    blink = [list(r) for r in _SMILEY]
-    for x in (5, 10):
-        blink[5][x] = "Y"
-        blink[6][x - 1] = blink[6][x] = blink[6][x + 1] = "E"
-    return [_SMILEY] * 3 + [["".join(r) for r in blink]]
 
 
 def to_image(frames):

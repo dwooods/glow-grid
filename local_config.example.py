@@ -1,7 +1,7 @@
 # Copy this file to local_config.py and edit it for your panel.
 # local_config.py is git-ignored, so `git pull` never overwrites your settings.
 #
-# Find the wiring values with:  python3 probe.py   (then: python3 probe.py check)
+# Find the wiring values with:  glow-grid probe   (then: glow-grid probe check)
 #
 #   Index 0 (red) in top-left / top-right / bottom-left / bottom-right
 #       -> no flips / FLIP_X = True / FLIP_Y = True / both True
@@ -31,7 +31,7 @@ MAX_BRIGHTNESS = 0.4
 # "nearest", or "average"
 RESIZE = "auto"
 
-# Set to True after `python3 probe.py check` (menu option c) shows white
+# Set to True after `glow-grid probe check` shows white
 # top-left, red along the top, green down the left and a blue diagonal.
 # The menu's "k" option sets this for you.
 WIRING_CONFIRMED = False

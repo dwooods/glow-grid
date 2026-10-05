@@ -17,14 +17,6 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCAL_CONFIG = os.path.join(SCRIPT_DIR, "local_config.py")
 IMAGE_EXTS = (".png", ".gif", ".jpg", ".jpeg", ".webp", ".bmp")
 
-# Letter commands. Images are numbered 1, 2, 3, ... so they never collide.
-COMMANDS = [
-    ("p", "Wiring probe (markers)", ["probe.py"]),
-    ("w", "Wiring probe (walk every index)", ["probe.py", "walk"]),
-    ("c", "Check wiring settings", ["probe.py", "check"]),
-]
-COMMAND_MAP = {key: (name, args) for key, name, args in COMMANDS}
-
 wiring_confirmed = bool(getattr(grid_common, "WIRING_CONFIRMED", False))
 
 
@@ -62,14 +54,13 @@ def show_menu(images, running_name):
     print(f"\nGlow Grid ({COLS}x{ROWS})")
     if not wiring_confirmed:
         print("  ! Wiring not checked yet: images may look scrambled.")
-        print("    Run p, set the flags in local_config.py, then c. If c looks right, press k.")
+        print("    Quit, run `glow-grid probe`, set the flags in local_config.py, run")
+        print("    `glow-grid probe check`, then come back and press k if it looks right.")
     if images:
         for i, (f, info) in enumerate(images, 1):
             print(f"  {i}. {f}  ({info})")
     else:
         print("  (no images in images/ yet; copy a PNG there and press r)")
-    for key, name, _ in COMMANDS:
-        print(f"  {key}. {name}")
     if not wiring_confirmed:
         print("  k. Wiring looks right: mark it confirmed")
     print("  r. Rescan images")
@@ -117,11 +108,6 @@ def main():
                 stop_process(current_proc)
                 subprocess.run([sys.executable, "off.py"], cwd=SCRIPT_DIR)
                 current_proc, current_name = None, None
-                continue
-            if key in COMMAND_MAP:
-                name, args = COMMAND_MAP[key]
-                stop_process(current_proc)
-                current_proc, current_name = start([*args, *extra]), name
                 continue
             if key.isdigit() and 1 <= int(key) <= len(images):
                 f = images[int(key) - 1][0]
