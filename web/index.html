@@ -325,6 +325,14 @@
             <li><strong>Transparency</strong> becomes "off" LEDs.</li>
             <li><strong>Non-square images</strong> are centered and fitted without stretching.</li>
           </ul>
+          <h3>Animation files: sheet, fps and names</h3>
+          <ul>
+            <li><strong>Sprite sheet</strong> = one PNG with all frames side by side, like a film strip. 4 frames on a 16×16 grid make a 64×16 image. <strong>fps</strong> = how fast the frames play (4 fps = a quarter second per frame). The sheet says what the file is; fps says how fast to play it.</li>
+            <li><strong>Saved from here:</strong> the frame count and fps are stored inside the PNG, so you can rename the file to anything (<code>ghost.png</code>). The <code>_4fps_bright35_gamma2.2</code> part of the suggested name is only for reading settings in a file list.</li>
+            <li><strong>From other tools</strong> (Piskel, hand-made strips): the name decides. <code>walk_4fps.png</code> plays at 4 fps (it marks a sheet and sets the speed). <code>walk_sheet.png</code> plays at the default 6 fps. A plain <code>walk.png</code> plays as one squashed still.</li>
+            <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
+            <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
+          </ul>
           <h3>Watch out for</h3>
           <ol>
             <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
