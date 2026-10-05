@@ -45,7 +45,7 @@ When you save a PNG, Glow Grid writes its current *Brightness* and *Gamma* into 
 knight_4fps.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
 ```
 
-- The settings are also in the file name, so you can see them in a file list: `knight_4fps_bright35_gamma2.2.png` is brightness 0.35, gamma 2.2. The Pi reads the frame rate from the `_4fps` part and ignores the rest.
+- The settings are also in the file name, so you can see them in a file list: `knight_4fps_bright35_gamma2.2.png` is brightness 0.35, gamma 2.2. The frame count and speed are also stored inside the PNG, so the Pi plays a sheet correctly even after you rename it. The name tags are the fallback for sheets made elsewhere; the Pi's speed priority is the number you type, then the PNG, then `_4fps` in the name.
 - Images without them (Piskel exports, GIFs, photos, older Glow Grid saves) use `BRIGHTNESS` and `GAMMA` from `local_config.py`.
 - `MAX_BRIGHTNESS` in `local_config.py` (default 0.4) caps every image, so a design saved at 0.9 can't overload a 6A supply. The Pi says when it capped one. Raise it only with a bigger supply.
 - `USE_IMAGE_LIGHT = False` ignores the saved settings and always uses `local_config.py`.
@@ -204,14 +204,14 @@ The Pi fits any image to the grid and plays it. How good it looks depends on wha
 
 - **Pixel art at 16×16** (Glow Grid exports, Piskel sprites, the examples) comes out pixel-perfect. So does pixel art at an exact 2×, 3×, 4×… upscale.
 - **Photos and large images:** anything more than 2× the grid in either direction is averaged per cell, so photos come out smooth instead of noisy. Smaller images keep exact pixels, which keeps pixel-art edges hard. Change this with `RESIZE` in `local_config.py` (`"auto"`, `"nearest"` or `"average"`).
-- **Animations:** an animated GIF, or a sprite sheet (frames side by side, 16 px tall) whose name contains the speed or `_sheet`: `walk_8fps.png`, `walk_sheet.png`. Sheets saved from Glow Grid are already named this way.
+- **Animations:** an animated GIF, or a sprite sheet (frames side by side, 16 px tall) whose name contains the speed or `_sheet`: `walk_8fps.png`, `walk_sheet.png`. Sheets saved from Glow Grid also carry their frame count and speed inside the PNG, so they play under any name.
 - **Transparency** becomes "off" LEDs.
 - **Non-square images** are centered and fitted without stretching.
 - **Formats:** PNG, GIF, JPG, WEBP and BMP all show in the menu.
 
 **Things to watch**
 
-1. **Name your sprite sheets.** A 16-px-tall strip *without* `_8fps` or `_sheet` in its name is treated as one wide still and squashed to fit. (This rule stops ordinary wide images from turning into accidental animations.)
+1. **Name sprite sheets made elsewhere.** Sheets saved from Glow Grid need nothing, because the PNG says it's a sheet. A 16-px-tall strip from another tool *without* `_8fps` or `_sheet` in its name is treated as one wide still and squashed to fit. (This rule stops ordinary wide images from turning into accidental animations.)
 2. **Mid-size pixel art** (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at 16×16, or export at an exact multiple.
 3. **Wiring comes first.** Until the probe settings are set and confirmed (`glow-grid probe`, `glow-grid probe check`, then `k` in the menu), images may look scrambled; the menu warns you.
 4. **Near-black isn't off, and dark shades can vanish.** See *Designing for LEDs*; the simulator's Panel check flags both.
