@@ -34,6 +34,7 @@ When you save a PNG, Glow Grid writes its current *Brightness* and *Gamma* into 
 knight_4fps.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
 ```
 
+- The settings are also in the file name, so you can see them in a file list: `knight_4fps_bright35_gamma2.2.png` is brightness 0.35, gamma 2.2. The Pi reads the frame rate from the `_4fps` part and ignores the rest.
 - Images without them (Piskel exports, GIFs, photos, older Glow Grid saves) use `BRIGHTNESS` and `GAMMA` from `local_config.py`.
 - `MAX_BRIGHTNESS` in `local_config.py` (default 0.4) caps every image, so a design saved at 0.9 can't overload a 6A supply. The Pi says when it capped one. Raise it only with a bigger supply.
 - `USE_IMAGE_LIGHT = False` ignores the saved settings and always uses `local_config.py`.
@@ -175,11 +176,11 @@ To add your own images, see the next section.
 
 Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png`, `.gif`, `.jpg`/`.jpeg`, `.webp` and `.bmp` there, numbered.
 
-**Copy from Windows** (PowerShell, not the SSH window):
+**Copy from Windows** (PowerShell, not the SSH window). The simulator's *Export to the Pi* card writes this command for you: set *Pi login* and *Folder on your PC* once (it remembers them), and it fills in the file name.
 
 ```powershell
-scp $HOME\Downloads\walk_8fps.png user@raspberrypi.local:~/glow-grid/images/
-scp $HOME\Downloads\*.png user@raspberrypi.local:~/glow-grid/images/   # several at once
+scp "$HOME\Downloads\walk_8fps_bright35_gamma2.2.png" user@raspberrypi.local:~/glow-grid/images/
+scp "C:\Users\you\pixel-art\*.png" user@raspberrypi.local:~/glow-grid/images/   # several at once
 ```
 
 Then press `r` in the menu (or restart `glow-grid`) and type the file's number.
