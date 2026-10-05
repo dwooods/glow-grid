@@ -285,7 +285,7 @@
           <ol>
             <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
             <li><strong>Unnamed sprite sheets</strong> play as one squashed still. Add <code>_8fps</code> or <code>_sheet</code> to the name. Sheets saved from here already have it.</li>
-            <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (menu <code>p</code>, <code>c</code>, then <code>k</code>), images may look scrambled; the menu warns you.</li>
+            <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (<code>glow-grid probe</code>, <code>glow-grid probe check</code>, then <code>k</code> in the menu), images may look scrambled; the menu warns you.</li>
             <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
           </ol>
         </details>
@@ -296,6 +296,7 @@
         <div class="form-row">
           <label class="grow">Name <input id="nameInput" type="text" value="smiley" spellcheck="false"></label>
           <label class="grow">Pi login <input id="piInput" type="text" value="user@raspberrypi.local" spellcheck="false"></label>
+          <label class="grow">Folder on your PC <input id="pcDirInput" type="text" value="$HOME\Downloads" spellcheck="false"></label>
           <label>Scale
             <select id="scaleInput">
               <option value="1">1× for the Pi</option>
@@ -309,7 +310,7 @@
           <button id="exportPngBtn" class="btn" type="button">Save this frame</button>
           <button id="exportSheetBtn" class="btn btn-quiet" type="button">Save animation (sprite sheet)</button>
         </div>
-        <p class="hint">Use 1× for the Pi: one pixel per LED. Larger scales make sharp, blocky copies for viewing and sharing, named <code>_x16</code> etc.; don't copy a scaled animation to the Pi, it would play as one squashed still. Saved PNGs include this brightness and gamma. Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
+        <p class="hint">Use 1× for the Pi: one pixel per LED. Larger scales make sharp, blocky copies for viewing and sharing, named <code>_x16</code> etc.; don't copy a scaled animation to the Pi, it would play as one squashed still. Saved PNGs include this brightness and gamma, both inside the file and in its name (<code>_bright35_gamma2.2</code>). Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
         <code class="cmd" id="cmdOut"></code>
         <button id="copyCmdBtn" class="btn btn-quiet" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
@@ -386,7 +387,7 @@
     state = { cols: 16, rows: 16, frames: [sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, true)], currentFrame: 0, recentColors: [], fps: 6, name: 'smiley' };
   }
   state.color = '#e63946'; state.tool = 'paint';
-  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', importMode: 'auto' }, recall('glowgrid-sim') || {});
+  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', importMode: 'auto' }, recall('glowgrid-sim') || {});
 
   function saveState() {
     store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name });
@@ -610,7 +611,7 @@
     sim.brightness = clamp(Number($('brightInput').value) || 0.3, 0.05, 1);
     sim.gamma = clamp(Number($('gammaInput').value) || 2.2, 1, 3);
     sim.psu = clamp(Number($('psuInput').value) || 6, 1, 60);
-    saveSim(); buildLut(); renderFrame();
+    saveSim(); buildLut(); renderFrame(); updateCmd();
     if (sim.brightness > 0.4) setStatus(`Note: the Pi caps brightness at MAX_BRIGHTNESS (0.4 unless you raised it in local_config.py), so ${sim.brightness} will play at 0.4.`);
   }
   ['brightInput', 'gammaInput', 'psuInput'].forEach((id) => $(id).addEventListener('change', readLedSettings));
@@ -676,7 +677,7 @@
           state.currentFrame = 0;
           const m = /_(\d+)fps/i.exec(file.name);
           if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
-          const base = file.name.replace(/\.[^.]+$/, '').replace(/_(\d+fps|sheet)$/i, '');
+          const base = file.name.replace(/\.[^.]+$/, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?(_x\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '');
           if (base) { state.name = base; $('nameInput').value = base; }
           setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
         } else {
@@ -764,8 +765,10 @@
   /* ---------- export ---------- */
   function setStatus(msg) { $('statusEl').textContent = msg; }
   const safeName = () => (state.name || '').trim().replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'sprite';
-  const frameFile = () => `${safeName()}.png`;
-  const sheetFile = () => `${safeName()}_${state.fps}fps.png`;
+  // Brightness and gamma go in the file name too, so you can see them in a file list: knight_4fps_bright35_gamma2.2.png
+  const lightTag = () => `_bright${Math.round(sim.brightness * 100)}_gamma${Number(sim.gamma.toFixed(1))}`;
+  const frameFile = () => `${safeName()}${lightTag()}.png`;
+  const sheetFile = () => `${safeName()}_${state.fps}fps${lightTag()}.png`;
   const exportScale = () => Number($('scaleInput').value) || 1;
   const scaledName = (file) => exportScale() > 1 ? file.replace(/\.png$/, `_x${exportScale()}.png`) : file;
   // Enlarge each pixel into a sharp block (no smoothing) for viewing/sharing
@@ -780,8 +783,10 @@
     const anim = state.frames.length > 1;
     const f = anim ? sheetFile() : frameFile();
     const pi = (sim.pi || '').trim() || 'user@raspberrypi.local';
+    const dir = ((sim.pcDir || '').trim() || '$HOME\\Downloads').replace(/[\\/]+$/, '');
+    // Quoted so folders with spaces work; PowerShell still expands $HOME inside double quotes
     $('cmdOut').textContent =
-      `scp $HOME\\Downloads\\${f} ${pi}:~/glow-grid/images/\n` +
+      `scp "${dir}\\${f}" ${pi}:~/glow-grid/images/\n` +
       `# then run glow-grid, press r to rescan, and pick ${f}`;
   }
   async function saveCanvas(canvas, filename) {
@@ -822,6 +827,7 @@
   });
   $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
   $('piInput').addEventListener('input', (e) => { sim.pi = e.target.value; updateCmd(); saveSim(); });
+  $('pcDirInput').addEventListener('input', (e) => { sim.pcDir = e.target.value; updateCmd(); saveSim(); });
   $('copyCmdBtn').addEventListener('click', async () => {
     const text = $('cmdOut').textContent;
     try { await navigator.clipboard.writeText(text); setStatus('Commands copied.'); }
@@ -874,7 +880,7 @@
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
   $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
-  $('importMode').value = sim.importMode; $('piInput').value = sim.pi;
+  $('importMode').value = sim.importMode; $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir;
   $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
   $('fpsInput').value = state.fps; $('nameInput').value = state.name;
   buildLut(); buildGridDOM(); renderSwatches(); updateUndoBtns();
