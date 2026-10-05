@@ -301,7 +301,7 @@
           <label class="file-btn">Choose image<input id="imageInput" type="file" accept="image/*" hidden></label>
           <label class="btn file-photo">Photo to grid…<input id="photoInput" type="file" accept="image/*" hidden></label>
         </div>
-        <p class="hint"><strong>Photo to grid…</strong> opens a crop-and-zoom editor with background removal and dithering (on a phone it offers the camera too). <em>Choose image</em> is the quick path for pixel art and sprite sheets. Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet whose name has <code>_8fps</code> or <code>_sheet</code> loads back as separate frames.</p>
+        <p class="hint"><strong>Photo to grid…</strong> opens a crop-and-zoom editor with background removal and dithering (on a phone it offers the camera too). <em>Choose image</em> is the quick path for pixel art and sprite sheets. Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet saved from here loads back as separate frames under any name; sheets from other tools need <code>_8fps</code> or <code>_sheet</code> in the name.</p>
       </section>
 
       <section class="card">
@@ -328,7 +328,7 @@
           <h3>Watch out for</h3>
           <ol>
             <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
-            <li><strong>Unnamed sprite sheets</strong> play as one squashed still. Add <code>_8fps</code> or <code>_sheet</code> to the name. Sheets saved from here already have it.</li>
+            <li><strong>Sprite sheets from other tools</strong> play as one squashed still unless the name has <code>_8fps</code> or <code>_sheet</code>. Sheets saved from here carry their frame count and speed inside the PNG, so renaming them is safe.</li>
             <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (<code>glow-grid probe</code>, <code>glow-grid probe check</code>, then <code>k</code> in the menu), images may look scrambled; the menu warns you.</li>
             <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
           </ol>
@@ -746,16 +746,19 @@
     const a = d[i + 3] / 255;
     out[y * state.cols + x] = toHex(Math.round(d[i] * a), Math.round(d[i + 1] * a), Math.round(d[i + 2] * a));
   }
-  $('imageInput').addEventListener('change', (e) => {
+  $('imageInput').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const lightP = file.arrayBuffer().then((b) => readPngText(b, LIGHT_KEY)).catch(() => null);
+    let meta = {};
+    try { meta = JSON.parse(await lightP) || {}; } catch (err) { meta = {}; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const img = new Image();
       img.onload = async () => {
         stopPlay(); pushUndo();
         const w = img.naturalWidth, h = img.naturalHeight, n = w / state.cols;
-        if (h === state.rows && Number.isInteger(n) && n > 1 && /_(\d+(\.\d+)?)fps|_sheet/i.test(file.name)) {
+        const byMeta = Number.isInteger(meta.frames) && meta.frames > 1 && w === meta.frames * state.cols;
+        if (h === state.rows && Number.isInteger(n) && n > 1 && (byMeta || /_(\d+(\.\d+)?)fps|_sheet/i.test(file.name))) {
           // Sprite sheet: split into frames
           const c = document.createElement('canvas'); c.width = w; c.height = h;
           const x = c.getContext('2d'); x.drawImage(img, 0, 0);
@@ -767,7 +770,8 @@
           }
           state.currentFrame = 0;
           const m = /_(\d+)fps/i.exec(file.name);
-          if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
+          if (typeof meta.fps === 'number' && meta.fps > 0) { state.fps = clamp(meta.fps, 1, 30); $('fpsInput').value = state.fps; }
+          else if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
           const base = file.name.replace(/\.[^.]+$/, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?(_x\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '');
           if (base) { state.name = base; $('nameInput').value = base; }
           setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
@@ -1070,7 +1074,8 @@
     return (c ^ 0xffffffff) >>> 0;
   }
   const ascii = (str) => Uint8Array.from(str, (ch) => ch.charCodeAt(0) & 0xff);
-  const lightJson = () => JSON.stringify({ brightness: Math.round(sim.brightness * 1000) / 1000, gamma: Math.round(sim.gamma * 1000) / 1000 });
+  // Stored in the PNG: light settings always; for an animation also the frame count and speed, so a renamed sheet still plays
+  const lightJson = (extra) => JSON.stringify(Object.assign({ brightness: Math.round(sim.brightness * 1000) / 1000, gamma: Math.round(sim.gamma * 1000) / 1000 }, extra || {}));
   // Insert a tEXt chunk right after IHDR (8-byte signature + 25-byte IHDR chunk)
   function withPngText(buf, key, text) {
     const src = new Uint8Array(buf);
@@ -1136,9 +1141,9 @@
       `scp "${dir}\\${f}" ${pi}:~/glow-grid/images/\n` +
       `# then run glow-grid, press r to rescan, and pick ${f}`;
   }
-  async function saveCanvas(canvas, filename) {
+  async function saveCanvas(canvas, filename, extra) {
     const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-    const blob = new Blob([withPngText(await png.arrayBuffer(), LIGHT_KEY, lightJson())], { type: 'image/png' });
+    const blob = new Blob([withPngText(await png.arrayBuffer(), LIGHT_KEY, lightJson(extra))], { type: 'image/png' });
     if (!downloadsCap && !window.claude) {
       // Opened as a plain file (web/index.html from the repo): ordinary browser download
       const a = document.createElement('a');
@@ -1170,7 +1175,7 @@
     const c = document.createElement('canvas'); c.width = state.cols * state.frames.length; c.height = state.rows;
     const ctx = c.getContext('2d');
     state.frames.forEach((f, i) => paintCanvas(ctx, f, i * state.cols));
-    saveCanvas(scaled(c), scaledName(sheetFile()));
+    saveCanvas(scaled(c), scaledName(sheetFile()), { frames: state.frames.length, fps: state.fps });
   });
   $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
   $('piInput').addEventListener('input', (e) => { sim.pi = e.target.value; updateCmd(); saveSim(); });
