@@ -14,7 +14,7 @@ import sys
 import time
 
 import grid_common
-from grid_common import get_strip, draw, image_light, load_frames, resolve_path, set_light
+from grid_common import get_strip, draw, image_grid, image_light, load_frames, resolve_path, set_light
 
 if len(sys.argv) < 2:
     print(__doc__)
@@ -28,6 +28,11 @@ if not os.path.exists(path):
 if not getattr(grid_common, "WIRING_CONFIRMED", False) and not os.environ.get("GLOWGRID_MENU"):
     print("Note: wiring not confirmed yet (run probe.py, then set WIRING_CONFIRMED = True "
           "in local_config.py). The image may look scrambled.")
+
+grid = image_grid(path)
+if grid and grid != (grid_common.COLS, grid_common.ROWS) and not os.environ.get("GLOWGRID_MENU"):
+    print(f"Note: this image was made for a {grid[0]}x{grid[1]} grid; the panel is "
+          f"{grid_common.COLS}x{grid_common.ROWS}, so it will be squashed to fit.")
 
 fps = float(sys.argv[2]) if len(sys.argv) > 2 else None
 frames, delays = load_frames(path, fps)

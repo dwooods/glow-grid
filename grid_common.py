@@ -275,6 +275,13 @@ def image_light(path):
     return out
 
 
+def image_grid(path):
+    """(cols, rows) the simulator saved in a Glow Grid PNG, or None."""
+    data = _png_meta(path)
+    c, r = data.get("cols"), data.get("rows")
+    return (c, r) if isinstance(c, int) and isinstance(r, int) else None
+
+
 def draw(strip, img):
     px = img.load()
     for x in range(COLS):

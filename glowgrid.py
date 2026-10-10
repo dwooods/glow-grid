@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 import grid_common
-from grid_common import IMAGES_DIR, load_frames, image_light, COLS, ROWS
+from grid_common import IMAGES_DIR, load_frames, image_light, image_grid, COLS, ROWS
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCAL_CONFIG = os.path.join(SCRIPT_DIR, "local_config.py")
@@ -49,6 +49,9 @@ def scan_images():
                 parts.append(f"bright {light['brightness']:g}")
             if "gamma" in light:
                 parts.append(f"gamma {light['gamma']:g}")
+            grid = image_grid(os.path.join(IMAGES_DIR, f))
+            if grid and grid != (COLS, ROWS):
+                parts.append(f"! made for {grid[0]}x{grid[1]}, panel is {COLS}x{ROWS}")
             info = ", ".join(parts)
         except Exception as e:  # unreadable file: still list it, flag why
             info = f"can't read: {e.__class__.__name__}"
