@@ -8,8 +8,8 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 
 1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below), or in [Piskel](#piskel).
 2. **Simulate and adjust**: switch to *LED sim* to see what survives on real LEDs, and tune *Brightness* and *Gamma* until it looks right. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
-3. **Export** a still PNG or an animation sprite sheet (frames side by side, frame rate in the filename, e.g. `knight_4fps.png`). The PNG remembers the brightness and gamma you picked.
-4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight_4fps.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
+3. **Export** a still PNG or an animation sprite sheet (frames side by side). The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
+4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
 
 The simulator never talks to the panel. It's a preview tool; the Pi's Python program is what lights the LEDs.
 
@@ -43,10 +43,10 @@ The LED model matches `grid_common.py` exactly: `round(255 * BRIGHTNESS * (c/255
 When you save a PNG, Glow Grid writes its current *Brightness* and *Gamma* into the file (a PNG text chunk named `glow-grid`; the pixels are unchanged). On the Pi, `play.py` reads them and uses them for that image, and prints what it used:
 
 ```
-knight_4fps.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
+knight.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
 ```
 
-- The settings are also in the file name, so you can see them in a file list: `knight_4fps_bright35_gamma2.2.png` is brightness 0.35, gamma 2.2. The frame count and speed are also stored inside the PNG, so the Pi plays a sheet correctly even after you rename it. The name tags are the fallback for sheets made elsewhere; the Pi's speed priority is the number you type, then the PNG, then `_4fps` in the name.
+- The file name carries no settings. Frame count, fps, brightness and gamma are stored inside the PNG, so the Pi plays a sheet correctly under any name, and the menu lists them next to it, e.g. `knight.png  (4 frames, 4 fps, bright 0.35, gamma 2.2)`. The Pi's speed priority is the number you type, then the PNG, then `_4fps` in the name (for sheets made elsewhere).
 - Images without them (Piskel exports, GIFs, photos, older Glow Grid saves) use `BRIGHTNESS` and `GAMMA` from `local_config.py`.
 - `MAX_BRIGHTNESS` in `local_config.py` (default 0.4) caps every image, so a design saved at 0.9 can't overload a 6A supply. The Pi says when it capped one. Raise it only with a bigger supply.
 - `USE_IMAGE_LIGHT = False` ignores the saved settings and always uses `local_config.py`.
@@ -61,7 +61,7 @@ An animation is a **sprite sheet**: one PNG with every frame side by side, like 
 [ frame 1 ][ frame 2 ][ frame 3 ][ frame 4 ]     = one 64x16 PNG, played at 4 fps
 ```
 
-**Sheets saved from Glow Grid** (*Save animation (sprite sheet)*) store the frame count and fps inside the PNG, next to brightness and gamma, so the file name can be anything: `ghost.png`, `red_ghost_v2.png`. The suggested name (`ghost_4fps_bright35_gamma2.2.png`) is only there so you can read the settings in a file list.
+**Sheets saved from Glow Grid** (*Save animation (sprite sheet)*) store the frame count and fps inside the PNG, next to brightness and gamma, so the file name can be anything: `ghost.png`, `red_ghost_v2.png`. The saved name is just the sprite's name; the menu on the Pi shows the settings.
 
 **Sheets from other tools** (Piskel, hand-made strips) carry no metadata, so the Pi uses the file name:
 
@@ -201,8 +201,8 @@ If `bufsiz` is already 65536 and you still see strays, *then* it's hardware: com
 
 ```
 Glow Grid (16x16)
-  1. knight.png  (still)
-  2. knight_4fps.png  (4 frames, 4 fps)
+  1. heart.png  (still)
+  2. knight.png  (4 frames, 4 fps, bright 0.35, gamma 2.2)
   r. Rescan images
   o. Turn off
   q. Quit
@@ -225,7 +225,7 @@ Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png`, 
 **Copy from Windows** (PowerShell, not the SSH window). The simulator's *Export to the Pi* card writes this command for you: set *Pi login* and *Folder on your PC* once (it remembers them), and it fills in the file name.
 
 ```powershell
-scp "$HOME\Downloads\walk_8fps_bright35_gamma2.2.png" user@raspberrypi.local:~/glow-grid/images/
+scp "$HOME\Downloads\walk.png" user@raspberrypi.local:~/glow-grid/images/
 scp "C:\Users\you\pixel-art\*.png" user@raspberrypi.local:~/glow-grid/images/   # several at once
 ```
 
@@ -258,7 +258,7 @@ Tip: avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
 ```bash
 cd ~/glow-grid && source venv/bin/activate
 python3 play.py knight.png           # bare names are looked up in images/
-python3 play.py knight_4fps.png 10   # override the frame rate
+python3 play.py knight.png 10   # override the frame rate
 python3 play.py images/photo.jpg     # photos are averaged automatically
 ```
 
