@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 import grid_common
-from grid_common import IMAGES_DIR, load_frames, COLS, ROWS
+from grid_common import IMAGES_DIR, load_frames, image_light, COLS, ROWS
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LOCAL_CONFIG = os.path.join(SCRIPT_DIR, "local_config.py")
@@ -43,7 +43,13 @@ def scan_images():
     for f in files:
         try:
             frames, delays = load_frames(os.path.join(IMAGES_DIR, f))
-            info = "still" if len(frames) == 1 else f"{len(frames)} frames, {1 / delays[0]:.0f} fps"
+            parts = ["still" if len(frames) == 1 else f"{len(frames)} frames, {1 / delays[0]:g} fps"]
+            light = image_light(os.path.join(IMAGES_DIR, f))  # saved inside the PNG by the simulator
+            if "brightness" in light:
+                parts.append(f"bright {light['brightness']:g}")
+            if "gamma" in light:
+                parts.append(f"gamma {light['gamma']:g}")
+            info = ", ".join(parts)
         except Exception as e:  # unreadable file: still list it, flag why
             info = f"can't read: {e.__class__.__name__}"
         items.append((f, info))
