@@ -24,11 +24,12 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 Your drawings are saved in that browser's local storage, so re-import a sprite sheet to move work between browsers.
 
-### Photo to grid
+### Import image
 
-*Import image → Photo to grid…* turns any picture into a 16×16 design. On a phone the file picker offers the camera too.
+*Import image…* turns any picture into a 16×16 design. A sprite sheet or one of the simulator's own saved frames loads directly; any other picture opens the import dialog. On a phone the file picker offers the camera too.
 
 - **Crop and zoom:** drag the photo to move it, pinch or scroll to zoom. *Fit whole photo* shows everything (letterboxed); *Fill grid* crops to the grid's shape. The faint lines are one LED each, and the small picture is the result.
+- **Exact pixels:** for small pixel art, tick *Exact pixels (pixel art, no averaging)*. Each LED takes the color at the middle of its cell, with no averaging or dithering. It is on by default for images no larger than twice the grid.
 - **Background off:** tap *Pick on photo* (or *Use corners*) to choose the background color, then set the tolerance. Background cells go black (LED off). Cells at the edge of the subject keep the subject's own color instead of a muddy blend.
 - **Dithering:** *Floyd–Steinberg* (smooth) or *Ordered* (patterned). It works in LED space, using the brightness and gamma from *LED settings*, so dark gradients that would collapse into a few levels keep their tones. Black stays black. It is baked in at the current brightness and gamma; change them and re-run.
 - *Apply to this frame* replaces the frame; *Add as new frame* appends one, so a few photos make an animation. Undo reverts.
@@ -78,13 +79,13 @@ Why the name is needed here: a 16 px tall, 48 px wide image could be three frame
 
 Other rules: avoid spaces in names (they complicate `scp`), and use `.png`, `.gif`, `.jpg`, `.webp` or `.bmp`.
 
-### Animating one part: move, onion skin, shared background
+### Animating one part: move, onion skin, still part
 
 The *Move and layers* card makes animations from a single drawing without repainting every frame.
 
 - **Move:** the arrow buttons (or Shift + arrow keys) shift the picture by one pixel. Duplicate a frame, nudge it, repeat to make a bob or a slide. *Move every frame* shifts the whole animation, and *Wrap around the edges* brings pixels back on the opposite side instead of clipping them.
 - **Onion skin:** shows the previous frame faintly, and the next one fainter, on empty cells, so you can see how far a part has moved.
-- **Shared background:** draw the whole character, duplicate it for each frame, change only the part that moves (a hand, legs, eyes, a mouth), then press *Split off shared background*. Every pixel that is identical in all frames moves into one shared layer under every frame. Choose *Shared background* to edit the body for all frames at once. In a frame, black means see-through while a shared layer exists. *Merge into frames* flattens it back.
+- **Still part:** draw the whole character, duplicate it for each frame, change only the part that moves (a hand, legs, eyes, a mouth), then press *Separate the still part*. Every pixel that is identical in all frames moves into one shared layer under every frame. Choose *Still part (all frames)* to edit the body for all frames at once, or *This frame* for the moving part. In a frame, black means see-through while a still part exists. *Join back into frames* copies it into every frame again.
 - **Nothing changes on the Pi.** Saved PNGs and sprite sheets always contain the combined picture, and the shared layer is kept in your browser only. Splitting and merging produce byte-identical exported sheets.
 
 ### Export size: 1× for the Pi, bigger to share
