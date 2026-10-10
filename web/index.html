@@ -350,7 +350,7 @@
           <h3>Animation files: sheet, fps and names</h3>
           <ul>
             <li><strong>Sprite sheet</strong> = one PNG with all frames side by side, like a film strip. 4 frames on a 16×16 grid make a 64×16 image. <strong>fps</strong> = how fast the frames play (4 fps = a quarter second per frame). The sheet says what the file is; fps says how fast to play it.</li>
-            <li><strong>Saved from here:</strong> the frame count and fps are stored inside the PNG, so you can rename the file to anything (<code>ghost.png</code>). The <code>_4fps_bright35_gamma2.2</code> part of the suggested name is only for reading settings in a file list.</li>
+            <li><strong>Saved from here:</strong> the frame count and fps are stored inside the PNG, so you can rename the file to anything (<code>ghost.png</code>). Brightness and gamma are stored there too, and the Pi menu shows all of them next to the file name.</li>
             <li><strong>From other tools</strong> (Piskel, hand-made strips): the name decides. <code>walk_4fps.png</code> plays at 4 fps (it marks a sheet and sets the speed). <code>walk_sheet.png</code> plays at the default 6 fps. A plain <code>walk.png</code> plays as one squashed still.</li>
             <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
             <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
@@ -390,7 +390,7 @@
           <button id="exportPngBtn" class="btn" type="button">Save this frame</button>
           <button id="exportSheetBtn" class="btn btn-quiet" type="button">Save animation (sprite sheet)</button>
         </div>
-        <p class="hint">Use 1× for the Pi: one pixel per LED. Larger scales make sharp, blocky copies for viewing and sharing, named <code>_x16</code> etc.; don't copy a scaled animation to the Pi, it would play as one squashed still. Saved PNGs include this brightness and gamma, both inside the file and in its name (<code>_bright35_gamma2.2</code>). Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
+        <p class="hint">Use 1× for the Pi: one pixel per LED. Larger scales make sharp, blocky copies for viewing and sharing, named <code>_x16</code> etc.; don't copy a scaled animation to the Pi, it would play as one squashed still. Saved PNGs carry this brightness and gamma inside the file (the file name stays plain). Copy to the Pi from PowerShell, then pick it from the <code>glow-grid</code> menu:</p>
         <code class="cmd" id="cmdOut"></code>
         <button id="copyCmdBtn" class="btn btn-quiet" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
@@ -1218,10 +1218,9 @@
   /* ---------- export ---------- */
   function setStatus(msg) { $('statusEl').textContent = msg; }
   const safeName = () => (state.name || '').trim().replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'sprite';
-  // Brightness and gamma go in the file name too, so you can see them in a file list: knight_4fps_bright35_gamma2.2.png
-  const lightTag = () => `_bright${Math.round(sim.brightness * 100)}_gamma${Number(sim.gamma.toFixed(1))}`;
-  const frameFile = () => `${safeName()}${lightTag()}.png`;
-  const sheetFile = () => `${safeName()}_${state.fps}fps${lightTag()}.png`;
+  // File name is just the sprite's name. Frames, fps, brightness and gamma live inside the PNG (text chunk).
+  const frameFile = () => `${safeName()}.png`;
+  const sheetFile = () => `${safeName()}.png`;
   const exportScale = () => Number($('scaleInput').value) || 1;
   const scaledName = (file) => exportScale() > 1 ? file.replace(/\.png$/, `_x${exportScale()}.png`) : file;
   // Enlarge each pixel into a sharp block (no smoothing) for viewing/sharing
