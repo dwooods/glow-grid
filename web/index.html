@@ -140,7 +140,6 @@
   .nudge { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 40px); gap: 4px; }
   .nudge .btn { padding: 0; font-size: 1rem; }
   .nudge .n-up { grid-area: 1 / 2; } .nudge .n-left { grid-area: 2 / 1; } .nudge .n-right { grid-area: 2 / 3; } .nudge .n-down { grid-area: 3 / 2; }
-  .move-opts { display: flex; flex-direction: column; gap: 8px; }
   .device.edit-shared { outline: 2px dashed var(--accent); outline-offset: 3px; }
 
   .guide summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
@@ -305,29 +304,18 @@
 
       <section class="card" aria-labelledby="moveTitle">
         <h2 id="moveTitle">Move and layers</h2>
-        <div class="tool-row" role="group" aria-label="What your drawing and moves apply to">
-          <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">This frame</button>
+        <div class="nudge" role="group" aria-label="Move the picture one pixel">
+          <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
+          <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
+          <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
+          <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
+        </div>
+        <label class="check"><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
+        <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
+          <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
           <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
         </div>
-        <div class="move-row">
-          <div class="nudge" role="group" aria-label="Move the picture one pixel">
-            <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
-            <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
-            <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
-            <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
-          </div>
-          <div class="move-opts">
-            <label class="check"><input id="wrapToggle" type="checkbox"> Wrap around the edges</label>
-            <label class="check"><input id="allFramesToggle" type="checkbox"> Move every frame</label>
-            <label class="check"><input id="onionToggle" type="checkbox"> Onion skin</label>
-          </div>
-        </div>
-        <div class="btn-row">
-          <button id="splitSharedBtn" class="btn btn-quiet" type="button">Separate the still part</button>
-          <button id="mergeSharedBtn" class="btn btn-quiet" type="button" disabled>Join back into frames</button>
-        </div>
-        <p class="hint"><strong>Move:</strong> the arrows (or Shift+arrow keys) shift the picture one pixel. <strong>Onion skin</strong> shows the previous frame faintly, and the next one fainter, so you can see how far you moved.</p>
-        <p class="hint"><strong>To animate just one part</strong> (eyes, a hand, legs) while the rest stays put: <strong>1.</strong> draw the whole picture. <strong>2.</strong> Press <em>+ Duplicate</em> once per extra frame. <strong>3.</strong> Press <em>Separate the still part</em>: everything that is the same in every frame moves into the <em>Still part</em>, and each frame is left with nothing but what changes. <strong>4.</strong> With <em>This frame</em> selected, paint only the moving bit on each frame. Black on a frame means see-through, so the still part shows through. To edit the still part for every frame at once, pick <em>Still part (all frames)</em>. <em>Join back into frames</em> undoes it. Saved files always join the two, so the Pi needs nothing new.</p>
+        <p class="hint" id="layerHint"></p>
       </section>
 
       <section class="card">
@@ -367,11 +355,10 @@
             <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
             <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
           </ul>
-          <h3>Animating one part: move, onion skin, still part</h3>
+          <h3>Animating one part: move and still part</h3>
           <ul>
-            <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift the picture one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide. Tick <em>Move every frame</em> to shift the whole animation, <em>Wrap</em> to let pixels come back on the other side.</li>
-            <li><strong>Onion skin</strong> shows the previous frame faintly (and the next one fainter) on empty cells, so you can see how far you moved.</li>
-            <li><strong>Still part:</strong> draw the whole character and duplicate it for each frame. <em>Separate the still part</em> pulls everything that is identical in all frames into one layer, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. <em>Join back into frames</em> undoes it.</li>
+            <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift this frame one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide.</li>
+            <li><strong>Animate one part only:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes the still part, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. Untick to join it back.</li>
             <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
           </ul>
           <h3>Watch out for</h3>
@@ -528,7 +515,7 @@
   }
   state.target = 'frame';
   state.color = '#e63946'; state.tool = 'paint';
-  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', onion: false }, recall('glowgrid-sim') || {});
+  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads' }, recall('glowgrid-sim') || {});
 
   function saveState() {
     store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name, shared: state.shared });
@@ -606,15 +593,6 @@
       gridEl.appendChild(c); cellEls.push(c);
     }
   }
-  // Onion skin: what the neighbouring frames show where this frame is empty (previous stronger than next)
-  function onionAt(idx) {
-    const prev = state.frames[state.currentFrame - 1], next = state.frames[state.currentFrame + 1];
-    const p = prev && layerHex(prev, idx);
-    if (p && !isOff(p)) return { hex: p, alpha: 0.32 };
-    const n = next && layerHex(next, idx);
-    if (n && !isOff(n)) return { hex: n, alpha: 0.16 };
-    return null;
-  }
   function updateCell(idx) {
     const hex = layerHex(state.frames[state.currentFrame], idx);
     const cell = cellEls[idx]; if (!cell) return;
@@ -622,9 +600,7 @@
     cell.classList.toggle('flag-faint', a.flag === 'faint');
     cell.classList.toggle('flag-shift', a.flag === 'shift');
     if (a.isBlack) {
-      const ghost = !playing && sim.onion && onionAt(idx);
-      if (ghost) { const [r, g, b] = hexToRgb(ghost.hex); cell.style.background = `rgba(${r},${g},${b},${ghost.alpha})`; }
-      else cell.style.background = 'var(--grid-off)';
+      cell.style.background = 'var(--grid-off)';
       cell.style.boxShadow = 'none'; return;
     }
     if (sim.view === 'sim') {
@@ -1289,14 +1265,18 @@
     }
   });
 
-  /* ---------- move, shared layer, onion skin ---------- */
+  /* ---------- move and still part ---------- */
   function updateLayerUI() {
-    const sh = state.target === 'shared' && !!state.shared;
+    const has = !!state.shared, sh = state.target === 'shared' && has;
+    $('stillOn').checked = has;
+    $('stillOn').disabled = !has && state.frames.length < 2;
+    $('layerRow').hidden = !has;
     $('targetFrame').classList.toggle('active', !sh); $('targetFrame').setAttribute('aria-pressed', String(!sh));
     $('targetShared').classList.toggle('active', sh); $('targetShared').setAttribute('aria-pressed', String(sh));
     deviceEl.classList.toggle('edit-shared', sh);
-    $('splitSharedBtn').disabled = !!state.shared || state.frames.length < 2;
-    $('mergeSharedBtn').disabled = !state.shared;
+    $('layerHint').innerHTML = has
+      ? 'Everything that was identical in every frame is now the <strong>still part</strong>. With <em>Moving part</em> selected, paint only what changes. Pick <em>Still part</em> to edit the body for all frames at once. On a frame, black means see-through. Untick to join it back. Saved files always combine both, so the Pi needs nothing new.'
+      : 'The arrows (or Shift+arrow keys) move this frame one pixel. To animate just one part (eyes, a hand, legs) while the rest stays put: draw the whole picture, press <em>+ Duplicate</em> once per extra frame, then tick <em>Animate one part only</em>. It is optional: you can also just paint each frame.';
   }
   function shiftArr(arr, dx, dy, wrap) {
     const { cols, rows } = state, out = new Array(arr.length).fill('#000000');
@@ -1311,10 +1291,8 @@
   function nudge(dx, dy) {
     if (playing) return;
     pushUndo();
-    const wrap = $('wrapToggle').checked;
-    if (state.target === 'shared' && state.shared) state.shared = shiftArr(state.shared, dx, dy, wrap);
-    else if ($('allFramesToggle').checked) state.frames = state.frames.map((f) => shiftArr(f, dx, dy, wrap));
-    else state.frames[state.currentFrame] = shiftArr(state.frames[state.currentFrame], dx, dy, wrap);
+    if (state.target === 'shared' && state.shared) state.shared = shiftArr(state.shared, dx, dy, false);
+    else state.frames[state.currentFrame] = shiftArr(state.frames[state.currentFrame], dx, dy, false);
     afterFrameChange();
   }
   $('nudgeUp').addEventListener('click', () => nudge(0, -1));
@@ -1327,14 +1305,14 @@
     if (d) { e.preventDefault(); nudge(d[0], d[1]); }
   });
   function setTarget(t) {
-    if (t === 'shared' && !state.shared) { stopPlay(); pushUndo(); state.shared = newBlankFrame(state.cols, state.rows); }
+    if (t === 'shared' && !state.shared) return;
     state.target = t; afterFrameChange();
-    setStatus(t === 'shared' ? 'Editing the still part: it sits under every frame.' : 'Editing this frame only.');
+    setStatus(t === 'shared' ? 'Editing the still part: it sits under every frame.' : 'Editing the moving part of this frame only.');
   }
   $('targetFrame').addEventListener('click', () => setTarget('frame'));
   $('targetShared').addEventListener('click', () => setTarget('shared'));
-  $('splitSharedBtn').addEventListener('click', () => {
-    if (state.shared || state.frames.length < 2) return;
+  function separateStill() {
+    if (state.shared || state.frames.length < 2) return false;
     stopPlay(); pushUndo();
     const n = state.cols * state.rows, sh = newBlankFrame(state.cols, state.rows);
     let moved = 0;
@@ -1342,21 +1320,25 @@
       const v = state.frames[0][i];
       if (!isOff(v) && state.frames.every((f) => f[i] === v)) { sh[i] = v; moved++; }
     }
-    if (!moved) { undoStack.pop(); updateUndoBtns(); setStatus('No pixel is the same in every frame, so there is nothing to share yet.'); return; }
-    state.shared = sh;
+    if (!moved) { undoStack.pop(); updateUndoBtns(); setStatus('No pixel is the same in every frame, so there is no still part yet. Duplicate your picture into more frames first.'); return false; }
+    state.shared = sh; state.target = 'frame';
     state.frames = state.frames.map((f) => f.map((v, i) => (sh[i] !== '#000000' && v === sh[i]) ? '#000000' : v));
     afterFrameChange();
     setStatus(`Moved ${moved} unchanging pixels into the still part. Each frame now holds only what moves. Undo reverts.`);
-  });
-  $('mergeSharedBtn').addEventListener('click', () => {
+    return true;
+  }
+  function joinStill() {
     if (!state.shared) return;
     stopPlay(); pushUndo();
     state.frames = state.frames.map((f) => flatten(f).slice());
     state.shared = null; state.target = 'frame';
     afterFrameChange();
     setStatus('Joined the still part back into every frame. Undo reverts.');
+  }
+  $('stillOn').addEventListener('change', (e) => {
+    if (e.target.checked) { if (!separateStill()) e.target.checked = false; }
+    else joinStill();
   });
-  $('onionToggle').addEventListener('change', (e) => { sim.onion = e.target.checked; saveSim(); renderFrame(); });
 
   /* ---------- playback ---------- */
   function startPlay() {
@@ -1399,7 +1381,7 @@
 
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
-  $('flagsToggle').checked = sim.flags; $('onionToggle').checked = !!sim.onion; deviceEl.classList.toggle('flags-on', sim.flags);
+  $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
   $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir;
   $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
   $('fpsInput').value = state.fps; $('nameInput').value = state.name;
