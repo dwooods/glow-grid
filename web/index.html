@@ -134,6 +134,12 @@
   .status { font-size: 0.76rem; color: var(--accent); min-height: 1.2em; margin: 0; }
   .cmd { display: block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 0.74rem; white-space: pre-wrap; word-break: break-all; user-select: all; }
   .check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text); }
+  .move-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .nudge { display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 40px); gap: 4px; }
+  .nudge .btn { padding: 0; font-size: 1rem; }
+  .nudge .n-up { grid-area: 1 / 2; } .nudge .n-left { grid-area: 2 / 1; } .nudge .n-right { grid-area: 2 / 3; } .nudge .n-down { grid-area: 3 / 2; }
+  .move-opts { display: flex; flex-direction: column; gap: 8px; }
+  .device.edit-shared { outline: 2px dashed var(--accent); outline-offset: 3px; }
 
   .guide summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; }
   .guide summary::-webkit-details-marker { display: none; }
@@ -154,6 +160,7 @@
   .grid { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   @media (pointer: coarse) {
     .btn, .tool-btn, .view-toggle button, .file-btn { min-height: 44px; }
+    .nudge { grid-template-rows: repeat(3, 44px); }
     .swatch { width: 36px; height: 36px; }
     .swatches { gap: 8px; }
     .frame-thumb { width: 48px; height: 48px; }
@@ -288,6 +295,32 @@
         </div>
       </section>
 
+      <section class="card" aria-labelledby="moveTitle">
+        <h2 id="moveTitle">Move and layers</h2>
+        <div class="tool-row" role="group" aria-label="What your drawing and moves apply to">
+          <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">This frame</button>
+          <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Shared background</button>
+        </div>
+        <div class="move-row">
+          <div class="nudge" role="group" aria-label="Move the picture one pixel">
+            <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
+            <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
+            <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
+            <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
+          </div>
+          <div class="move-opts">
+            <label class="check"><input id="wrapToggle" type="checkbox"> Wrap around the edges</label>
+            <label class="check"><input id="allFramesToggle" type="checkbox"> Move every frame</label>
+            <label class="check"><input id="onionToggle" type="checkbox"> Onion skin</label>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button id="splitSharedBtn" class="btn btn-quiet" type="button">Split off shared background</button>
+          <button id="mergeSharedBtn" class="btn btn-quiet" type="button" disabled>Merge into frames</button>
+        </div>
+        <p class="hint">Arrows (or Shift+arrow keys) move the picture one pixel. <strong>Onion skin</strong> shows the previous frame faintly, and the next one fainter, on empty cells. <strong>Split off shared background</strong> moves every pixel that is identical in all frames into one shared layer, so you can redraw only the part that moves (a hand, legs, eyes). In a frame, black means see-through, so the shared layer shows. Switch to <em>Shared background</em> to edit or erase it. Playback and saved files always combine the layers into normal frames.</p>
+      </section>
+
       <section class="card">
         <h2>Import image</h2>
         <div class="form-row">
@@ -332,6 +365,13 @@
             <li><strong>From other tools</strong> (Piskel, hand-made strips): the name decides. <code>walk_4fps.png</code> plays at 4 fps (it marks a sheet and sets the speed). <code>walk_sheet.png</code> plays at the default 6 fps. A plain <code>walk.png</code> plays as one squashed still.</li>
             <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
             <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
+          </ul>
+          <h3>Animating one part: move, onion skin, shared background</h3>
+          <ul>
+            <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift the picture one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide. Tick <em>Move every frame</em> to shift the whole animation, <em>Wrap</em> to let pixels come back on the other side.</li>
+            <li><strong>Onion skin</strong> shows the previous frame faintly (and the next one fainter) on empty cells, so you can see how far you moved.</li>
+            <li><strong>Shared background:</strong> draw the whole character, duplicate it for each frame, change only the part that moves, then press <em>Split off shared background</em>. Every pixel that is the same in all frames moves to one shared layer, and each frame keeps only what changes (a hand, legs, eyes, a mouth). Pick <em>Shared background</em> to edit the body for every frame at once. In a frame, black means see-through. <em>Merge into frames</em> undoes it.</li>
+            <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
           </ul>
           <h3>Watch out for</h3>
           <ol>
@@ -480,14 +520,16 @@
   if (saved && Array.isArray(saved.frames) && saved.frames.length && saved.cols && saved.rows) {
     state = Object.assign({ recentColors: [], fps: 6, name: 'smiley' }, saved);
     state.currentFrame = clamp(state.currentFrame || 0, 0, state.frames.length - 1);
+    if (!(Array.isArray(state.shared) && state.shared.length === state.cols * state.rows)) state.shared = null;
   } else {
-    state = { cols: 16, rows: 16, frames: [sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, true)], currentFrame: 0, recentColors: [], fps: 6, name: 'smiley' };
+    state = { cols: 16, rows: 16, frames: [sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, true)], currentFrame: 0, recentColors: [], fps: 6, name: 'smiley', shared: null };
   }
+  state.target = 'frame';
   state.color = '#e63946'; state.tool = 'paint';
-  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', importMode: 'auto' }, recall('glowgrid-sim') || {});
+  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', importMode: 'auto', onion: false }, recall('glowgrid-sim') || {});
 
   function saveState() {
-    store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name });
+    store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name, shared: state.shared });
   }
   const saveSim = () => store('glowgrid-sim', sim);
 
@@ -524,17 +566,26 @@
     return a;
   }
 
+  /* ---------- layers: an optional shared background under every frame ---------- */
+  // In a frame, black is see-through when a shared layer exists; playback and export use the combined picture.
+  const isOff = (h) => !h || h === '#000000';
+  const layerHex = (frame, i) => { const h = frame[i]; return (state.shared && isOff(h)) ? (state.shared[i] || '#000000') : (h || '#000000'); };
+  const flatten = (frame) => state.shared ? frame.map((h, i) => isOff(h) ? (state.shared[i] || '#000000') : h) : frame;
+  const editLayer = () => (state.target === 'shared' && state.shared) ? state.shared : state.frames[state.currentFrame];
+  function setEditLayer(arr) { if (state.target === 'shared' && state.shared) state.shared = arr; else state.frames[state.currentFrame] = arr; }
+
   /* ---------- undo / redo ---------- */
   const undoStack = [], redoStack = [];
-  const snapshot = () => JSON.stringify({ cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame });
+  const snapshot = () => JSON.stringify({ cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, shared: state.shared });
   function pushUndo() {
     undoStack.push(snapshot()); if (undoStack.length > 100) undoStack.shift();
     redoStack.length = 0; updateUndoBtns();
   }
   function restore(snap) {
-    const s = JSON.parse(snap);
+    const s = JSON.parse(snap); if (s.shared === undefined) s.shared = null;
     const resized = s.cols !== state.cols || s.rows !== state.rows;
     Object.assign(state, s);
+    if (!state.shared) state.target = 'frame';
     if (resized) { $('colsInput').value = state.cols; $('rowsInput').value = state.rows; buildGridDOM(); }
     afterFrameChange();
   }
@@ -553,13 +604,27 @@
       gridEl.appendChild(c); cellEls.push(c);
     }
   }
+  // Onion skin: what the neighbouring frames show where this frame is empty (previous stronger than next)
+  function onionAt(idx) {
+    const prev = state.frames[state.currentFrame - 1], next = state.frames[state.currentFrame + 1];
+    const p = prev && layerHex(prev, idx);
+    if (p && !isOff(p)) return { hex: p, alpha: 0.32 };
+    const n = next && layerHex(next, idx);
+    if (n && !isOff(n)) return { hex: n, alpha: 0.16 };
+    return null;
+  }
   function updateCell(idx) {
-    const hex = state.frames[state.currentFrame][idx] || '#000000';
+    const hex = layerHex(state.frames[state.currentFrame], idx);
     const cell = cellEls[idx]; if (!cell) return;
     const a = led(hex);
     cell.classList.toggle('flag-faint', a.flag === 'faint');
     cell.classList.toggle('flag-shift', a.flag === 'shift');
-    if (a.isBlack) { cell.style.background = 'var(--grid-off)'; cell.style.boxShadow = 'none'; return; }
+    if (a.isBlack) {
+      const ghost = !playing && sim.onion && onionAt(idx);
+      if (ghost) { const [r, g, b] = hexToRgb(ghost.hex); cell.style.background = `rgba(${r},${g},${b},${ghost.alpha})`; }
+      else cell.style.background = 'var(--grid-off)';
+      cell.style.boxShadow = 'none'; return;
+    }
     if (sim.view === 'sim') {
       const [r, g, b] = hexToRgb(a.disp);
       const glow = Math.max(r, g, b) / 255;
@@ -577,8 +642,8 @@
     return { amps: mA / 1000, faint, shift };
   }
   function renderDiagnostics() {
-    const now = frameStats(state.frames[state.currentFrame]);
-    let peak = 0; for (const f of state.frames) peak = Math.max(peak, frameStats(f).amps);
+    const now = frameStats(flatten(state.frames[state.currentFrame]));
+    let peak = 0; for (const f of state.frames) peak = Math.max(peak, frameStats(flatten(f)).amps);
     $('ampNow').textContent = now.amps.toFixed(2) + ' A';
     $('ampPeak').innerHTML = peak.toFixed(2) + ' A <small>of ' + sim.psu + ' A</small>';
     const pct = peak / sim.psu;
@@ -598,7 +663,7 @@
       t.width = state.cols; t.height = state.rows;
       t.className = 'frame-thumb' + (i === state.currentFrame ? ' active' : '');
       t.tabIndex = 0; t.setAttribute('role', 'button'); t.setAttribute('aria-label', 'Frame ' + (i + 1));
-      paintCanvas(t.getContext('2d'), frame, 0);
+      paintCanvas(t.getContext('2d'), flatten(frame), 0);
       t.addEventListener('click', () => selectFrame(i));
       t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFrame(i); } });
       strip.appendChild(t);
@@ -613,7 +678,7 @@
     ctx.putImageData(img, offsetX, 0);
   }
   const updateReadout = () => { $('frameReadout').textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; };
-  function afterFrameChange() { renderFrame(); renderFrameStrip(); updateReadout(); updateCmd(); saveState(); }
+  function afterFrameChange() { renderFrame(); renderFrameStrip(); updateReadout(); updateLayerUI(); updateCmd(); saveState(); }
   function selectFrame(i) { stopPlay(); state.currentFrame = i; afterFrameChange(); }
 
   /* ---------- frames ---------- */
@@ -629,7 +694,7 @@
 
   /* ---------- drawing ---------- */
   function floodFill(start, color) {
-    const f = state.frames[state.currentFrame], target = f[start];
+    const f = editLayer(), target = f[start];
     if (target === color) return;
     const stack = [start];
     while (stack.length) {
@@ -644,7 +709,7 @@
     }
   }
   function applyTool(idx) {
-    const f = state.frames[state.currentFrame];
+    const f = editLayer();
     if (state.tool === 'fill') { floodFill(idx, state.color); return; }
     const c = state.tool === 'erase' ? '#000000' : state.color;
     if (f[idx] !== c) { f[idx] = c; updateCell(idx); }
@@ -666,8 +731,8 @@
   window.addEventListener('pointerup', endPaint);
   window.addEventListener('pointercancel', endPaint);
 
-  document.querySelectorAll('.tool-btn').forEach((btn) => btn.addEventListener('click', () => {
-    document.querySelectorAll('.tool-btn').forEach((b) => b.classList.remove('active'));
+  document.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn[data-tool]').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active'); state.tool = btn.dataset.tool;
   }));
   function renderSwatches() {
@@ -685,7 +750,7 @@
     state.recentColors = [e.target.value, ...state.recentColors.filter((c) => c !== e.target.value)].slice(0, 8);
     renderSwatches(); saveState();
   });
-  $('clearBtn').addEventListener('click', () => { stopPlay(); pushUndo(); state.frames[state.currentFrame] = newBlankFrame(state.cols, state.rows); afterFrameChange(); });
+  $('clearBtn').addEventListener('click', () => { stopPlay(); pushUndo(); setEditLayer(newBlankFrame(state.cols, state.rows)); afterFrameChange(); });
   $('undoBtn').addEventListener('click', undo);
   $('redoBtn').addEventListener('click', redo);
   window.addEventListener('keydown', (e) => {
@@ -770,7 +835,7 @@
           // Sprite sheet: split into frames
           const c = document.createElement('canvas'); c.width = w; c.height = h;
           const x = c.getContext('2d'); x.drawImage(img, 0, 0);
-          state.frames = [];
+          state.frames = []; state.shared = null; state.target = 'frame';
           for (let k = 0; k < n; k++) {
             const piece = document.createElement('canvas'); piece.width = state.cols; piece.height = state.rows;
             piece.getContext('2d').drawImage(c, k * state.cols, 0, state.cols, state.rows, 0, 0, state.cols, state.rows);
@@ -784,7 +849,7 @@
           if (base) { state.name = base; $('nameInput').value = base; }
           setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
         } else {
-          state.frames[state.currentFrame] = fitImage(img, w, h, sim.importMode);
+          setEditLayer(fitImage(img, w, h, sim.importMode));
           const used = sim.importMode === 'auto' ? ((w > 2 * state.cols || h > 2 * state.rows) ? 'photo' : 'pixel') : sim.importMode;
           setStatus(`Image fitted onto frame ${state.currentFrame + 1} (${used === 'photo' ? 'averaged' : 'exact pixels'}). Undo reverts.`);
         }
@@ -1035,8 +1100,8 @@
   function applyPhoto(asNew) {
     if (!photo.result) return;
     stopPlay(); pushUndo();
-    if (asNew) { state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
-    else state.frames[state.currentFrame] = photo.result;
+    if (asNew) { state.target = 'frame'; state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
+    else setEditLayer(photo.result);
     afterFrameChange();
     const how = photo.dither === 'none' ? 'no dithering' : (photo.dither === 'fs' ? 'Floyd–Steinberg' : 'ordered') + ' dithering';
     setStatus((asNew ? `Photo added as frame ${state.currentFrame + 1}` : `Photo applied to frame ${state.currentFrame + 1}`) + ` (${how}${photo.bg.on ? ', background off' : ''}). Undo reverts.`);
@@ -1065,6 +1130,11 @@
       for (let y = 0; y < Math.min(state.rows, nr); y++) for (let x = 0; x < Math.min(state.cols, nc); x++) out[y * nc + x] = f[y * state.cols + x];
       return out;
     });
+    if (state.shared) {
+      const sh = newBlankFrame(nc, nr);
+      for (let y = 0; y < Math.min(state.rows, nr); y++) for (let x = 0; x < Math.min(state.cols, nc); x++) sh[y * nc + x] = state.shared[y * state.cols + x];
+      state.shared = sh;
+    }
     state.cols = nc; state.rows = nr; $('colsInput').value = nc; $('rowsInput').value = nr;
     buildGridDOM(); afterFrameChange();
   });
@@ -1176,13 +1246,13 @@
   }
   $('exportPngBtn').addEventListener('click', () => {
     const c = document.createElement('canvas'); c.width = state.cols; c.height = state.rows;
-    paintCanvas(c.getContext('2d'), state.frames[state.currentFrame], 0);
+    paintCanvas(c.getContext('2d'), flatten(state.frames[state.currentFrame]), 0);
     saveCanvas(scaled(c), scaledName(frameFile()));
   });
   $('exportSheetBtn').addEventListener('click', () => {
     const c = document.createElement('canvas'); c.width = state.cols * state.frames.length; c.height = state.rows;
     const ctx = c.getContext('2d');
-    state.frames.forEach((f, i) => paintCanvas(ctx, f, i * state.cols));
+    state.frames.forEach((f, i) => paintCanvas(ctx, flatten(f), i * state.cols));
     saveCanvas(scaled(c), scaledName(sheetFile()), { frames: state.frames.length, fps: state.fps });
   });
   $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
@@ -1197,6 +1267,75 @@
       setStatus('Clipboard is blocked here. The text is selected, so press Ctrl+C.');
     }
   });
+
+  /* ---------- move, shared layer, onion skin ---------- */
+  function updateLayerUI() {
+    const sh = state.target === 'shared' && !!state.shared;
+    $('targetFrame').classList.toggle('active', !sh); $('targetFrame').setAttribute('aria-pressed', String(!sh));
+    $('targetShared').classList.toggle('active', sh); $('targetShared').setAttribute('aria-pressed', String(sh));
+    deviceEl.classList.toggle('edit-shared', sh);
+    $('splitSharedBtn').disabled = !!state.shared || state.frames.length < 2;
+    $('mergeSharedBtn').disabled = !state.shared;
+  }
+  function shiftArr(arr, dx, dy, wrap) {
+    const { cols, rows } = state, out = new Array(arr.length).fill('#000000');
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      let nx = x + dx, ny = y + dy;
+      if (wrap) { nx = (nx + cols) % cols; ny = (ny + rows) % rows; }
+      else if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+      out[ny * cols + nx] = arr[y * cols + x];
+    }
+    return out;
+  }
+  function nudge(dx, dy) {
+    if (playing) return;
+    pushUndo();
+    const wrap = $('wrapToggle').checked;
+    if (state.target === 'shared' && state.shared) state.shared = shiftArr(state.shared, dx, dy, wrap);
+    else if ($('allFramesToggle').checked) state.frames = state.frames.map((f) => shiftArr(f, dx, dy, wrap));
+    else state.frames[state.currentFrame] = shiftArr(state.frames[state.currentFrame], dx, dy, wrap);
+    afterFrameChange();
+  }
+  $('nudgeUp').addEventListener('click', () => nudge(0, -1));
+  $('nudgeDown').addEventListener('click', () => nudge(0, 1));
+  $('nudgeLeft').addEventListener('click', () => nudge(-1, 0));
+  $('nudgeRight').addEventListener('click', () => nudge(1, 0));
+  window.addEventListener('keydown', (e) => {
+    if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.target.matches('input, select, textarea') || $('photoDlg').open) return;
+    const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (d) { e.preventDefault(); nudge(d[0], d[1]); }
+  });
+  function setTarget(t) {
+    if (t === 'shared' && !state.shared) { stopPlay(); pushUndo(); state.shared = newBlankFrame(state.cols, state.rows); }
+    state.target = t; afterFrameChange();
+    setStatus(t === 'shared' ? 'Editing the shared background: it sits under every frame.' : 'Editing this frame only.');
+  }
+  $('targetFrame').addEventListener('click', () => setTarget('frame'));
+  $('targetShared').addEventListener('click', () => setTarget('shared'));
+  $('splitSharedBtn').addEventListener('click', () => {
+    if (state.shared || state.frames.length < 2) return;
+    stopPlay(); pushUndo();
+    const n = state.cols * state.rows, sh = newBlankFrame(state.cols, state.rows);
+    let moved = 0;
+    for (let i = 0; i < n; i++) {
+      const v = state.frames[0][i];
+      if (!isOff(v) && state.frames.every((f) => f[i] === v)) { sh[i] = v; moved++; }
+    }
+    if (!moved) { undoStack.pop(); updateUndoBtns(); setStatus('No pixel is the same in every frame, so there is nothing to share yet.'); return; }
+    state.shared = sh;
+    state.frames = state.frames.map((f) => f.map((v, i) => (sh[i] !== '#000000' && v === sh[i]) ? '#000000' : v));
+    afterFrameChange();
+    setStatus(`Moved ${moved} unchanging pixels into the shared background. Each frame now holds only what moves. Undo reverts.`);
+  });
+  $('mergeSharedBtn').addEventListener('click', () => {
+    if (!state.shared) return;
+    stopPlay(); pushUndo();
+    state.frames = state.frames.map((f) => flatten(f).slice());
+    state.shared = null; state.target = 'frame';
+    afterFrameChange();
+    setStatus('Merged the shared background into every frame. Undo reverts.');
+  });
+  $('onionToggle').addEventListener('change', (e) => { sim.onion = e.target.checked; saveSim(); renderFrame(); });
 
   /* ---------- playback ---------- */
   function startPlay() {
@@ -1239,7 +1378,7 @@
 
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
-  $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
+  $('flagsToggle').checked = sim.flags; $('onionToggle').checked = !!sim.onion; deviceEl.classList.toggle('flags-on', sim.flags);
   $('importMode').value = sim.importMode; $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir;
   $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
   $('fpsInput').value = state.fps; $('nameInput').value = state.name;
