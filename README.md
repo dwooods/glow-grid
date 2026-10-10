@@ -78,6 +78,15 @@ Why the name is needed here: a 16 px tall, 48 px wide image could be three frame
 
 Other rules: avoid spaces in names (they complicate `scp`), and use `.png`, `.gif`, `.jpg`, `.webp` or `.bmp`.
 
+### Animating one part: move, onion skin, shared background
+
+The *Move and layers* card makes animations from a single drawing without repainting every frame.
+
+- **Move:** the arrow buttons (or Shift + arrow keys) shift the picture by one pixel. Duplicate a frame, nudge it, repeat to make a bob or a slide. *Move every frame* shifts the whole animation, and *Wrap around the edges* brings pixels back on the opposite side instead of clipping them.
+- **Onion skin:** shows the previous frame faintly, and the next one fainter, on empty cells, so you can see how far a part has moved.
+- **Shared background:** draw the whole character, duplicate it for each frame, change only the part that moves (a hand, legs, eyes, a mouth), then press *Split off shared background*. Every pixel that is identical in all frames moves into one shared layer under every frame. Choose *Shared background* to edit the body for all frames at once. In a frame, black means see-through while a shared layer exists. *Merge into frames* flattens it back.
+- **Nothing changes on the Pi.** Saved PNGs and sprite sheets always contain the combined picture, and the shared layer is kept in your browser only. Splitting and merging produce byte-identical exported sheets.
+
 ### Export size: 1× for the Pi, bigger to share
 
 Exports are 16×16 by default: one pixel per LED, which is exactly what the Pi plays. The *Scale* option in the export card also saves 8×, 16× or 32× copies for viewing and sharing: each pixel becomes a sharp block, and the name gets `_x16` etc. Copy the **1×** file to the Pi. A scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
