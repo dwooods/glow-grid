@@ -334,6 +334,8 @@
           <label class="file-btn">Choose image<input id="imageInput" type="file" accept="image/*" hidden></label>
           <label class="btn file-photo">Photo to grid…<input id="photoInput" type="file" accept="image/*" hidden></label>
         </div>
+        <label class="check"><input id="bgBlackToggle" type="checkbox" checked> Make the background black on import</label>
+        <label class="range-row">Background tolerance <input id="bgBlackTol" type="range" min="0" max="120" value="40"></label>
         <p class="hint"><strong>Photo to grid…</strong> opens a crop-and-zoom editor with background removal and dithering (on a phone it offers the camera too). <em>Choose image</em> is the quick path for pixel art and sprite sheets. Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet saved from here loads back as separate frames under any name; sheets from other tools need <code>_8fps</code> or <code>_sheet</code> in the name.</p>
       </section>
 
@@ -526,7 +528,7 @@
   }
   state.target = 'frame';
   state.color = '#e63946'; state.tool = 'paint';
-  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', importMode: 'auto', onion: false }, recall('glowgrid-sim') || {});
+  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', importMode: 'auto', onion: false, bgBlack: true, bgTol: 40 }, recall('glowgrid-sim') || {});
 
   function saveState() {
     store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name, shared: state.shared });
@@ -819,6 +821,31 @@
     const a = d[i + 3] / 255;
     out[y * state.cols + x] = toHex(Math.round(d[i] * a), Math.round(d[i + 1] * a), Math.round(d[i + 2] * a));
   }
+  // Background to black: take the corner color of the source, then clear everything of that color
+  // that connects to the picture's edge (so same-colored details inside the sprite are kept).
+  function cornerRgb(src, w, h) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(src, 0, 0);
+    const pts = [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]].map(([px, py]) => x.getImageData(px, py, 1, 1).data);
+    if (pts.some((d) => d[3] < 10)) return null; // transparent corner: import already makes it black
+    return [0, 1, 2].map((k) => { const a = pts.map((d) => d[k]).sort((p, q) => p - q); return Math.round((a[1] + a[2]) / 2); });
+  }
+  function clearBackground(frame, bg, tol) {
+    if (!bg || (bg[0] + bg[1] + bg[2]) === 0) return frame;
+    const { cols, rows } = state, tol2 = tol * tol, out = frame.slice(), seen = new Uint8Array(cols * rows), stack = [];
+    const near = (hex) => { if (isOff(hex)) return true; const c = hexToRgb(hex); const d0 = c[0] - bg[0], d1 = c[1] - bg[1], d2 = c[2] - bg[2]; return d0 * d0 + d1 * d1 + d2 * d2 <= tol2; };
+    const push = (i) => { if (!seen[i] && near(out[i])) { seen[i] = 1; stack.push(i); } };
+    for (let x = 0; x < cols; x++) { push(x); push((rows - 1) * cols + x); }
+    for (let y = 0; y < rows; y++) { push(y * cols); push(y * cols + cols - 1); }
+    while (stack.length) {
+      const i = stack.pop(); out[i] = '#000000';
+      const x = i % cols, y = Math.floor(i / cols);
+      if (x > 0) push(i - 1); if (x < cols - 1) push(i + 1); if (y > 0) push(i - cols); if (y < rows - 1) push(i + cols);
+    }
+    return out;
+  }
+  $('bgBlackToggle').addEventListener('change', (e) => { sim.bgBlack = e.target.checked; saveSim(); });
+  $('bgBlackTol').addEventListener('input', (e) => { sim.bgTol = Number(e.target.value); saveSim(); });
   $('imageInput').addEventListener('change', async (e) => {
     const file = e.target.files[0]; if (!file) return;
     const lightP = file.arrayBuffer().then((b) => readPngText(b, LIGHT_KEY)).catch(() => null);
@@ -839,7 +866,9 @@
           for (let k = 0; k < n; k++) {
             const piece = document.createElement('canvas'); piece.width = state.cols; piece.height = state.rows;
             piece.getContext('2d').drawImage(c, k * state.cols, 0, state.cols, state.rows, 0, 0, state.cols, state.rows);
-            state.frames.push(fitImage(piece, state.cols, state.rows, 'pixel'));
+            let fr = fitImage(piece, state.cols, state.rows, 'pixel');
+            if (sim.bgBlack) fr = clearBackground(fr, cornerRgb(piece, state.cols, state.rows), sim.bgTol);
+            state.frames.push(fr);
           }
           state.currentFrame = 0;
           const m = /_(\d+)fps/i.exec(file.name);
@@ -849,7 +878,9 @@
           if (base) { state.name = base; $('nameInput').value = base; }
           setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
         } else {
-          setEditLayer(fitImage(img, w, h, sim.importMode));
+          let fr = fitImage(img, w, h, sim.importMode);
+          if (sim.bgBlack) fr = clearBackground(fr, cornerRgb(img, w, h), sim.bgTol);
+          setEditLayer(fr);
           const used = sim.importMode === 'auto' ? ((w > 2 * state.cols || h > 2 * state.rows) ? 'photo' : 'pixel') : sim.importMode;
           setStatus(`Image fitted onto frame ${state.currentFrame + 1} (${used === 'photo' ? 'averaged' : 'exact pixels'}). Undo reverts.`);
         }
@@ -1378,7 +1409,7 @@
 
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
-  $('flagsToggle').checked = sim.flags; $('onionToggle').checked = !!sim.onion; deviceEl.classList.toggle('flags-on', sim.flags);
+  $('bgBlackToggle').checked = !!sim.bgBlack; $('bgBlackTol').value = sim.bgTol; $('flagsToggle').checked = sim.flags; $('onionToggle').checked = !!sim.onion; deviceEl.classList.toggle('flags-on', sim.flags);
   $('importMode').value = sim.importMode; $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir;
   $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
   $('fpsInput').value = state.fps; $('nameInput').value = state.name;
