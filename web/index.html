@@ -131,6 +131,8 @@
 
   .hint { font-size: 0.75rem; color: var(--text-dim); margin: 0; line-height: 1.5; }
   .hint code, .cmd { color: var(--text); }
+  .hint-list { margin: 0; padding-left: 18px; font-size: 0.75rem; line-height: 1.5; color: var(--text-dim); display: flex; flex-direction: column; gap: 4px; }
+  .hint-list strong, .hint-list code { color: var(--text); }
   .status { font-size: 0.76rem; color: var(--accent); min-height: 1.2em; margin: 0; }
   .cmd { display: block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 0.74rem; white-space: pre-wrap; word-break: break-all; user-select: all; }
   .check { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text); }
@@ -282,7 +284,13 @@
           <label>Gamma <input id="gammaInput" type="number" min="1" max="3" step="0.1" value="2.2"></label>
           <label>PSU amps <input id="psuInput" type="number" min="1" max="60" step="1" value="6"></label>
         </div>
-        <p class="hint">Adjust these until the LED sim looks right. Saved PNGs remember them, and <code>play.py</code> on the Pi uses them for that image, so the panel matches what you see here. The Pi caps brightness at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white). The sim uses the same rounding and "keep non-black pixels lit" rule. It's scaled so full white looks full on screen, so judge shapes and colors, not how bright it is.</p>
+        <ul class="hint-list">
+          <li><strong>Brightness:</strong> how bright the LEDs run, from 0.05 to 1. The Pi caps it at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white), so anything higher plays at 0.4.</li>
+          <li><strong>Gamma:</strong> corrects for how eyes see light. LEDs get brighter in even steps, but we notice dark shades more than bright ones, so without correction mid-tones look washed out. Gamma darkens the middle of the range to compensate. 2.2 is the usual value. Raise it for more contrast and deeper colors (very dark shades can drop to off), lower it toward 1 for a flatter, brighter look.</li>
+          <li><strong>PSU amps:</strong> your power supply's rating. It only sets the limit on the Peak meter under the grid.</li>
+          <li>Saved PNGs remember brightness and gamma, and <code>play.py</code> on the Pi uses them for that image, so the panel matches what you see here.</li>
+          <li>The sim uses the same rounding and "keep non-black pixels lit" rule as the Pi. It's scaled so full white looks full on screen, so judge shapes and colors, not how bright it is.</li>
+        </ul>
       </section>
 
       <section class="card">
@@ -299,7 +307,7 @@
         <h2 id="moveTitle">Move and layers</h2>
         <div class="tool-row" role="group" aria-label="What your drawing and moves apply to">
           <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">This frame</button>
-          <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Shared background</button>
+          <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
         </div>
         <div class="move-row">
           <div class="nudge" role="group" aria-label="Move the picture one pixel">
@@ -315,28 +323,19 @@
           </div>
         </div>
         <div class="btn-row">
-          <button id="splitSharedBtn" class="btn btn-quiet" type="button">Split off shared background</button>
-          <button id="mergeSharedBtn" class="btn btn-quiet" type="button" disabled>Merge into frames</button>
+          <button id="splitSharedBtn" class="btn btn-quiet" type="button">Separate the still part</button>
+          <button id="mergeSharedBtn" class="btn btn-quiet" type="button" disabled>Join back into frames</button>
         </div>
-        <p class="hint">Arrows (or Shift+arrow keys) move the picture one pixel. <strong>Onion skin</strong> shows the previous frame faintly, and the next one fainter, on empty cells. <strong>Split off shared background</strong> moves every pixel that is identical in all frames into one shared layer, so you can redraw only the part that moves (a hand, legs, eyes). In a frame, black means see-through, so the shared layer shows. Switch to <em>Shared background</em> to edit or erase it. Playback and saved files always combine the layers into normal frames.</p>
+        <p class="hint"><strong>Move:</strong> the arrows (or Shift+arrow keys) shift the picture one pixel. <strong>Onion skin</strong> shows the previous frame faintly, and the next one fainter, so you can see how far you moved.</p>
+        <p class="hint"><strong>To animate just one part</strong> (eyes, a hand, legs) while the rest stays put: <strong>1.</strong> draw the whole picture. <strong>2.</strong> Press <em>+ Duplicate</em> once per extra frame. <strong>3.</strong> Press <em>Separate the still part</em>: everything that is the same in every frame moves into the <em>Still part</em>, and each frame is left with nothing but what changes. <strong>4.</strong> With <em>This frame</em> selected, paint only the moving bit on each frame. Black on a frame means see-through, so the still part shows through. To edit the still part for every frame at once, pick <em>Still part (all frames)</em>. <em>Join back into frames</em> undoes it. Saved files always join the two, so the Pi needs nothing new.</p>
       </section>
 
       <section class="card">
         <h2>Import image</h2>
-        <div class="form-row">
-          <label class="grow">Mode
-            <select id="importMode">
-              <option value="auto">Auto: same as the Pi</option>
-              <option value="pixel">Pixel art: exact pixels</option>
-              <option value="photo">Photo: average each cell</option>
-            </select>
-          </label>
-          <label class="file-btn">Choose image<input id="imageInput" type="file" accept="image/*" hidden></label>
-          <label class="btn file-photo">Photo to grid…<input id="photoInput" type="file" accept="image/*" hidden></label>
+        <div class="btn-row">
+          <label class="btn file-photo">Import image…<input id="imageInput" type="file" accept="image/*" hidden></label>
         </div>
-        <label class="check"><input id="bgBlackToggle" type="checkbox" checked> Make the background black on import</label>
-        <label class="range-row">Background tolerance <input id="bgBlackTol" type="range" min="0" max="120" value="40"></label>
-        <p class="hint"><strong>Photo to grid…</strong> opens a crop-and-zoom editor with background removal and dithering (on a phone it offers the camera too). <em>Choose image</em> is the quick path for pixel art and sprite sheets. Fit without stretching, transparency becomes black. <em>Auto</em> matches the Pi: images more than 2× the grid are averaged per cell, smaller ones keep exact pixels. A sprite sheet saved from here loads back as separate frames under any name; sheets from other tools need <code>_8fps</code> or <code>_sheet</code> in the name.</p>
+        <p class="hint">One button for everything. A sprite sheet saved from here (or a file with the right <code>_8fps</code> / <code>_sheet</code> name) loads straight in as separate frames, and so does a single frame saved from here. Any other picture opens a crop-and-zoom editor: tick <strong>Exact pixels</strong> for pixel art (no averaging, no dithering), or leave it off for photos (averaged per cell, with optional dithering). Both can remove the background. On a phone the picker offers the camera too.</p>
       </section>
 
       <section class="card">
@@ -368,11 +367,11 @@
             <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
             <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
           </ul>
-          <h3>Animating one part: move, onion skin, shared background</h3>
+          <h3>Animating one part: move, onion skin, still part</h3>
           <ul>
             <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift the picture one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide. Tick <em>Move every frame</em> to shift the whole animation, <em>Wrap</em> to let pixels come back on the other side.</li>
             <li><strong>Onion skin</strong> shows the previous frame faintly (and the next one fainter) on empty cells, so you can see how far you moved.</li>
-            <li><strong>Shared background:</strong> draw the whole character, duplicate it for each frame, change only the part that moves, then press <em>Split off shared background</em>. Every pixel that is the same in all frames moves to one shared layer, and each frame keeps only what changes (a hand, legs, eyes, a mouth). Pick <em>Shared background</em> to edit the body for every frame at once. In a frame, black means see-through. <em>Merge into frames</em> undoes it.</li>
+            <li><strong>Still part:</strong> draw the whole character and duplicate it for each frame. <em>Separate the still part</em> pulls everything that is identical in all frames into one layer, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. <em>Join back into frames</em> undoes it.</li>
             <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
           </ul>
           <h3>Watch out for</h3>
@@ -416,7 +415,7 @@
 <dialog id="photoDlg" class="photo-dlg" aria-labelledby="photoTitle">
   <div class="photo-wrap">
     <div class="photo-head">
-      <h2 id="photoTitle">Photo to grid</h2>
+      <h2 id="photoTitle">Import image</h2>
       <button id="photoCancel" class="btn btn-quiet" type="button">Cancel</button>
     </div>
     <div class="photo-body">
@@ -426,6 +425,7 @@
       </div>
       <div class="photo-col">
         <p class="hint">Drag the photo to move it. Pinch or scroll to zoom. The faint lines are one LED each; the small picture is the result.</p>
+        <label class="check"><input id="exactOn" type="checkbox"> Exact pixels (pixel art, no averaging)</label>
         <label class="range-row">Zoom <input id="photoZoom" type="range" min="0" max="100" value="0"></label>
         <div class="btn-row">
           <button id="photoFit" class="btn btn-quiet" type="button">Fit whole photo</button>
@@ -528,7 +528,7 @@
   }
   state.target = 'frame';
   state.color = '#e63946'; state.tool = 'paint';
-  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', importMode: 'auto', onion: false, bgBlack: true, bgTol: 40 }, recall('glowgrid-sim') || {});
+  const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads', onion: false }, recall('glowgrid-sim') || {});
 
   function saveState() {
     store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name, shared: state.shared });
@@ -783,7 +783,6 @@
   ['brightInput', 'gammaInput', 'psuInput'].forEach((id) => $(id).addEventListener('change', readLedSettings));
 
   /* ---------- import ---------- */
-  $('importMode').addEventListener('change', (e) => { sim.importMode = e.target.value; saveSim(); });
   // Fit like grid_common.fit(): keep aspect, center, composite alpha over black
   function fitImage(src, sw, sh, mode) {
     const cols = state.cols, rows = state.rows;
@@ -821,78 +820,45 @@
     const a = d[i + 3] / 255;
     out[y * state.cols + x] = toHex(Math.round(d[i] * a), Math.round(d[i + 1] * a), Math.round(d[i + 2] * a));
   }
-  // Background to black: take the corner color of the source, then clear everything of that color
-  // that connects to the picture's edge (so same-colored details inside the sprite are kept).
-  function cornerRgb(src, w, h) {
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(src, 0, 0);
-    const pts = [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]].map(([px, py]) => x.getImageData(px, py, 1, 1).data);
-    if (pts.some((d) => d[3] < 10)) return null; // transparent corner: import already makes it black
-    return [0, 1, 2].map((k) => { const a = pts.map((d) => d[k]).sort((p, q) => p - q); return Math.round((a[1] + a[2]) / 2); });
-  }
-  function clearBackground(frame, bg, tol) {
-    if (!bg || (bg[0] + bg[1] + bg[2]) === 0) return frame;
-    const { cols, rows } = state, tol2 = tol * tol, out = frame.slice(), seen = new Uint8Array(cols * rows), stack = [];
-    const near = (hex) => { if (isOff(hex)) return true; const c = hexToRgb(hex); const d0 = c[0] - bg[0], d1 = c[1] - bg[1], d2 = c[2] - bg[2]; return d0 * d0 + d1 * d1 + d2 * d2 <= tol2; };
-    const push = (i) => { if (!seen[i] && near(out[i])) { seen[i] = 1; stack.push(i); } };
-    for (let x = 0; x < cols; x++) { push(x); push((rows - 1) * cols + x); }
-    for (let y = 0; y < rows; y++) { push(y * cols); push(y * cols + cols - 1); }
-    while (stack.length) {
-      const i = stack.pop(); out[i] = '#000000';
-      const x = i % cols, y = Math.floor(i / cols);
-      if (x > 0) push(i - 1); if (x < cols - 1) push(i + 1); if (y > 0) push(i - cols); if (y < rows - 1) push(i + cols);
-    }
-    return out;
-  }
-  $('bgBlackToggle').addEventListener('change', (e) => { sim.bgBlack = e.target.checked; saveSim(); });
-  $('bgBlackTol').addEventListener('input', (e) => { sim.bgTol = Number(e.target.value); saveSim(); });
+  // One import path. Sprite sheets (and single frames saved from here) load straight in; everything else opens the crop dialog.
   $('imageInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0]; if (!file) return;
-    const lightP = file.arrayBuffer().then((b) => readPngText(b, LIGHT_KEY)).catch(() => null);
-    let meta = {};
-    try { meta = JSON.parse(await lightP) || {}; } catch (err) { meta = {}; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = async () => {
-        stopPlay(); pushUndo();
-        const w = img.naturalWidth, h = img.naturalHeight, n = w / state.cols;
-        const byMeta = Number.isInteger(meta.frames) && meta.frames > 1 && w === meta.frames * state.cols;
-        if (h === state.rows && Number.isInteger(n) && n > 1 && (byMeta || /_(\d+(\.\d+)?)fps|_sheet/i.test(file.name))) {
-          // Sprite sheet: split into frames
-          const c = document.createElement('canvas'); c.width = w; c.height = h;
-          const x = c.getContext('2d'); x.drawImage(img, 0, 0);
-          state.frames = []; state.shared = null; state.target = 'frame';
-          for (let k = 0; k < n; k++) {
-            const piece = document.createElement('canvas'); piece.width = state.cols; piece.height = state.rows;
-            piece.getContext('2d').drawImage(c, k * state.cols, 0, state.cols, state.rows, 0, 0, state.cols, state.rows);
-            let fr = fitImage(piece, state.cols, state.rows, 'pixel');
-            if (sim.bgBlack) fr = clearBackground(fr, cornerRgb(piece, state.cols, state.rows), sim.bgTol);
-            state.frames.push(fr);
-          }
-          state.currentFrame = 0;
-          const m = /_(\d+)fps/i.exec(file.name);
-          if (typeof meta.fps === 'number' && meta.fps > 0) { state.fps = clamp(meta.fps, 1, 30); $('fpsInput').value = state.fps; }
-          else if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
-          const base = file.name.replace(/\.[^.]+$/, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?(_x\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '');
-          if (base) { state.name = base; $('nameInput').value = base; }
-          setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
-        } else {
-          let fr = fitImage(img, w, h, sim.importMode);
-          if (sim.bgBlack) fr = clearBackground(fr, cornerRgb(img, w, h), sim.bgTol);
-          setEditLayer(fr);
-          const used = sim.importMode === 'auto' ? ((w > 2 * state.cols || h > 2 * state.rows) ? 'photo' : 'pixel') : sim.importMode;
-          setStatus(`Image fitted onto frame ${state.currentFrame + 1} (${used === 'photo' ? 'averaged' : 'exact pixels'}). Undo reverts.`);
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    let raw = null, meta = {};
+    try { raw = readPngText(await file.arrayBuffer(), LIGHT_KEY); meta = JSON.parse(raw) || {}; } catch (err) { meta = {}; }
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); setStatus('That file couldn’t be read as an image.'); };
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const w = img.naturalWidth, h = img.naturalHeight, n = w / state.cols;
+      const byMeta = Number.isInteger(meta.frames) && meta.frames > 1 && w === meta.frames * state.cols;
+      const isSheet = h === state.rows && Number.isInteger(n) && n > 1 && (byMeta || /_(\d+(\.\d+)?)fps|_sheet/i.test(file.name));
+      const isOwnFrame = !isSheet && typeof meta.brightness === 'number' && w === state.cols && h === state.rows;
+      if (!isSheet && !isOwnFrame) { openImport(file); return; }
+      stopPlay(); pushUndo();
+      if (isSheet) {
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+        state.frames = []; state.shared = null; state.target = 'frame';
+        for (let k = 0; k < n; k++) {
+          const piece = document.createElement('canvas'); piece.width = state.cols; piece.height = state.rows;
+          piece.getContext('2d').drawImage(c, k * state.cols, 0, state.cols, state.rows, 0, 0, state.cols, state.rows);
+          state.frames.push(fitImage(piece, state.cols, state.rows, 'pixel'));
         }
-        afterFrameChange();
-        const raw = await lightP;
-        if (raw && applySavedLight(raw)) setStatus($('statusEl').textContent + ` Loaded its light settings: brightness ${sim.brightness}, gamma ${sim.gamma}.`);
-      };
-      img.onerror = () => setStatus('That file couldn’t be read as an image.');
-      img.src = ev.target.result;
+        state.currentFrame = 0;
+        const m = /_(\d+)fps/i.exec(file.name);
+        if (typeof meta.fps === 'number' && meta.fps > 0) { state.fps = clamp(meta.fps, 1, 30); $('fpsInput').value = state.fps; }
+        else if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
+        const base = file.name.replace(/\.[^.]+$/, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?(_x\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '');
+        if (base) { state.name = base; $('nameInput').value = base; }
+        setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
+      } else {
+        setEditLayer(fitImage(img, w, h, 'pixel'));
+        setStatus(`Frame loaded onto frame ${state.currentFrame + 1}. Undo reverts.`);
+      }
+      afterFrameChange();
+      if (raw && applySavedLight(raw)) setStatus($('statusEl').textContent + ` Loaded its light settings: brightness ${sim.brightness}, gamma ${sim.gamma}.`);
     };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    img.src = url;
   });
 
 
@@ -929,6 +895,24 @@
         if (wFg / area < 0.5) { out[o] = out[o + 1] = out[o + 2] = 0; }
         else { out[o] = fr / wFg; out[o + 1] = fg / wFg; out[o + 2] = fb / wFg; }
       } else { out[o] = sr / area; out[o + 1] = sg / area; out[o + 2] = sb / area; }
+    }
+    return out;
+  }
+
+  // Exact pixels: sample the middle of each cell, no averaging (pixel art). Same background rule as boxCrop.
+  function pointCrop(d, w, h, view, cols, rows, bg) {
+    const out = new Float32Array(cols * rows * 3);
+    const cw = view.vw / cols, ch = view.vh / rows, tol2 = bg ? bg.tol * bg.tol : 0;
+    for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+      const x = Math.floor(view.x0 + (cx + 0.5) * cw), y = Math.floor(view.y0 + (cy + 0.5) * ch);
+      if (x < 0 || y < 0 || x >= w || y >= h) continue;
+      const i = (y * w + x) * 4, a = d[i + 3] / 255;
+      if (bg) {
+        const dr = d[i] - bg.rgb[0], dg = d[i + 1] - bg.rgb[1], db = d[i + 2] - bg.rgb[2];
+        if (a < 0.05 || dr * dr + dg * dg + db * db <= tol2) continue;
+      }
+      const o = (cy * cols + cx) * 3;
+      out[o] = d[i] * a; out[o + 1] = d[i + 1] * a; out[o + 2] = d[i + 2] * a;
     }
     return out;
   }
@@ -1003,7 +987,7 @@
   }
   window.GlowPhoto = { boxCrop, ditherFrame }; // exposed so the Pi-parity test can call it
 
-  const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', queued: false };
+  const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', exact: false, queued: false };
   const cropCv = $('cropCanvas'), cropCtx = cropCv.getContext('2d');
   const viewH = () => photo.vw * state.rows / state.cols;
 
@@ -1056,8 +1040,8 @@
     cropCtx.stroke();
 
     const bg = photo.bg.on ? { rgb: photo.bg.rgb, tol: photo.bg.tol } : null;
-    const rgb = boxCrop(photo.data, photo.w, photo.h, v, cols, rows, bg);
-    photo.result = ditherFrame(rgb, cols, rows, photo.dither, LUT, sim.brightness, sim.gamma);
+    const rgb = (photo.exact ? pointCrop : boxCrop)(photo.data, photo.w, photo.h, v, cols, rows, bg);
+    photo.result = ditherFrame(rgb, cols, rows, photo.exact ? 'none' : photo.dither, LUT, sim.brightness, sim.gamma);
     const pv = $('photoPreview'); pv.width = cols; pv.height = rows;
     const px = pv.getContext('2d'), img = px.createImageData(cols, rows), asLed = $('photoLed').checked;
     photo.result.forEach((hex, p) => { img.data.set([...hexToRgb(asLed ? led(hex).disp : hex), 255], p * 4); });
@@ -1121,6 +1105,7 @@
   $('bgCorners').addEventListener('click', () => { photo.bg.rgb = cornerColor(); photo.bg.on = true; photo.bgSet = true; $('bgOn').checked = true; schedulePhoto(); });
   $('bgOn').addEventListener('change', (e) => { photo.bg.on = e.target.checked; if (photo.bg.on && !photo.bgSet) { photo.bg.rgb = cornerColor(); photo.bgSet = true; } schedulePhoto(); });
   $('bgTol').addEventListener('input', (e) => { photo.bg.tol = Number(e.target.value); schedulePhoto(); });
+  $('exactOn').addEventListener('change', (e) => { photo.exact = e.target.checked; $('ditherMode').disabled = photo.exact; schedulePhoto(); });
   $('ditherMode').addEventListener('change', (e) => { photo.dither = e.target.value; schedulePhoto(); });
   $('photoLed').addEventListener('change', schedulePhoto);
   $('photoZoom').addEventListener('input', setZoomFromSlider);
@@ -1134,22 +1119,27 @@
     if (asNew) { state.target = 'frame'; state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
     else setEditLayer(photo.result);
     afterFrameChange();
-    const how = photo.dither === 'none' ? 'no dithering' : (photo.dither === 'fs' ? 'Floyd–Steinberg' : 'ordered') + ' dithering';
-    setStatus((asNew ? `Photo added as frame ${state.currentFrame + 1}` : `Photo applied to frame ${state.currentFrame + 1}`) + ` (${how}${photo.bg.on ? ', background off' : ''}). Undo reverts.`);
+    const how = photo.exact ? 'exact pixels' : photo.dither === 'none' ? 'no dithering' : (photo.dither === 'fs' ? 'Floyd–Steinberg' : 'ordered') + ' dithering';
+    setStatus((asNew ? `Image added as frame ${state.currentFrame + 1}` : `Image applied to frame ${state.currentFrame + 1}`) + ` (${how}${photo.bg.on ? ', background off' : ''}). Undo reverts.`);
     $('photoDlg').close();
   }
   $('photoApply').addEventListener('click', () => applyPhoto(false));
   $('photoAdd').addEventListener('click', () => applyPhoto(true));
-  $('photoInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+  async function openImport(file) {
     try {
       const d = await decodeFile(file);
-      Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, bgSet: false, result: null });
-      photo.bg.on = false; $('bgOn').checked = false; $('ditherMode').value = photo.dither = 'none';
+      Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, result: null });
+      const small = d.w <= 2 * state.cols && d.h <= 2 * state.rows; // same rule the Pi uses for pixel art vs photo
+      photo.exact = small; $('exactOn').checked = small;
+      photo.dither = 'none'; $('ditherMode').value = 'none'; $('ditherMode').disabled = small;
+      // background off by default when the corners are a solid, non-black color
+      const px = [[0, 0], [d.w - 1, 0], [0, d.h - 1], [d.w - 1, d.h - 1]].map(([x, y]) => d.data[(y * d.w + x) * 4 + 3]);
+      const cc = cornerColor(), solid = px.every((a) => a >= 250) && (cc[0] + cc[1] + cc[2]) > 0;
+      photo.bg.rgb = cc; photo.bg.on = solid; photo.bgSet = solid; $('bgOn').checked = solid;
       photo.vwMax = Math.max(d.w, d.h * state.cols / state.rows) * 3; photo.vwMin = Math.max(state.cols, Math.min(d.w, d.h * state.cols / state.rows) / 40);
-      $('photoDlg').showModal(); fitView(true);
+      $('photoDlg').showModal(); fitView(!small);
     } catch (err) { setStatus('That file couldn’t be read as an image.'); }
-  });
+  }
 
   /* ---------- resize ---------- */
   $('resizeBtn').addEventListener('click', () => {
@@ -1339,7 +1329,7 @@
   function setTarget(t) {
     if (t === 'shared' && !state.shared) { stopPlay(); pushUndo(); state.shared = newBlankFrame(state.cols, state.rows); }
     state.target = t; afterFrameChange();
-    setStatus(t === 'shared' ? 'Editing the shared background: it sits under every frame.' : 'Editing this frame only.');
+    setStatus(t === 'shared' ? 'Editing the still part: it sits under every frame.' : 'Editing this frame only.');
   }
   $('targetFrame').addEventListener('click', () => setTarget('frame'));
   $('targetShared').addEventListener('click', () => setTarget('shared'));
@@ -1356,7 +1346,7 @@
     state.shared = sh;
     state.frames = state.frames.map((f) => f.map((v, i) => (sh[i] !== '#000000' && v === sh[i]) ? '#000000' : v));
     afterFrameChange();
-    setStatus(`Moved ${moved} unchanging pixels into the shared background. Each frame now holds only what moves. Undo reverts.`);
+    setStatus(`Moved ${moved} unchanging pixels into the still part. Each frame now holds only what moves. Undo reverts.`);
   });
   $('mergeSharedBtn').addEventListener('click', () => {
     if (!state.shared) return;
@@ -1364,7 +1354,7 @@
     state.frames = state.frames.map((f) => flatten(f).slice());
     state.shared = null; state.target = 'frame';
     afterFrameChange();
-    setStatus('Merged the shared background into every frame. Undo reverts.');
+    setStatus('Joined the still part back into every frame. Undo reverts.');
   });
   $('onionToggle').addEventListener('change', (e) => { sim.onion = e.target.checked; saveSim(); renderFrame(); });
 
@@ -1409,8 +1399,8 @@
 
   /* ---------- boot ---------- */
   $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
-  $('bgBlackToggle').checked = !!sim.bgBlack; $('bgBlackTol').value = sim.bgTol; $('flagsToggle').checked = sim.flags; $('onionToggle').checked = !!sim.onion; deviceEl.classList.toggle('flags-on', sim.flags);
-  $('importMode').value = sim.importMode; $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir;
+  $('flagsToggle').checked = sim.flags; $('onionToggle').checked = !!sim.onion; deviceEl.classList.toggle('flags-on', sim.flags);
+  $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir;
   $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
   $('fpsInput').value = state.fps; $('nameInput').value = state.name;
   buildLut(); buildGridDOM(); renderSwatches(); updateUndoBtns();
