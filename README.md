@@ -79,14 +79,13 @@ Why the name is needed here: a 16 px tall, 48 px wide image could be three frame
 
 Other rules: avoid spaces in names (they complicate `scp`), and use `.png`, `.gif`, `.jpg`, `.webp` or `.bmp`.
 
-### Animating one part: move, onion skin, still part
+### Animating one part: move and still part
 
 The *Move and layers* card makes animations from a single drawing without repainting every frame.
 
-- **Move:** the arrow buttons (or Shift + arrow keys) shift the picture by one pixel. Duplicate a frame, nudge it, repeat to make a bob or a slide. *Move every frame* shifts the whole animation, and *Wrap around the edges* brings pixels back on the opposite side instead of clipping them.
-- **Onion skin:** shows the previous frame faintly, and the next one fainter, on empty cells, so you can see how far a part has moved.
-- **Still part:** draw the whole character, duplicate it for each frame, change only the part that moves (a hand, legs, eyes, a mouth), then press *Separate the still part*. Every pixel that is identical in all frames moves into one shared layer under every frame. Choose *Still part (all frames)* to edit the body for all frames at once, or *This frame* for the moving part. In a frame, black means see-through while a still part exists. *Join back into frames* copies it into every frame again.
-- **Nothing changes on the Pi.** Saved PNGs and sprite sheets always contain the combined picture, and the shared layer is kept in your browser only. Splitting and merging produce byte-identical exported sheets.
+- **Move:** the arrow buttons (or Shift + arrow keys) shift this frame by one pixel. Duplicate a frame, nudge it, repeat to make a bob or a slide.
+- **Animate one part only:** draw the whole character, duplicate it for each frame, then tick *Animate one part only*. Every pixel that is identical in all frames moves into one shared layer under every frame (the still part), so each frame holds only what changes (a hand, legs, eyes, a mouth). Paint just those bits with *Moving part (this frame)* selected, or pick *Still part (all frames)* to edit the body for all frames at once. In a frame, black means see-through while a still part exists. Untick the box to join it back into every frame. It is optional: you can also just paint each frame.
+- **Nothing changes on the Pi.** Saved PNGs and sprite sheets always contain the combined picture, and the still part is kept in your browser only. Separating and joining produce byte-identical exported sheets.
 
 ### Export size: 1× for the Pi, bigger to share
 
