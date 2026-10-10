@@ -8,7 +8,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 
 1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below), or in [Piskel](#piskel).
 2. **Simulate and adjust**: switch to *LED sim* to see what survives on real LEDs, and tune *Brightness* and *Gamma* until it looks right. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
-3. **Export** a still PNG or an animation sprite sheet (frames side by side). The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
+3. **Export** from the *Export image* card. For the Pi it is one PNG: a still with 1 frame, an animation sprite sheet (frames side by side) with 2 or more. The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
 4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
 
 The simulator never talks to the panel. It's a preview tool; the Pi's Python program is what lights the LEDs.
@@ -31,7 +31,7 @@ Your drawings are saved in that browser's local storage, so re-import a sprite s
 - **Crop and zoom:** drag the photo to move it, pinch or scroll to zoom. *Fit whole photo* shows everything (letterboxed); *Fill grid* crops to the grid's shape. The faint lines are one LED each, and the small picture is the result.
 - **Exact pixels:** for small pixel art, tick *Exact pixels (pixel art, no averaging)*. Each LED takes the color at the middle of its cell, with no averaging or dithering. It is on by default for images no larger than twice the grid.
 - **Background off:** tap *Pick on photo* (or *Use corners*) to choose the background color, then set the tolerance. Only the background connected to the picture's edge is removed, so white inside the subject (a face, an eye) stays. Background cells go black (LED off). Cells at the edge of the subject keep the subject's own color instead of a muddy blend. If the background leaks inside through a gap in an outline, lower the tolerance.
-- **Dithering:** *Floyd–Steinberg* (smooth) or *Ordered* (patterned). It works in LED space, using the brightness and gamma from *LED settings*, so dark gradients that would collapse into a few levels keep their tones. Black stays black. It is baked in at the current brightness and gamma; change them and re-run.
+- **Dithering:** *Floyd–Steinberg* (smooth) or *Ordered* (patterned). It works in LED space, using the brightness and gamma from *Panel settings*, so dark gradients that would collapse into a few levels keep their tones. Black stays black. It is baked in at the current brightness and gamma; change them and re-run.
 - *Apply to this frame* replaces the frame; *Add as new frame* appends one, so a few photos make an animation. Undo reverts.
 
 The resize is an exact area average, the same math as the Pi's `BOX` filter, so a photo imported with no dithering matches what `play.py` would make of the original file to within one level of 255.
@@ -61,7 +61,7 @@ An animation is a **sprite sheet**: one PNG with every frame side by side, like 
 [ frame 1 ][ frame 2 ][ frame 3 ][ frame 4 ]     = one 64x16 PNG, played at 4 fps
 ```
 
-**Sheets saved from Glow Grid** (*Save animation (sprite sheet)*) store the frame count and fps inside the PNG, next to brightness and gamma, so the file name can be anything: `ghost.png`, `red_ghost_v2.png`. The saved name is just the sprite's name; the menu on the Pi shows the settings.
+**Files saved from Glow Grid** (one export button: a still with 1 frame, a sprite sheet with 2 or more) store the frame count and fps inside the PNG, next to brightness and gamma, so the file name can be anything: `ghost.png`, `red_ghost_v2.png`. The saved name is just the sprite's name; the menu on the Pi shows the settings. They also record the grid size (`cols`, `rows`); if a file was made for a different size than the panel, the menu flags it (`! made for 8x32, panel is 16x16`) and `play.py` prints a note, rather than squashing it silently.
 
 **Sheets from other tools** (Piskel, hand-made strips) carry no metadata, so the Pi uses the file name:
 
@@ -87,9 +87,13 @@ The *Move and layers* card makes animations from a single drawing without repain
 - **Animate one part only:** draw the whole character, duplicate it for each frame, then tick *Animate one part only*. Every pixel that is identical in all frames moves into one shared layer under every frame (the still part), so each frame holds only what changes (a hand, legs, eyes, a mouth). Paint just those bits with *Moving part (this frame)* selected, or pick *Still part (all frames)* to edit the body for all frames at once. In a frame, black means see-through while a still part exists. Untick the box to join it back into every frame. It is optional: you can also just paint each frame.
 - **Nothing changes on the Pi.** Saved PNGs and sprite sheets always contain the combined picture, and the still part is kept in your browser only. Separating and joining produce byte-identical exported sheets.
 
-### Export size: 1× for the Pi, bigger to share
+### Export image: choose what it is for
 
-Exports are 16×16 by default: one pixel per LED, which is exactly what the Pi plays. The *Scale* option in the export card also saves 8×, 16× or 32× copies for viewing and sharing: each pixel becomes a sharp block, and the name gets `_x16` etc. Copy the **1×** file to the Pi. A scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
+The *Export image* card has one button and an *Export for* choice:
+
+- **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. The card also writes the `scp` command for it.
+- **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
+- **ESP32-C3:** listed but disabled until the C3 build exists. New targets slot in here.
 
 ## Hardware and software (the tested build)
 
@@ -222,7 +226,7 @@ To add your own images, see the next section.
 
 Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png`, `.gif`, `.jpg`/`.jpeg`, `.webp` and `.bmp` there, numbered.
 
-**Copy from Windows** (PowerShell, not the SSH window). The simulator's *Export to the Pi* card writes this command for you: set *Pi login* and *Folder on your PC* once (it remembers them), and it fills in the file name.
+**Copy from Windows** (PowerShell, not the SSH window). The simulator's *Export image* card (with *Export for: Raspberry Pi*) writes this command for you: set *Pi login* and *Folder on your PC* once (it remembers them), and it fills in the file name.
 
 ```powershell
 scp "$HOME\Downloads\walk.png" user@raspberrypi.local:~/glow-grid/images/
@@ -266,7 +270,7 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 
 ## Architecture
 
-- **`grid_common.py`**: panel config and defaults, `get_strip()` (also takes a lock so only one glow-grid program drives the panel at a time), `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `set_light()` / `image_light()` (per-image brightness and gamma, capped by `MAX_BRIGHTNESS`), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, sprite sheet or animated GIF → frames + delays), and `draw()`.
+- **`grid_common.py`**: panel config and defaults, `get_strip()` (also takes a lock so only one glow-grid program drives the panel at a time), `xy_to_index()` (wiring map), `correct()` (gamma/brightness lookup table), `set_light()` / `image_light()` (per-image brightness and gamma, capped by `MAX_BRIGHTNESS`), `image_grid()` (the grid size saved in a PNG), `fit()` (fit any image to the grid without stretching, averaging large images and keeping pixel art exact; transparency becomes black), `load_frames()` (still, sprite sheet or animated GIF → frames + delays), and `draw()`.
 - **`play.py`**: plays one file with its saved light settings. A still is held until stopped; an animation loops.
 - **`probe.py`**: wiring diagnostics (markers / walk / check), run with `glow-grid probe`.
 - **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
