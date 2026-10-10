@@ -38,7 +38,8 @@ source = "from the image" if light else "from local_config.py"
 note = ""
 if light.get("brightness", 0) > grid_common.BRIGHTNESS:
     note = f" (image asked for {light['brightness']:g}; capped by MAX_BRIGHTNESS)"
-print(f"{os.path.basename(path)}: {len(frames)} frame(s), "
+if not os.environ.get("GLOWGRID_MENU"):  # in the menu, a late print would land on its prompt
+    print(f"{os.path.basename(path)}: {len(frames)} frame(s), "
       f"brightness {grid_common.BRIGHTNESS:g}, gamma {grid_common.GAMMA:g} {source}{note}")
 
 strip = get_strip()
