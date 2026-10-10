@@ -427,6 +427,7 @@
           <span class="bg-swatch" id="bgSwatch" title="Background color"></span>
         </div>
         <label class="range-row">Background tolerance <input id="bgTol" type="range" min="0" max="160" value="45"></label>
+        <p class="hint">Only background connected to the picture's edge is removed, so white inside the subject (a face, an eye) stays. If the background leaks inside through a gap in an outline, lower the tolerance.</p>
 
         <label class="form-row" style="flex-direction:column;align-items:stretch">Dithering
           <select id="ditherMode">
@@ -861,7 +862,7 @@
           sr += r * wgt; sg += g * wgt; sb += b * wgt;
           if (bg) {
             const dr = d[i] - bg.rgb[0], dg = d[i + 1] - bg.rgb[1], db = d[i + 2] - bg.rgb[2];
-            if (a < 0.05 || dr * dr + dg * dg + db * db <= tol2) continue;
+            if (bg.mask ? bg.mask[y * w + x] : (a < 0.05 || dr * dr + dg * dg + db * db <= tol2)) continue;
             fr += r * wgt; fg += g * wgt; fb += b * wgt; wFg += wgt;
           }
         }
@@ -885,7 +886,7 @@
       const i = (y * w + x) * 4, a = d[i + 3] / 255;
       if (bg) {
         const dr = d[i] - bg.rgb[0], dg = d[i + 1] - bg.rgb[1], db = d[i + 2] - bg.rgb[2];
-        if (a < 0.05 || dr * dr + dg * dg + db * db <= tol2) continue;
+        if (bg.mask ? bg.mask[y * w + x] : (a < 0.05 || dr * dr + dg * dg + db * db <= tol2)) continue;
       }
       const o = (cy * cols + cx) * 3;
       out[o] = d[i] * a; out[o + 1] = d[i + 1] * a; out[o + 2] = d[i + 2] * a;
@@ -998,6 +999,31 @@
   function schedulePhoto() { if (photo.queued) return; photo.queued = true; requestAnimationFrame(() => { photo.queued = false; renderPhoto(); }); }
   const viewRect = () => ({ x0: photo.cx - photo.vw / 2, y0: photo.cy - viewH() / 2, vw: photo.vw, vh: viewH() });
 
+  // Background = pixels near the background color (or transparent) that connect to the picture's edge.
+  // White inside the subject (a face, an eye) is enclosed by other colors, so it is kept.
+  function bgMask() {
+    const { w, h, data } = photo, key = photo.bg.rgb.join(',') + '|' + photo.bg.tol;
+    if (photo.maskKey === key && photo.mask) return photo.mask;
+    const tol2 = photo.bg.tol * photo.bg.tol, c = photo.bg.rgb;
+    const near = new Uint8Array(w * h);
+    for (let p = 0; p < w * h; p++) {
+      const i = p * 4, dr = data[i] - c[0], dg = data[i + 1] - c[1], db = data[i + 2] - c[2];
+      near[p] = (data[i + 3] < 13 || dr * dr + dg * dg + db * db <= tol2) ? 1 : 0;
+    }
+    const mask = new Uint8Array(w * h), stack = [];
+    const seed = (p) => { if (near[p] && !mask[p]) { mask[p] = 1; stack.push(p); } };
+    for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
+    while (stack.length) {
+      const p = stack.pop(), x = p % w;
+      if (x > 0) seed(p - 1);
+      if (x < w - 1) seed(p + 1);
+      if (p >= w) seed(p - w);
+      if (p < w * (h - 1)) seed(p + w);
+    }
+    photo.mask = mask; photo.maskKey = key;
+    return mask;
+  }
   function renderPhoto() {
     if (!photo.data || !$('photoDlg').open) return;
     const cols = state.cols, rows = state.rows;
@@ -1015,7 +1041,7 @@
     for (let j = 1; j < rows; j++) { const y = Math.round(j * H / rows) + .5; cropCtx.moveTo(0, y); cropCtx.lineTo(W, y); }
     cropCtx.stroke();
 
-    const bg = photo.bg.on ? { rgb: photo.bg.rgb, tol: photo.bg.tol } : null;
+    const bg = photo.bg.on ? { rgb: photo.bg.rgb, tol: photo.bg.tol, mask: bgMask() } : null;
     const rgb = (photo.exact ? pointCrop : boxCrop)(photo.data, photo.w, photo.h, v, cols, rows, bg);
     photo.result = ditherFrame(rgb, cols, rows, photo.exact ? 'none' : photo.dither, LUT, sim.brightness, sim.gamma);
     const pv = $('photoPreview'); pv.width = cols; pv.height = rows;
@@ -1104,7 +1130,7 @@
   async function openImport(file) {
     try {
       const d = await decodeFile(file);
-      Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, result: null });
+      Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, result: null, mask: null, maskKey: null });
       const small = d.w <= 2 * state.cols && d.h <= 2 * state.rows; // same rule the Pi uses for pixel art vs photo
       photo.exact = small; $('exactOn').checked = small;
       photo.dither = 'none'; $('ditherMode').value = 'none'; $('ditherMode').disabled = small;

@@ -30,7 +30,7 @@ Your drawings are saved in that browser's local storage, so re-import a sprite s
 
 - **Crop and zoom:** drag the photo to move it, pinch or scroll to zoom. *Fit whole photo* shows everything (letterboxed); *Fill grid* crops to the grid's shape. The faint lines are one LED each, and the small picture is the result.
 - **Exact pixels:** for small pixel art, tick *Exact pixels (pixel art, no averaging)*. Each LED takes the color at the middle of its cell, with no averaging or dithering. It is on by default for images no larger than twice the grid.
-- **Background off:** tap *Pick on photo* (or *Use corners*) to choose the background color, then set the tolerance. Background cells go black (LED off). Cells at the edge of the subject keep the subject's own color instead of a muddy blend.
+- **Background off:** tap *Pick on photo* (or *Use corners*) to choose the background color, then set the tolerance. Only the background connected to the picture's edge is removed, so white inside the subject (a face, an eye) stays. Background cells go black (LED off). Cells at the edge of the subject keep the subject's own color instead of a muddy blend. If the background leaks inside through a gap in an outline, lower the tolerance.
 - **Dithering:** *Floyd–Steinberg* (smooth) or *Ordered* (patterned). It works in LED space, using the brightness and gamma from *LED settings*, so dark gradients that would collapse into a few levels keep their tones. Black stays black. It is baked in at the current brightness and gamma; change them and re-run.
 - *Apply to this frame* replaces the frame; *Add as new frame* appends one, so a few photos make an animation. Undo reverts.
 
