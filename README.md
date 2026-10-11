@@ -8,7 +8,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 
 1. **Design** in the Glow Grid simulator (`https://dwooods.github.io/glow-grid/`, installed as an app, or `web/index.html` locally), or in [Piskel](#piskel).
 2. **Check and adjust**: tune *Brightness* and *Gamma*, and watch the *Panel check*, which flags pixels that will be barely lit or shift color (dashed outlines on the grid) and estimates current draw against your power supply. The grid shows your colors as drawn; the Panel check is what tells you how the LEDs will treat them.
-3. **Export** from the *Export image* card. For the Pi it is one PNG: a still with 1 frame, an animation sprite sheet (frames side by side) with 2 or more. The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
+3. **Export** from the *File* menu (*File ▸ Export…*). For the Pi it is one PNG: a still with 1 frame, an animation sprite sheet (frames side by side) with 2 or more. The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
 4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
 
 The simulator never talks to the panel. It's a preview tool; the Pi's Python program is what lights the LEDs.
@@ -21,14 +21,16 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 |---|---|
 | `js/core.js` | helpers, saved settings and last session (`localStorage`), the blank starting frame |
 | `js/led.js` | the LED model (mirrors `grid_common.py`: gamma, brightness, current estimate) and the shared layer |
-| `js/editor.js` | undo/redo, rendering, frames, drawing, the editing view |
+| `js/editor.js` | undo/redo, rendering, frames, drawing (strokes are filled in between pointer samples so fast drags don't skip cells), the editing view |
+| `js/loupe.js` | touch magnifier: a close-up of the pixels around a painting finger or pen |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
-| `js/export.js` | the PNG text chunk (`glow-grid` metadata) and the Export image card: Pi, view/share, and the future C3 target |
+| `js/export.js` | the PNG text chunk (`glow-grid` metadata), the Export dialog (Pi, view/share, and the future C3 target) and the status toast |
 | `js/tools.js` | move, "animate one part only", playback |
-| `js/main.js` | app install, service worker, boot |
+| `js/main.js` | app install, service worker, help dialog, File menu, boot |
 
 New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only.
 
+- **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen): one column with the grid pinned to the top while the cards scroll beneath it (Tools, Frames, Move and layers, Panel settings). While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
 - **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI by `web/make_icons.py`). It is a project site, so it sits beside the blog at `dwooods.github.io` without touching it. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 - **Install as an app**: open the hosted page in Chrome, Edge or iPhone Safari (*Share → Add to Home Screen*) and it runs in its own window and works offline. After an update, close and reopen it to pick up the new version.
@@ -104,11 +106,11 @@ The *Move and layers* card makes animations from a single drawing without repain
 - **Animate one part only:** draw the whole character, duplicate it for each frame, then tick *Animate one part only*. Every pixel that is identical in all frames moves into one shared layer under every frame (the still part), so each frame holds only what changes (a hand, legs, eyes, a mouth). Paint just those bits with *Moving part (this frame)* selected, or pick *Still part (all frames)* to edit the body for all frames at once. In a frame, black means see-through while a still part exists. Untick the box to join it back into every frame. It is optional: you can also just paint each frame.
 - **Nothing changes on the Pi.** Saved PNGs and sprite sheets always contain the combined picture, and the still part is kept in your browser only. Separating and joining produce byte-identical exported sheets.
 
-### Export image: choose what it is for
+### Export: choose what it is for
 
-The *Export image* card has one button and an *Export for* choice:
+The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Export…* opens a dialog with the sprite's name, an *Export for* choice and one Save button (a bottom sheet on a phone). The File menu is a native `popover` and the dialog a native `<dialog>`, so there is no UI library.
 
-- **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. The card also writes the `scp` command for it.
+- **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. Copy it to the Pi with `scp` (the command is in Help and below).
 - **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
 - **ESP32-C3:** listed but disabled until the C3 build exists. New targets slot in here.
 
@@ -243,7 +245,7 @@ To add your own images, see the next section.
 
 Put images in **`~/glow-grid/images/`** on the Pi. The menu lists every `.png`, `.gif`, `.jpg`/`.jpeg`, `.webp` and `.bmp` there, numbered.
 
-**Copy from Windows** (PowerShell, not the SSH window). The simulator's *Export image* card (with *Export for: Raspberry Pi*) writes this command for you: set *Pi login* and *Folder on your PC* once (it remembers them), and it fills in the file name.
+**Copy from Windows** (PowerShell, not the SSH window). Change the file name and login to match yours (the same command is in the simulator's Help).
 
 ```powershell
 scp "$HOME\Downloads\walk.png" user@raspberrypi.local:~/glow-grid/images/
