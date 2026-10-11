@@ -20,6 +20,22 @@ $('helpBtn').addEventListener('click', () => { if (helpDlg.showModal) helpDlg.sh
 $('helpClose').addEventListener('click', () => helpDlg.close());
 helpDlg.addEventListener('click', (e) => { if (e.target === helpDlg) helpDlg.close(); });
 
+/* ---------- File menu (native popover) and export dialog ---------- */
+const fileMenu = $('fileMenu'), fileBtn = $('fileBtn'), exportDlg = $('exportDlg');
+fileMenu.addEventListener('beforetoggle', (e) => {
+  if (e.newState !== 'open') return;
+  const r = fileBtn.getBoundingClientRect();
+  fileMenu.style.top = `${r.bottom + 6}px`;
+  fileMenu.style.left = `${Math.max(8, Math.min(r.right - 240, window.innerWidth - 248))}px`;
+});
+fileMenu.addEventListener('toggle', (e) => fileBtn.setAttribute('aria-expanded', e.newState === 'open'));
+fileBtn.addEventListener('click', () => { if (fileMenu.togglePopover) fileMenu.togglePopover(); });
+$('menuImport').addEventListener('click', () => { fileMenu.hidePopover(); $('imageInput').click(); });
+$('menuExport').addEventListener('click', () => { fileMenu.hidePopover(); updateCmd(); if (exportDlg.showModal) exportDlg.showModal(); else exportDlg.setAttribute('open', ''); });
+$('exportClose').addEventListener('click', () => exportDlg.close());
+exportDlg.addEventListener('click', (e) => { if (e.target === exportDlg) exportDlg.close(); });
+$('exportBtn').addEventListener('click', () => exportDlg.close());
+
 /* ---------- boot ---------- */
 $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
 $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
