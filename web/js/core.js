@@ -43,20 +43,24 @@ function recall(key) { try { const r = localStorage.getItem(key); return r ? JSO
 const newBlankFrame = (c, r) => new Array(c * r).fill('#000000');
 
 const saved = recall('glowgrid-state');
-let state;
+const blankState = () => ({ cols: 16, rows: 16, frames: [newBlankFrame(16, 16)], currentFrame: 0, recentColors: [], fps: 6, name: 'sprite', shared: null });
+const hasArt = (st) => st.frames.length > 1 || st.frames.some((f) => f.some((h) => h !== '#000000')) || !!st.shared;
+let state, lastSession = null;
 if (saved && Array.isArray(saved.frames) && saved.frames.length && saved.cols && saved.rows) {
-  state = Object.assign({ recentColors: [], fps: 6, name: 'sprite' }, saved);
-  state.currentFrame = clamp(state.currentFrame || 0, 0, state.frames.length - 1);
-  if (!(Array.isArray(state.shared) && state.shared.length === state.cols * state.rows)) state.shared = null;
+  // The page always opens on one blank frame. Last visit's work is kept aside, one click away.
+  if (hasArt(saved)) { lastSession = saved; store('glowgrid-last', saved); } else { lastSession = recall('glowgrid-last'); }
+  state = Object.assign(blankState(), { cols: saved.cols, rows: saved.rows, recentColors: saved.recentColors || [], fps: saved.fps || 6, name: saved.name || 'sprite' });
+  state.frames = [newBlankFrame(state.cols, state.rows)];
 } else {
-  state = { cols: 16, rows: 16, frames: [newBlankFrame(16, 16)], currentFrame: 0, recentColors: [], fps: 6, name: 'sprite', shared: null };  // a fresh start is one blank frame
+  state = blankState();
+  lastSession = recall('glowgrid-last');
 }
+if (!(lastSession && Array.isArray(lastSession.frames) && lastSession.frames.length && lastSession.cols && lastSession.rows)) lastSession = null;
 state.target = 'frame';
 state.color = '#e63946'; state.tool = 'paint';
-const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, target: 'pi', view: 'design', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads' }, recall('glowgrid-sim') || {});
+const sim = Object.assign({ brightness: 0.3, gamma: 2.2, psu: 6, target: 'pi', flags: true, pi: 'user@raspberrypi.local', pcDir: '$HOME\\Downloads' }, recall('glowgrid-sim') || {});
 
 function saveState() {
   store('glowgrid-state', { cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, recentColors: state.recentColors, fps: state.fps, name: state.name, shared: state.shared });
 }
 const saveSim = () => store('glowgrid-sim', sim);
-

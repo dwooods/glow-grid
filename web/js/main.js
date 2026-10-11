@@ -21,5 +21,4 @@ $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir; $('targetInput')
 $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
 $('fpsInput').value = state.fps; $('nameInput').value = state.name;
 buildLut(); buildGridDOM(); renderSwatches(); setColor(state.color, false); updateUndoBtns();
-setView(sim.view === 'sim' ? 'sim' : 'design');
 afterFrameChange();
