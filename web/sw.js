@@ -1,7 +1,8 @@
 // Offline support for the installed app: serve from cache, refresh in the
 // background. Bump CACHE when the asset list changes.
-const CACHE = 'glow-grid-v1';
-const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const CACHE = 'glow-grid-v2';
+const ASSETS = ['./', './index.html', './style.css', './manifest.webmanifest', './icon-192.png', './icon-512.png',
+  './js/core.js', './js/led.js', './js/editor.js', './js/import.js', './js/export.js', './js/tools.js', './js/main.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
