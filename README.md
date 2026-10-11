@@ -6,7 +6,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 
 ## The workflow
 
-1. **Design** in the Glow Grid simulator (`web/index.html`, or the hosted/installed version below), or in [Piskel](#piskel).
+1. **Design** in the Glow Grid simulator (`https://dwooods.github.io/glow-grid/`, installed as an app, or `web/index.html` locally), or in [Piskel](#piskel).
 2. **Simulate and adjust**: switch to *LED sim* to see what survives on real LEDs, and tune *Brightness* and *Gamma* until it looks right. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
 3. **Export** from the *Export image* card. For the Pi it is one PNG: a still with 1 frame, an animation sprite sheet (frames side by side) with 2 or more. The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
 4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
@@ -15,16 +15,25 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 ## The simulator
 
-`web/` is a static site with no build step: one `index.html`, plus a manifest and service worker so it can be installed as an app.
+`web/` is a static site with no build step or framework: `index.html` holds the markup, `style.css` the styles, and `js/` the code, split by job and loaded in order (they share one scope, so there is nothing to bundle). The same folder is what GitHub Pages serves and what the future phone app (Capacitor) will wrap, so the simulator is written once and runs in three places.
+
+| File | Job |
+|---|---|
+| `js/core.js` | helpers, saved settings (`localStorage`), the sample sprite |
+| `js/led.js` | the LED model (mirrors `grid_common.py`: gamma, brightness, current estimate) and the shared layer |
+| `js/editor.js` | undo/redo, rendering, frames, drawing, the Design/Simulate views |
+| `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
+| `js/export.js` | the PNG text chunk (`glow-grid` metadata) and the Export image card: Pi, view/share, and the future C3 target |
+| `js/tools.js` | move, "animate one part only", playback |
+| `js/main.js` | app install, service worker, boot |
+
+New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only.
 
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
-- **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI from `examples/sprites.py`). One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
-- **Install as an app**: open the hosted page in Chrome or Edge and click *Install app* (or the install icon in the address bar). It then runs in its own window and works offline.
-- **Download**: *Download for offline* on the hosted page saves the single-file simulator.
+- **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI by `web/make_icons.py`). It is a project site, so it sits beside the blog at `dwooods.github.io` without touching it. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
+- **Install as an app**: open the hosted page in Chrome, Edge or iPhone Safari (*Share → Add to Home Screen*) and it runs in its own window and works offline. After an update, close and reopen it to pick up the new version.
 
-Your drawings are saved in that browser's local storage, so re-import a sprite sheet to move work between browsers.
-
-### Import image
+## Import image
 
 *Import image…* turns any picture into a 16×16 design. A sprite sheet or one of the simulator's own saved frames loads directly; any other picture opens the import dialog. On a phone the file picker offers the camera too.
 
@@ -276,7 +285,7 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 - **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
 - **`off.py`**: clears the panel.
 - **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/` (the knight, as a still and as an animation).
-- **`web/`**: the simulator (static site / installable app).
+- **`web/`**: the simulator (static site / installable app); see [The simulator](#the-simulator) for the file layout.
 
 Frame rate for an animation comes from, in order: the menu argument, the fps stored in the PNG, `_<n>fps` in the filename, the GIF's own timing, then `DEFAULT_FPS` (6).
 
