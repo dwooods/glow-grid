@@ -32,14 +32,13 @@
       <div class="device flags-on" id="device">
         <div class="grid" id="grid" role="img" aria-label="LED grid preview"></div>
       </div>
-      <div class="playback">
-        <button id="playBtn" class="btn" type="button">▶ Play</button>
-        <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
-        <span class="frame-readout" id="frameReadout">Frame 1 / 1</span>
-      </div>
-
       <section class="card">
         <h2>Frames</h2>
+        <div class="playback">
+          <button id="playBtn" class="btn" type="button">▶ Play</button>
+          <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
+          <span class="frame-readout" id="frameReadout">Frame 1 / 1</span>
+        </div>
         <div class="frame-strip" id="frameStrip"></div>
         <div class="btn-row">
           <button id="addFrameBtn" class="btn btn-quiet" type="button">+ Duplicate</button>
