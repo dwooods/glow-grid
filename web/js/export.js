@@ -53,7 +53,11 @@ function applySavedLight(raw) {
 }
 
 /* ---------- export ---------- */
-function setStatus(msg) { $('statusEl').textContent = msg; }
+let toastTimer = 0;
+function setStatus(msg) {
+  const t = $('statusEl'); t.textContent = msg; t.classList.toggle('show', !!msg);
+  clearTimeout(toastTimer); if (msg) toastTimer = setTimeout(() => t.classList.remove('show'), 5000);
+}
 const safeName = () => (state.name || '').trim().replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'sprite';
 // File name is just the sprite's name. Frames, fps, brightness and gamma live inside the PNG (text chunk).
 const frameFile = () => `${safeName()}.png`;
@@ -111,4 +115,3 @@ $('exportBtn').addEventListener('click', () => {
 $('scaleInput').addEventListener('change', updateCmd);
 $('targetInput').addEventListener('change', (e) => { sim.target = e.target.value; saveSim(); updateCmd(); });
 $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
-
