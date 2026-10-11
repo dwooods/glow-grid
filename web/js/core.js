@@ -40,30 +40,16 @@ function hueSat(r, g, b) {
 function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
 function recall(key) { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
 
-/* ---------- sample: a blinking smiley on true black ---------- */
 const newBlankFrame = (c, r) => new Array(c * r).fill('#000000');
-function sampleFrame(cols, rows, blink) {
-  const f = newBlankFrame(cols, rows);
-  const cx = (cols - 1) / 2, cy = (rows - 1) / 2, rad = Math.min(cols, rows) / 2 - 1;
-  const set = (x, y, hex) => { x = Math.round(x); y = Math.round(y); if (x >= 0 && y >= 0 && x < cols && y < rows) f[y * cols + x] = hex; };
-  for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (Math.hypot(x - cx, y - cy) <= rad) f[y * cols + x] = '#f5c542';
-  const ink = '#1a1208'; // near-black on purpose: shows up as "barely lit" in the checker
-  const eyeY = cy - rad * 0.35, off = rad * 0.4;
-  if (blink) { for (const ex of [cx - off, cx + off]) { set(ex - 1, eyeY, ink); set(ex, eyeY, ink); set(ex + 1, eyeY, ink); } }
-  else { for (const ex of [cx - off, cx + off]) { set(ex, eyeY, ink); set(ex, eyeY - 1, ink); } }
-  const span = Math.round(rad * 0.45);
-  for (let dx = -span; dx <= span; dx++) set(cx + dx, cy + rad * 0.2 + (span ? (Math.abs(dx) / span) * rad * -0.25 + rad * 0.25 : 0), '#e63946');
-  return f;
-}
 
 const saved = recall('glowgrid-state');
 let state;
 if (saved && Array.isArray(saved.frames) && saved.frames.length && saved.cols && saved.rows) {
-  state = Object.assign({ recentColors: [], fps: 6, name: 'smiley' }, saved);
+  state = Object.assign({ recentColors: [], fps: 6, name: 'sprite' }, saved);
   state.currentFrame = clamp(state.currentFrame || 0, 0, state.frames.length - 1);
   if (!(Array.isArray(state.shared) && state.shared.length === state.cols * state.rows)) state.shared = null;
 } else {
-  state = { cols: 16, rows: 16, frames: [sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, false), sampleFrame(16, 16, true)], currentFrame: 0, recentColors: [], fps: 6, name: 'smiley', shared: null };
+  state = { cols: 16, rows: 16, frames: [newBlankFrame(16, 16)], currentFrame: 0, recentColors: [], fps: 6, name: 'sprite', shared: null };  // a fresh start is one blank frame
 }
 state.target = 'frame';
 state.color = '#e63946'; state.tool = 'paint';

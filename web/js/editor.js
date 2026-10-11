@@ -100,8 +100,11 @@ function selectFrame(i) { stopPlay(); state.currentFrame = i; afterFrameChange()
 $('addFrameBtn').addEventListener('click', () => { stopPlay(); pushUndo(); state.frames.splice(state.currentFrame + 1, 0, [...state.frames[state.currentFrame]]); state.currentFrame++; afterFrameChange(); });
 $('addBlankFrameBtn').addEventListener('click', () => { stopPlay(); pushUndo(); state.frames.splice(state.currentFrame + 1, 0, newBlankFrame(state.cols, state.rows)); state.currentFrame++; afterFrameChange(); });
 $('deleteFrameBtn').addEventListener('click', () => {
-  if (state.frames.length <= 1) return;
   stopPlay(); pushUndo();
+  if (state.frames.length <= 1) {            // the last frame can't go, so blank it instead of doing nothing
+    state.frames[0] = newBlankFrame(state.cols, state.rows); state.shared = null; state.target = 'frame';
+    afterFrameChange(); setStatus('That was the only frame, so it was cleared instead. Undo reverts.'); return;
+  }
   state.frames.splice(state.currentFrame, 1);
   state.currentFrame = clamp(state.currentFrame - 1, 0, state.frames.length - 1);
   afterFrameChange();
@@ -271,6 +274,11 @@ gridEl.addEventListener('pointermove', (e) => {
 });
 gridEl.addEventListener('pointerleave', hideHover);
 $('clearBtn').addEventListener('click', () => { stopPlay(); pushUndo(); setEditLayer(newBlankFrame(state.cols, state.rows)); afterFrameChange(); });
+$('startOverBtn').addEventListener('click', () => {
+  stopPlay(); pushUndo();
+  state.frames = [newBlankFrame(state.cols, state.rows)]; state.currentFrame = 0; state.shared = null; state.target = 'frame';
+  afterFrameChange(); setStatus('Started over with one blank frame. Undo brings everything back.');
+});
 $('undoBtn').addEventListener('click', undo);
 $('redoBtn').addEventListener('click', redo);
 window.addEventListener('keydown', (e) => {
