@@ -20,6 +20,7 @@
     <div class="brand">
       <span class="brand-mark">●</span><h1>Glow Grid</h1>
       <div class="app-actions">
+        <button id="helpBtn" class="btn btn-quiet" type="button">Help</button>
         <button id="installBtn" class="btn btn-quiet" type="button" hidden>Install app</button>
       </div>
     </div>
@@ -145,51 +146,14 @@
       </section>
 
       <section class="card">
-        <h2>Import image</h2>
+        <h2>Import and export</h2>
+        <h3 class="sub-h">Import</h3>
         <div class="btn-row">
           <label class="btn file-photo">Import image…<input id="imageInput" type="file" accept="image/*" hidden></label>
         </div>
         <p class="hint">One button for everything. A sprite sheet saved from here (or a file with the right <code>_8fps</code> / <code>_sheet</code> name) loads straight in as separate frames, and so does a single frame saved from here. Any other picture opens a crop-and-zoom editor: tick <strong>Exact pixels</strong> for pixel art (no averaging, no dithering), or leave it off for photos (averaged per cell, with optional dithering). Both can remove the background. On a phone the picker offers the camera too.</p>
-      </section>
-
-      <section class="card guide">
-        <details id="guideDetails">
-          <summary><h2>How images turn out on the panel</h2></summary>
-          <p class="hint">The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.</p>
-          <h3>Works well</h3>
-          <ul>
-            <li><strong>Pixel art at or near grid size</strong> (drawn here, in Piskel, or the examples) comes out pixel-perfect.</li>
-            <li><strong>Photos and large images:</strong> anything more than 2× the grid is averaged per cell, so photos come out smooth instead of noisy.</li>
-            <li><strong>Animations:</strong> an animated GIF, or a sprite sheet (frames side by side, as tall as the grid) named with the speed, <code>walk_8fps.png</code>, or <code>_sheet</code>.</li>
-            <li><strong>Transparency</strong> becomes "off" LEDs.</li>
-            <li><strong>Non-square images</strong> are centered and fitted without stretching.</li>
-          </ul>
-          <h3>Animation files: sheet, fps and names</h3>
-          <ul>
-            <li><strong>Sprite sheet</strong> = one PNG with all frames side by side, like a film strip. 4 frames on a 16×16 grid make a 64×16 image. <strong>fps</strong> = how fast the frames play (4 fps = a quarter second per frame). The sheet says what the file is; fps says how fast to play it.</li>
-            <li><strong>Saved from here:</strong> the frame count and fps are stored inside the PNG, so you can rename the file to anything (<code>ghost.png</code>). Brightness and gamma are stored there too, and the Pi menu shows all of them next to the file name.</li>
-            <li><strong>From other tools</strong> (Piskel, hand-made strips): the name decides. <code>walk_4fps.png</code> plays at 4 fps (it marks a sheet and sets the speed). <code>walk_sheet.png</code> plays at the default 6 fps. A plain <code>walk.png</code> plays as one squashed still.</li>
-            <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
-            <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
-          </ul>
-          <h3>Animating one part: move and still part</h3>
-          <ul>
-            <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift this frame one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide.</li>
-            <li><strong>Animate one part only:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes the still part, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. Untick to join it back.</li>
-            <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
-          </ul>
-          <h3>Watch out for</h3>
-          <ol>
-            <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
-            <li><strong>Sprite sheets from other tools</strong> play as one squashed still unless the name has <code>_8fps</code> or <code>_sheet</code>. Sheets saved from here carry their frame count and speed inside the PNG, so renaming them is safe.</li>
-            <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (<code>glow-grid probe</code>, <code>glow-grid probe check</code>, then <code>k</code> in the menu), images may look scrambled; the menu warns you.</li>
-            <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
-          </ol>
-        </details>
-      </section>
-
-      <section class="card">
-        <h2>Export image</h2>
+        <hr class="sub-rule">
+        <h3 class="sub-h">Export</h3>
         <div class="form-row">
           <label class="grow">Name <input id="nameInput" type="text" value="sprite" spellcheck="false"></label>
           <label>Export for
@@ -220,9 +184,52 @@
         <button id="copyCmdBtn" class="btn btn-quiet only-pi" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
       </section>
+
+
     </aside>
   </main>
 </div>
+
+<dialog id="helpDlg" class="photo-dlg help-dlg" aria-labelledby="helpTitle">
+  <div class="photo-wrap">
+    <div class="photo-head">
+      <h2 id="helpTitle">Help: how images turn out on the panel</h2>
+      <button id="helpClose" class="btn btn-quiet" type="button">Close</button>
+    </div>
+    <div class="help-body guide">
+          <p class="hint">The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.</p>
+          <h3>Works well</h3>
+          <ul>
+            <li><strong>Pixel art at or near grid size</strong> (drawn here, in Piskel, or the examples) comes out pixel-perfect.</li>
+            <li><strong>Photos and large images:</strong> anything more than 2× the grid is averaged per cell, so photos come out smooth instead of noisy.</li>
+            <li><strong>Animations:</strong> an animated GIF, or a sprite sheet (frames side by side, as tall as the grid) named with the speed, <code>walk_8fps.png</code>, or <code>_sheet</code>.</li>
+            <li><strong>Transparency</strong> becomes "off" LEDs.</li>
+            <li><strong>Non-square images</strong> are centered and fitted without stretching.</li>
+          </ul>
+          <h3>Animation files: sheet, fps and names</h3>
+          <ul>
+            <li><strong>Sprite sheet</strong> = one PNG with all frames side by side, like a film strip. 4 frames on a 16×16 grid make a 64×16 image. <strong>fps</strong> = how fast the frames play (4 fps = a quarter second per frame). The sheet says what the file is; fps says how fast to play it.</li>
+            <li><strong>Saved from here:</strong> the frame count and fps are stored inside the PNG, so you can rename the file to anything (<code>ghost.png</code>). Brightness and gamma are stored there too, and the Pi menu shows all of them next to the file name.</li>
+            <li><strong>From other tools</strong> (Piskel, hand-made strips): the name decides. <code>walk_4fps.png</code> plays at 4 fps (it marks a sheet and sets the speed). <code>walk_sheet.png</code> plays at the default 6 fps. A plain <code>walk.png</code> plays as one squashed still.</li>
+            <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
+            <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
+          </ul>
+          <h3>Animating one part: move and still part</h3>
+          <ul>
+            <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift this frame one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide.</li>
+            <li><strong>Animate one part only:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes the still part, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. Untick to join it back.</li>
+            <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
+          </ul>
+          <h3>Watch out for</h3>
+          <ol>
+            <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
+            <li><strong>Sprite sheets from other tools</strong> play as one squashed still unless the name has <code>_8fps</code> or <code>_sheet</code>. Sheets saved from here carry their frame count and speed inside the PNG, so renaming them is safe.</li>
+            <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (<code>glow-grid probe</code>, <code>glow-grid probe check</code>, then <code>k</code> in the menu), images may look scrambled; the menu warns you.</li>
+            <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
+          </ol>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="photoDlg" class="photo-dlg" aria-labelledby="photoTitle">
   <div class="photo-wrap">

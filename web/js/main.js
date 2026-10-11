@@ -14,6 +14,12 @@ if (onWeb) {
   });
 }
 
+/* ---------- help dialog ---------- */
+const helpDlg = $('helpDlg');
+$('helpBtn').addEventListener('click', () => { if (helpDlg.showModal) helpDlg.showModal(); else helpDlg.setAttribute('open', ''); });
+$('helpClose').addEventListener('click', () => helpDlg.close());
+helpDlg.addEventListener('click', (e) => { if (e.target === helpDlg) helpDlg.close(); });
+
 /* ---------- boot ---------- */
 $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
 $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);

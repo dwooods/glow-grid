@@ -189,3 +189,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
   #photoPreview { flex: 1 1 38%; min-width: 0; align-self: flex-start; max-width: none; width: auto; }
   .photo-foot .btn { flex: 1 1 0; }
 }
+
+/* Help dialog */
+.help-dlg .help-body { overflow: auto; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.help-dlg .help-body h3:first-of-type { margin-top: 8px; }
+.sub-h { margin: 2px 0 0; font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.sub-rule { border: 0; border-top: 1px solid var(--border); margin: 6px 0 2px; width: 100%; }
