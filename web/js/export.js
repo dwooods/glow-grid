@@ -70,21 +70,9 @@ function scaled(canvas) {
   return c;
 }
 function updateCmd() {
-  const t = exportTarget(), n = state.frames.length, k = exportScale();
-  const f = scaledName(sheetFile());
-  const pi = (sim.pi || '').trim() || 'user@raspberrypi.local';
-  const dir = ((sim.pcDir || '').trim() || '$HOME\\Downloads').replace(/[\\/]+$/, '');
-  document.querySelectorAll('.only-pi').forEach((el) => { el.hidden = t !== 'pi'; });
+  const t = exportTarget();
   document.querySelectorAll('.only-view').forEach((el) => { el.hidden = t !== 'view'; });
   $('exportBtn').textContent = t === 'pi' ? 'Save for the Pi' : 'Save to view';
-  // Quoted so folders with spaces work; PowerShell still expands $HOME inside double quotes
-  if (t === 'pi') $('cmdOut').textContent =
-    `scp "${dir}\\${f}" ${pi}:~/glow-grid/images/\n` +
-    `# then run glow-grid, press r to rescan, and pick ${f}`;
-  const w = state.cols * n * k, h = state.rows * k;
-  $('exportInfo').textContent = t === 'pi'
-    ? (n > 1 ? `Saves one ${w}×${h} sprite sheet: ${n} frames of ${state.cols}×${state.rows} at ${state.fps} fps.` : `Saves one ${w}×${h} still image.`)
-    : `Saves one ${w}×${h} enlarged PNG (${k}× per LED) to look at or share. It isn't meant for the Pi.`;
 }
 async function saveCanvas(canvas, filename, extra) {
   const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));
@@ -123,15 +111,4 @@ $('exportBtn').addEventListener('click', () => {
 $('scaleInput').addEventListener('change', updateCmd);
 $('targetInput').addEventListener('change', (e) => { sim.target = e.target.value; saveSim(); updateCmd(); });
 $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
-$('piInput').addEventListener('input', (e) => { sim.pi = e.target.value; updateCmd(); saveSim(); });
-$('pcDirInput').addEventListener('input', (e) => { sim.pcDir = e.target.value; updateCmd(); saveSim(); });
-$('copyCmdBtn').addEventListener('click', async () => {
-  const text = $('cmdOut').textContent;
-  try { await navigator.clipboard.writeText(text); setStatus('Commands copied.'); }
-  catch (e) {
-    const r = document.createRange(); r.selectNodeContents($('cmdOut'));
-    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-    setStatus('Clipboard is blocked here. The text is selected, so press Ctrl+C.');
-  }
-});
 

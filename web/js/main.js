@@ -23,7 +23,7 @@ helpDlg.addEventListener('click', (e) => { if (e.target === helpDlg) helpDlg.clo
 /* ---------- boot ---------- */
 $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('psuInput').value = sim.psu;
 $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
-$('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir; $('targetInput').value = exportTarget();
+$('targetInput').value = exportTarget();
 $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
 $('fpsInput').value = state.fps; $('nameInput').value = state.name;
 buildLut(); buildGridDOM(); renderSwatches(); setColor(state.color, false); updateUndoBtns();

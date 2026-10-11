@@ -75,17 +75,9 @@
             </select>
           </label>
         </div>
-        <div class="form-row only-pi">
-          <label class="grow">Pi login <input id="piInput" type="text" value="user@raspberrypi.local" spellcheck="false"></label>
-          <label class="grow">Folder on your PC <input id="pcDirInput" type="text" value="$HOME\Downloads" spellcheck="false"></label>
-        </div>
         <div class="btn-row">
           <button id="exportBtn" class="btn" type="button">Save for the Pi</button>
         </div>
-        <p class="hint" id="exportInfo"></p>
-        <p class="hint"><strong>Raspberry Pi:</strong> one pixel per LED, with brightness, gamma, grid size and (for an animation) frame count and fps stored inside the file, so the name can stay plain. Copy it with the command below, then pick it from the <code>glow-grid</code> menu. <strong>View or share:</strong> a sharp, enlarged copy (named <code>_x16</code> etc.). Don't copy it to the Pi: an enlarged animation would play as one squashed still. <strong>ESP32-C3:</strong> comes with the C3 build.</p>
-        <code class="cmd only-pi" id="cmdOut"></code>
-        <button id="copyCmdBtn" class="btn btn-quiet only-pi" type="button">Copy commands</button>
         <p class="status" id="statusEl" role="status"></p>
       </section>
     </section>
@@ -216,6 +208,13 @@
             <li><strong>Animate one part only:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes the still part, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. Untick to join it back.</li>
             <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
           </ul>
+          <h3>Getting a picture onto the panel</h3>
+          <ul>
+            <li><strong>Save for the Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
+            <li><strong>Copy it to the Pi</strong> from your PC, then run <code>glow-grid</code>, press <code>r</code> to rescan and pick the file. In PowerShell: <code>scp "$HOME\Downloads\sprite.png" user@raspberrypi.local:~/glow-grid/images/</code> (change the file name and login to match yours).</li>
+            <li><strong>View or share (PNG)</strong> saves a sharp, enlarged copy (named <code>_x16</code> etc.) to look at or send to someone. Don't copy it to the Pi: an enlarged animation would play as one squashed still.</li>
+            <li><strong>ESP32-C3</strong> export comes with the C3 build.</li>
+          </ul>
           <h3>Watch out for</h3>
           <ol>
             <li><strong>Mid-size pixel art</strong> (between 1× and 2× the grid, e.g. a 24×24 sprite) keeps exact pixels, so some detail is dropped. Draw at grid size, or at an exact 2×, 3×… upscale.</li>
@@ -265,7 +264,7 @@
           <span class="bg-swatch" id="bgSwatch" title="Background color"></span>
         </div>
         <label class="range-row">Background tolerance <input id="bgTol" type="range" min="0" max="160" value="45"></label>
-        <p class="hint">Only background connected to the picture's edge is removed, so white inside the subject (a face, an eye) stays. If the background leaks inside through a gap in an outline, lower the tolerance.</p>
+        <p class="hint">Only background connected to the picture's edge is removed, so white inside the subject (a face, an eye) stays. If the background leaves inside through a gap in an outline, lower the tolerance.</p>
 
         <label class="form-row" style="flex-direction:column;align-items:stretch">Dithering
           <select id="ditherMode">
