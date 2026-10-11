@@ -37,6 +37,18 @@
         <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         <span class="frame-readout" id="frameReadout">Frame 1 / 1</span>
       </div>
+
+      <section class="card">
+        <h2>Frames</h2>
+        <div class="frame-strip" id="frameStrip"></div>
+        <div class="btn-row">
+          <button id="addFrameBtn" class="btn btn-quiet" type="button">+ Duplicate</button>
+          <button id="addBlankFrameBtn" class="btn btn-quiet" type="button">+ Blank</button>
+          <button id="deleteFrameBtn" class="btn btn-quiet danger" type="button">Delete frame</button>
+          <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part">Start over</button>
+          <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
+        </div>
+      </section>
     </section>
 
     <aside class="panel-col">
@@ -65,6 +77,22 @@
           <button id="clearBtn" class="btn btn-quiet" type="button">Clear frame</button>
         </div>
         <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint. Clear frame blanks this frame. Start over and Restore last session are in the Frames card.</p>
+      </section>
+
+      <section class="card" aria-labelledby="moveTitle">
+        <h2 id="moveTitle">Move and layers</h2>
+        <div class="nudge" role="group" aria-label="Move the picture one pixel">
+          <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
+          <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
+          <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
+          <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
+        </div>
+        <label class="check"><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
+        <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
+          <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
+          <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
+        </div>
+        <p class="hint" id="layerHint"></p>
       </section>
 
       <section class="card">
@@ -114,34 +142,6 @@
         </div>
         <p class="hint" id="diagHint">Barely lit means the pixel isn't black but ends up at 1–3 out of 255 on the LED, so it reads as off or a faint smudge. Use pure black for "off", or brighten it.</p>
         <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
-      </section>
-
-      <section class="card">
-        <h2>Frames</h2>
-        <div class="frame-strip" id="frameStrip"></div>
-        <div class="btn-row">
-          <button id="addFrameBtn" class="btn btn-quiet" type="button">+ Duplicate</button>
-          <button id="addBlankFrameBtn" class="btn btn-quiet" type="button">+ Blank</button>
-          <button id="deleteFrameBtn" class="btn btn-quiet danger" type="button">Delete frame</button>
-          <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part">Start over</button>
-          <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
-        </div>
-      </section>
-
-      <section class="card" aria-labelledby="moveTitle">
-        <h2 id="moveTitle">Move and layers</h2>
-        <div class="nudge" role="group" aria-label="Move the picture one pixel">
-          <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
-          <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
-          <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
-          <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
-        </div>
-        <label class="check"><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
-        <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
-          <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
-          <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
-        </div>
-        <p class="hint" id="layerHint"></p>
       </section>
 
       <section class="card">
