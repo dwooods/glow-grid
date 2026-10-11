@@ -37,9 +37,6 @@ h1 { font-family: 'Sora', 'Segoe UI', sans-serif; font-size: clamp(1.5rem, 2.5vw
 .device-col { flex: 1 1 420px; display: flex; flex-direction: column; gap: 14px; align-items: stretch; max-width: 460px; margin-inline: auto; }
 .panel-col { flex: 1 1 320px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
-.view-toggle { display: flex; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 3px; }
-.view-toggle button { flex: 1; font-family: inherit; font-size: 0.82rem; padding: 8px 0; border: 0; border-radius: 7px; background: transparent; color: var(--text-dim); cursor: pointer; }
-.view-toggle button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 
 .device {
   box-sizing: border-box;
@@ -55,9 +52,7 @@ h1 { font-family: 'Sora', 'Segoe UI', sans-serif; font-size: clamp(1.5rem, 2.5vw
   gap: 3px; aspect-ratio: var(--cols) / var(--rows);
   touch-action: none; max-width: 100%;
 }
-.grid.sim { gap: 4px; }
 .cell { border-radius: 25%; background: var(--grid-off); }
-.grid.sim .cell { border-radius: 50%; }
 .flags-on .cell.flag-faint { outline: 2px dashed var(--warn); outline-offset: -2px; }
 .flags-on .cell.flag-shift { outline: 2px dashed var(--shift); outline-offset: -2px; }
 
@@ -155,7 +150,7 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .grid { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .grid.picking .cell { cursor: crosshair; }
 @media (pointer: coarse) {
-  .btn, .tool-btn, .view-toggle button, .file-btn { min-height: 44px; }
+  .btn, .tool-btn, .file-btn { min-height: 44px; }
   .nudge { grid-template-rows: repeat(3, 44px); }
   .swatch { width: 36px; height: 36px; }
   .swatches { gap: 8px; }

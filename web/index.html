@@ -23,15 +23,11 @@
         <button id="installBtn" class="btn btn-quiet" type="button" hidden>Install app</button>
       </div>
     </div>
-    <p class="tagline">Draw pixel art, then switch to LED sim to see what survives the Pi's brightness cap and gamma curve before it goes near the panel.</p>
+    <p class="tagline">Draw pixel art and check what survives the Pi's brightness cap and gamma curve (the dashed outlines and the Panel check) before it goes near the panel.</p>
   </header>
 
   <main class="layout">
     <section class="device-col">
-      <div class="view-toggle" role="group" aria-label="Preview mode">
-        <button id="viewDesign" type="button" aria-pressed="true">Design</button>
-        <button id="viewSim" type="button" aria-pressed="false">LED sim</button>
-      </div>
       <div class="device flags-on" id="device">
         <div class="grid" id="grid" role="img" aria-label="LED grid preview"></div>
       </div>
@@ -91,9 +87,10 @@
           <button id="undoBtn" class="btn btn-quiet" type="button" disabled>Undo</button>
           <button id="redoBtn" class="btn btn-quiet" type="button" disabled>Redo</button>
           <button id="clearBtn" class="btn btn-quiet" type="button">Clear frame</button>
+          <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
           <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part">Start over</button>
         </div>
-        <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint. Clear frame blanks this frame; Start over throws away every frame and the still part (Undo brings them back).</p>
+        <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint. Clear frame blanks this frame; Start over throws away every frame and the still part (Undo brings them back). The page opens blank; Restore last session brings back what you had last time.</p>
       </section>
 
       <section class="card">
@@ -108,14 +105,17 @@
           <label>Rows <input id="rowsInput" type="number" min="1" max="64" value="16"></label>
           <button id="resizeBtn" class="btn btn-quiet" type="button">Apply size</button>
         </div>
-        <ul class="hint-list">
+        <div class="guide"><details>
+          <summary class="hint">What these settings mean</summary>
+        <ul style="margin-top:8px" class="hint-list">
           <li><strong>Brightness:</strong> how bright the LEDs run, from 0.05 to 1. The Pi caps it at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white), so anything higher plays at 0.4.</li>
           <li><strong>Gamma:</strong> corrects for how eyes see light. LEDs get brighter in even steps, but we notice dark shades more than bright ones, so without correction mid-tones look washed out. Gamma darkens the middle of the range to compensate. 2.2 is the usual value. Raise it for more contrast and deeper colors (very dark shades can drop to off), lower it toward 1 for a flatter, brighter look.</li>
           <li><strong>PSU amps:</strong> your power supply's rating. It only sets the limit on the Peak meter under the grid.</li>
           <li><strong>Cols and Rows:</strong> the panel's width and height in LEDs. The Pi program is built for 16×16. Saved files record the grid size, and the Pi menu flags a file made for a different size instead of squashing it silently. Making the grid smaller crops every frame; Undo reverts.</li>
           <li>Saved PNGs remember brightness and gamma, and <code>play.py</code> on the Pi uses them for that image, so the panel matches what you see here.</li>
-          <li>The sim uses the same rounding and "keep non-black pixels lit" rule as the Pi. It's scaled so full white looks full on screen, so judge shapes and colors, not how bright it is.</li>
+          <li>The Panel check uses the same rounding and "keep non-black pixels lit" rule as the Pi, so its warnings match what the panel will do. The grid itself shows your colors as drawn, not as the LEDs will glow.</li>
         </ul>
+        </details></div>
       </section>
 
       <section class="card">

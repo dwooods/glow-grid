@@ -39,16 +39,9 @@ function updateCell(idx) {
     cell.style.background = 'var(--grid-off)';
     cell.style.boxShadow = 'none'; return;
   }
-  if (sim.view === 'sim') {
-    const [r, g, b] = hexToRgb(a.disp);
-    const glow = Math.max(r, g, b) / 255;
-    cell.style.background = `radial-gradient(circle, ${a.disp} 35%, rgba(${r},${g},${b},0.75) 70%, rgba(${r},${g},${b},0.35) 100%)`;
-    cell.style.boxShadow = `0 0 ${Math.round(4 + glow * 10)}px ${Math.round(glow * 3)}px rgba(${r},${g},${b},${(0.25 + glow * 0.45).toFixed(2)})`;
-  } else {
-    const [r, g, b] = hexToRgb(hex);
-    cell.style.background = hex;
-    cell.style.boxShadow = `0 0 6px 1px rgba(${r},${g},${b},0.5)`;
-  }
+  const [r, g, b] = hexToRgb(hex);
+  cell.style.background = hex;
+  cell.style.boxShadow = `0 0 6px 1px rgba(${r},${g},${b},0.5)`;
 }
 function frameStats(frame) {
   let mA = 0, faint = 0, shift = 0;
@@ -93,7 +86,7 @@ function paintCanvas(ctx, frame, offsetX) {
   ctx.putImageData(img, offsetX, 0);
 }
 const updateReadout = () => { $('frameReadout').textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; };
-function afterFrameChange() { renderFrame(); renderFrameStrip(); updateReadout(); updateLayerUI(); updateCmd(); saveState(); }
+function afterFrameChange() { syncRestoreBtn(); renderFrame(); renderFrameStrip(); updateReadout(); updateLayerUI(); updateCmd(); saveState(); }
 function selectFrame(i) { stopPlay(); state.currentFrame = i; afterFrameChange(); }
 
 /* ---------- frames ---------- */
@@ -146,7 +139,7 @@ window.addEventListener('pointermove', (e) => {
   if (!painting || state.tool === 'fill') return;
   const idx = cellAt(e.clientX, e.clientY); if (idx !== null) applyTool(idx);
 });
-const endPaint = () => { if (!painting) return; painting = false; renderDiagnostics(); renderFrameStrip(); saveState(); };
+const endPaint = () => { if (!painting) return; painting = false; syncRestoreBtn(); renderDiagnostics(); renderFrameStrip(); saveState(); };
 window.addEventListener('pointerup', endPaint);
 window.addEventListener('pointercancel', endPaint);
 
@@ -279,6 +272,14 @@ $('startOverBtn').addEventListener('click', () => {
   state.frames = [newBlankFrame(state.cols, state.rows)]; state.currentFrame = 0; state.shared = null; state.target = 'frame';
   afterFrameChange(); setStatus('Started over with one blank frame. Undo brings everything back.');
 });
+const syncRestoreBtn = () => { $('restoreBtn').hidden = !(lastSession && !hasArt(state)); };
+$('restoreBtn').addEventListener('click', () => {
+  if (!lastSession) return;
+  stopPlay(); pushUndo();
+  const l = lastSession;
+  restore(JSON.stringify({ cols: l.cols, rows: l.rows, frames: l.frames, currentFrame: clamp(l.currentFrame || 0, 0, l.frames.length - 1), shared: (Array.isArray(l.shared) && l.shared.length === l.cols * l.rows) ? l.shared : null }));
+  setStatus('Restored your last session. Undo goes back to blank.');
+});
 $('undoBtn').addEventListener('click', undo);
 $('redoBtn').addEventListener('click', redo);
 window.addEventListener('keydown', (e) => {
@@ -288,16 +289,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
 });
 
-/* ---------- view + LED settings ---------- */
-function setView(v) {
-  sim.view = v; saveSim();
-  $('viewDesign').setAttribute('aria-pressed', String(v === 'design'));
-  $('viewSim').setAttribute('aria-pressed', String(v === 'sim'));
-  gridEl.classList.toggle('sim', v === 'sim');
-  renderFrame();
-}
-$('viewDesign').addEventListener('click', () => setView('design'));
-$('viewSim').addEventListener('click', () => setView('sim'));
+/* ---------- LED settings ---------- */
 $('flagsToggle').addEventListener('change', (e) => { sim.flags = e.target.checked; deviceEl.classList.toggle('flags-on', sim.flags); saveSim(); });
 function readLedSettings() {
   sim.brightness = clamp(Number($('brightInput').value) || 0.3, 0.05, 1);
@@ -307,4 +299,3 @@ function readLedSettings() {
   if (sim.brightness > 0.4) setStatus(`Note: the Pi caps brightness at MAX_BRIGHTNESS (0.4 unless you raised it in local_config.py), so ${sim.brightness} will play at 0.4.`);
 }
 ['brightInput', 'gammaInput', 'psuInput'].forEach((id) => $(id).addEventListener('change', readLedSettings));
-
