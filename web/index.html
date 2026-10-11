@@ -15,22 +15,22 @@
 
 </head>
 <body>
+<header class="appbar">
+  <div class="brand">
+    <span class="brand-mark">●</span><h1>Glow Grid</h1>
+    <div class="app-actions">
+      <button id="fileBtn" class="btn btn-quiet" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">File <span aria-hidden="true">▾</span></button>
+      <button id="helpBtn" class="btn btn-quiet" type="button">Help</button>
+      <button id="installBtn" class="btn btn-quiet" type="button" hidden>Install app</button>
+    </div>
+  </div>
+  <div id="fileMenu" class="menu" popover role="menu" aria-label="File">
+    <button class="menu-item" id="menuImport" type="button" role="menuitem">Import image…<small>Sprite sheet, single frame, photo or GIF</small></button>
+    <button class="menu-item" id="menuExport" type="button" role="menuitem">Export…<small>Save for the Pi, or a PNG to view or share</small></button>
+  </div>
+  <input id="imageInput" type="file" accept="image/*" hidden>
+</header>
 <div class="page">
-  <header class="appbar">
-    <div class="brand">
-      <span class="brand-mark">●</span><h1>Glow Grid</h1>
-      <div class="app-actions">
-        <button id="fileBtn" class="btn btn-quiet" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">File <span aria-hidden="true">▾</span></button>
-        <button id="helpBtn" class="btn btn-quiet" type="button">Help</button>
-        <button id="installBtn" class="btn btn-quiet" type="button" hidden>Install app</button>
-      </div>
-    </div>
-    <div id="fileMenu" class="menu" popover role="menu" aria-label="File">
-      <button class="menu-item" id="menuImport" type="button" role="menuitem">Import image…<small>Sprite sheet, single frame, photo or GIF</small></button>
-      <button class="menu-item" id="menuExport" type="button" role="menuitem">Export…<small>Save for the Pi, or a PNG to view or share</small></button>
-    </div>
-    <input id="imageInput" type="file" accept="image/*" hidden>
-  </header>
   <p class="toast" id="statusEl" role="status"></p>
 
   <main class="layout">
