@@ -16,16 +16,22 @@
 </head>
 <body>
 <div class="page">
-  <header>
+  <header class="appbar">
     <div class="brand">
       <span class="brand-mark">●</span><h1>Glow Grid</h1>
       <div class="app-actions">
+        <button id="fileBtn" class="btn btn-quiet" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">File <span aria-hidden="true">▾</span></button>
         <button id="helpBtn" class="btn btn-quiet" type="button">Help</button>
         <button id="installBtn" class="btn btn-quiet" type="button" hidden>Install app</button>
       </div>
     </div>
-    <p class="tagline">Draw pixel art and check what survives the Pi's brightness cap and gamma curve (the dashed outlines and the Panel check) before it goes near the panel.</p>
+    <div id="fileMenu" class="menu" popover role="menu" aria-label="File">
+      <button class="menu-item" id="menuImport" type="button" role="menuitem">Import image…<small>Sprite sheet, single frame, photo or GIF</small></button>
+      <button class="menu-item" id="menuExport" type="button" role="menuitem">Export…<small>Save for the Pi, or a PNG to view or share</small></button>
+    </div>
+    <input id="imageInput" type="file" accept="image/*" hidden>
   </header>
+  <p class="toast" id="statusEl" role="status"></p>
 
   <main class="layout">
     <section class="device-col">
@@ -47,38 +53,6 @@
           <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part">Start over</button>
           <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
         </div>
-      </section>
-
-      <section class="card">
-        <h2>Import and export</h2>
-        <h3 class="sub-h">Import</h3>
-        <div class="btn-row">
-          <label class="btn file-photo">Import image…<input id="imageInput" type="file" accept="image/*" hidden></label>
-        </div>
-        <p class="hint">One button for everything. A sprite sheet saved from here (or a file with the right <code>_8fps</code> / <code>_sheet</code> name) loads straight in as separate frames, and so does a single frame saved from here. Any other picture opens a crop-and-zoom editor: tick <strong>Exact pixels</strong> for pixel art (no averaging, no dithering), or leave it off for photos (averaged per cell, with optional dithering). Both can remove the background. On a phone the picker offers the camera too.</p>
-        <hr class="sub-rule">
-        <h3 class="sub-h">Export</h3>
-        <div class="form-row">
-          <label class="grow">Name <input id="nameInput" type="text" value="sprite" spellcheck="false"></label>
-          <label>Export for
-            <select id="targetInput">
-              <option value="pi">Raspberry Pi</option>
-              <option value="view">View or share (PNG)</option>
-              <option value="c3" disabled>ESP32-C3 (not built yet)</option>
-            </select>
-          </label>
-          <label class="only-view" hidden>Scale
-            <select id="scaleInput">
-              <option value="8">8×</option>
-              <option value="16" selected>16×</option>
-              <option value="32">32×</option>
-            </select>
-          </label>
-        </div>
-        <div class="btn-row">
-          <button id="exportBtn" class="btn" type="button">Save for the Pi</button>
-        </div>
-        <p class="status" id="statusEl" role="status"></p>
       </section>
     </section>
 
@@ -185,7 +159,7 @@
       <button id="helpClose" class="btn btn-quiet" type="button">Close</button>
     </div>
     <div class="help-body guide">
-          <p class="hint">The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.</p>
+          <p class="hint">Glow Grid is for drawing pixel art and checking what survives the Pi's brightness cap and gamma curve (the dashed outlines and the Panel check) before it goes near the panel. The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.</p>
           <h3>Works well</h3>
           <ul>
             <li><strong>Pixel art at or near grid size</strong> (drawn here, in Piskel, or the examples) comes out pixel-perfect.</li>
@@ -214,6 +188,7 @@
             <li><strong>The magnifier:</strong> while a finger or pen is painting or erasing, a close-up of the pixels around it floats beside your finger, with the pixel you are on outlined. It appears only for touch and pen, never for a mouse.</li>
           </ul>
           <h3>Getting a picture onto the panel</h3>
+          <p class="hint"><strong>File ▸ Import image</strong> loads everything: a sprite sheet or single frame saved from here comes back as separate frames; any other picture opens a crop-and-zoom editor. Tick <strong>Exact pixels</strong> for pixel art, or leave it off for photos. Both can remove the background. On a phone the picker offers the camera too.</p>
           <ul>
             <li><strong>Save for the Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
             <li><strong>Copy it to the Pi</strong> from your PC, then run <code>glow-grid</code>, press <code>r</code> to rescan and pick the file. In PowerShell: <code>scp "$HOME\Downloads\sprite.png" user@raspberrypi.local:~/glow-grid/images/</code> (change the file name and login to match yours).</li>
@@ -227,6 +202,36 @@
             <li><strong>Wiring:</strong> until the probe settings are set and confirmed on the Pi (<code>glow-grid probe</code>, <code>glow-grid probe check</code>, then <code>k</code> in the menu), images may look scrambled; the menu warns you.</li>
             <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
           </ol>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="exportDlg" class="photo-dlg export-dlg" aria-labelledby="exportTitle">
+  <div class="photo-wrap">
+    <div class="photo-head">
+      <h2 id="exportTitle">Export</h2>
+      <button id="exportClose" class="btn btn-quiet" type="button">Close</button>
+    </div>
+    <div class="photo-body export-body">
+      <label>Name <input id="nameInput" type="text" value="sprite" spellcheck="false"></label>
+      <label>Export for
+        <select id="targetInput">
+          <option value="pi">Raspberry Pi</option>
+          <option value="view">View or share (PNG)</option>
+          <option value="c3" disabled>ESP32-C3 (not built yet)</option>
+        </select>
+      </label>
+      <label class="only-view" hidden>Scale
+        <select id="scaleInput">
+          <option value="8">8×</option>
+          <option value="16" selected>16×</option>
+          <option value="32">32×</option>
+        </select>
+      </label>
+      <p class="hint">One frame saves a still; two or more save a sprite sheet. Brightness, gamma, frame count and speed are stored inside the PNG.</p>
+    </div>
+    <div class="photo-foot">
+      <button id="exportBtn" class="btn" type="button">Save for the Pi</button>
     </div>
   </div>
 </dialog>
