@@ -20,6 +20,6 @@ $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.
 $('piInput').value = sim.pi; $('pcDirInput').value = sim.pcDir; $('targetInput').value = exportTarget();
 $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
 $('fpsInput').value = state.fps; $('nameInput').value = state.name;
-buildLut(); buildGridDOM(); renderSwatches(); updateUndoBtns();
+buildLut(); buildGridDOM(); renderSwatches(); setColor(state.color, false); updateUndoBtns();
 setView(sim.view === 'sim' ? 'sim' : 'design');
 afterFrameChange();

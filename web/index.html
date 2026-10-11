@@ -74,17 +74,25 @@
           <button class="tool-btn active" data-tool="paint" type="button">Paint</button>
           <button class="tool-btn" data-tool="fill" type="button">Fill</button>
           <button class="tool-btn" data-tool="erase" type="button">Erase</button>
+          <button class="tool-btn" data-tool="pick" type="button" title="Pick a color from the grid (or Alt+click while painting)">Pick</button>
         </div>
-        <div class="color-row">
-          <input id="colorPicker" type="color" value="#e63946" aria-label="Paint color">
-          <div class="swatches" id="swatches"></div>
+        <div class="picker">
+          <canvas id="wheel" width="160" height="160" aria-label="Color wheel: hue around, saturation outward"></canvas>
+          <div class="picker-side">
+            <div class="cur-swatch" id="curSwatch" title="Current paint color"></div>
+            <label class="range-row">Brightness <input id="valInput" type="range" min="0" max="100" value="100"></label>
+            <label class="hex-row">Hex <input id="hexInput" type="text" value="#e63946" maxlength="7" spellcheck="false" autocomplete="off"></label>
+            <div class="hover-chip" id="hoverChip" hidden><i></i><span>#000000</span></div>
+          </div>
         </div>
+        <div class="swatch-group"><div class="swatch-label">Palette</div><div class="swatches" id="swatches"></div></div>
+        <div class="swatch-group" id="imgSwatchGroup" hidden><div class="swatch-label">In this picture</div><div class="swatches" id="imgSwatches"></div></div>
         <div class="btn-row">
           <button id="undoBtn" class="btn btn-quiet" type="button" disabled>Undo</button>
           <button id="redoBtn" class="btn btn-quiet" type="button" disabled>Redo</button>
           <button id="clearBtn" class="btn btn-quiet" type="button">Clear frame</button>
         </div>
-        <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel.</p>
+        <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint.</p>
       </section>
 
       <section class="card">

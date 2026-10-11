@@ -71,6 +71,7 @@ function renderDiagnostics() {
 }
 function renderFrame() { for (let i = 0; i < cellEls.length; i++) updateCell(i); renderDiagnostics(); }
 function renderFrameStrip() {
+  renderImgSwatches();
   const strip = $('frameStrip'); strip.innerHTML = '';
   state.frames.forEach((frame, i) => {
     const t = document.createElement('canvas');
@@ -135,6 +136,7 @@ function cellAt(x, y) {
 gridEl.addEventListener('pointerdown', (e) => {
   if (playing) return;
   const idx = cellAt(e.clientX, e.clientY); if (idx === null) return;
+  if (state.tool === 'pick' || e.altKey) { pickAt(idx, state.tool === 'pick'); e.preventDefault(); return; }
   pushUndo(); painting = true; applyTool(idx); e.preventDefault();
 });
 window.addEventListener('pointermove', (e) => {
@@ -145,25 +147,129 @@ const endPaint = () => { if (!painting) return; painting = false; renderDiagnost
 window.addEventListener('pointerup', endPaint);
 window.addEventListener('pointercancel', endPaint);
 
-document.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => btn.addEventListener('click', () => {
-  document.querySelectorAll('.tool-btn[data-tool]').forEach((b) => b.classList.remove('active'));
-  btn.classList.add('active'); state.tool = btn.dataset.tool;
-}));
+function setTool(t) {
+  state.tool = t;
+  document.querySelectorAll('.tool-btn[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
+  gridEl.classList.toggle('picking', t === 'pick');
+  if (t !== 'pick') hideHover();
+}
+document.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => btn.addEventListener('click', () => setTool(btn.dataset.tool)));
+
+/* ---------- color: wheel, value slider, hex, swatches ---------- */
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return [h, mx ? d / mx : 0, mx];
+}
+function hsvToRgb(h, s, v) {
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0]; else if (h < 120) [r, g, b] = [x, c, 0]; else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c]; else if (h < 300) [r, g, b] = [x, 0, c]; else [r, g, b] = [c, 0, x];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+const wheelCv = $('wheel'), wheelCtx = wheelCv.getContext('2d');
+const hsv = { h: 0, s: 1, v: 1 };          // the wheel's own state; state.color is derived from it
+let wheelDrawnV = -1, wheelBase = null;
+function drawWheel() {
+  const W = wheelCv.width, R = W / 2, v = hsv.v;
+  if (wheelDrawnV !== v) {
+    const img = wheelCtx.createImageData(W, W), d = img.data;
+    for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) {
+      const dx = x + 0.5 - R, dy = y + 0.5 - R, r = Math.hypot(dx, dy);
+      if (r > R) continue;
+      let h = Math.atan2(dy, dx) * 180 / Math.PI; if (h < 0) h += 360;
+      const [cr, cg, cb] = hsvToRgb(h, Math.min(1, r / (R - 1)), v);
+      const i = (y * W + x) * 4; d[i] = cr; d[i + 1] = cg; d[i + 2] = cb; d[i + 3] = Math.round(255 * Math.min(1, R - r));
+    }
+    wheelBase = img; wheelDrawnV = v;
+  }
+  wheelCtx.putImageData(wheelBase, 0, 0);
+  const a = hsv.h * Math.PI / 180, mr = hsv.s * (R - 1), mx = R + Math.cos(a) * mr, my = R + Math.sin(a) * mr;
+  wheelCtx.beginPath(); wheelCtx.arc(mx, my, 6, 0, Math.PI * 2);
+  wheelCtx.lineWidth = 3; wheelCtx.strokeStyle = '#000'; wheelCtx.stroke();
+  wheelCtx.lineWidth = 1.5; wheelCtx.strokeStyle = '#fff'; wheelCtx.stroke();
+}
+// Set the paint color. commit=true also records it in the recent swatches (end of a drag, hex entry, pick, swatch click).
+function setColor(hex, commit) {
+  hex = hex.toLowerCase(); state.color = hex;
+  const [h, s, v] = rgbToHsv(...hexToRgb(hex));
+  if (s > 0 && v > 0) hsv.h = h;     // keep the hue when the color is gray or black
+  if (v > 0) hsv.s = s;
+  hsv.v = v;
+  $('curSwatch').style.background = hex; $('hexInput').value = hex;
+  $('valInput').value = String(Math.round(v * 100));
+  drawWheel();
+  if (commit) {
+    state.recentColors = [hex, ...state.recentColors.filter((c) => c !== hex)].slice(0, 8);
+    renderSwatches(); saveState();
+  }
+}
+function colorFromWheel() { const [r, g, b] = hsvToRgb(hsv.h, hsv.s, hsv.v); setColor(toHex(r, g, b), false); }
+let wheelDrag = false;
+function wheelPoint(e) {
+  const rc = wheelCv.getBoundingClientRect(), R = wheelCv.width / 2;
+  const x = (e.clientX - rc.left) / rc.width * wheelCv.width - R, y = (e.clientY - rc.top) / rc.height * wheelCv.height - R;
+  let h = Math.atan2(y, x) * 180 / Math.PI; if (h < 0) h += 360;
+  hsv.h = h; hsv.s = Math.min(1, Math.hypot(x, y) / (R - 1));
+  if (hsv.v === 0) hsv.v = 1;   // picking on the wheel from black: bring the brightness up so a color shows
+  colorFromWheel();
+}
+wheelCv.addEventListener('pointerdown', (e) => { wheelCv.setPointerCapture(e.pointerId); wheelDrag = true; wheelPoint(e); e.preventDefault(); });
+wheelCv.addEventListener('pointermove', (e) => { if (wheelDrag) wheelPoint(e); });
+const endWheel = () => { if (!wheelDrag) return; wheelDrag = false; setColor(state.color, true); };
+wheelCv.addEventListener('pointerup', endWheel); wheelCv.addEventListener('pointercancel', endWheel);
+$('valInput').addEventListener('input', (e) => { hsv.v = Number(e.target.value) / 100; colorFromWheel(); });
+$('valInput').addEventListener('change', () => setColor(state.color, true));
+$('hexInput').addEventListener('change', (e) => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(e.target.value.trim());
+  if (m) setColor('#' + m[1], true); else e.target.value = state.color;
+});
+function swatchButton(hex) {
+  const sw = document.createElement('button');
+  sw.type = 'button'; sw.className = 'swatch'; sw.style.background = hex; sw.title = hex;
+  sw.setAttribute('aria-label', 'Use color ' + hex);
+  sw.addEventListener('click', () => { setColor(hex, true); if (state.tool === 'pick') setTool('paint'); });
+  return sw;
+}
 function renderSwatches() {
   const el = $('swatches'); el.innerHTML = '';
-  [...new Set([...basePalette, ...state.recentColors])].slice(0, 16).forEach((hex) => {
-    const sw = document.createElement('button');
-    sw.type = 'button'; sw.className = 'swatch'; sw.style.background = hex; sw.title = hex;
-    sw.setAttribute('aria-label', 'Use color ' + hex);
-    sw.addEventListener('click', () => { state.color = hex; $('colorPicker').value = hex; });
-    el.appendChild(sw);
-  });
+  [...new Set([...basePalette, ...state.recentColors])].slice(0, 16).forEach((hex) => el.appendChild(swatchButton(hex)));
 }
-$('colorPicker').addEventListener('input', (e) => { state.color = e.target.value; });
-$('colorPicker').addEventListener('change', (e) => {
-  state.recentColors = [e.target.value, ...state.recentColors.filter((c) => c !== e.target.value)].slice(0, 8);
-  renderSwatches(); saveState();
+// "In this picture": the colors used across every frame (and the still part), most used first
+let imgSwatchKey = '';
+function renderImgSwatches() {
+  const counts = new Map();
+  for (const f of state.frames) for (const h of flatten(f)) if (!isOff(h)) counts.set(h, (counts.get(h) || 0) + 1);
+  const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map((e) => e[0]);
+  const key = list.join(',');
+  if (key === imgSwatchKey) return;
+  imgSwatchKey = key;
+  const el = $('imgSwatches'); el.innerHTML = '';
+  list.forEach((hex) => el.appendChild(swatchButton(hex)));
+  $('imgSwatchGroup').hidden = !list.length;
+}
+
+/* ---------- eyedropper ---------- */
+function pickAt(idx, backToPaint) {
+  const hex = layerHex(state.frames[state.currentFrame], idx);
+  setColor(hex, true);
+  if (backToPaint) setTool('paint'); else hideHover();
+  setStatus(`Picked ${hex}.`);
+}
+function showHover(idx) {
+  const hex = layerHex(state.frames[state.currentFrame], idx), chip = $('hoverChip');
+  chip.hidden = false; chip.firstElementChild.style.background = hex; chip.lastElementChild.textContent = hex;
+}
+function hideHover() { $('hoverChip').hidden = true; }
+gridEl.addEventListener('pointermove', (e) => {
+  if (painting || !(state.tool === 'pick' || e.altKey)) return;
+  const idx = cellAt(e.clientX, e.clientY);
+  if (idx === null) hideHover(); else showHover(idx);
 });
+gridEl.addEventListener('pointerleave', hideHover);
 $('clearBtn').addEventListener('click', () => { stopPlay(); pushUndo(); setEditLayer(newBlankFrame(state.cols, state.rows)); afterFrameChange(); });
 $('undoBtn').addEventListener('click', undo);
 $('redoBtn').addEventListener('click', redo);
