@@ -38,7 +38,7 @@
       <div class="device flags-on" id="device">
         <div class="grid" id="grid" role="img" aria-label="LED grid preview"></div>
       </div>
-      <section class="card">
+      <section class="card" id="framesCard">
         <h2>Frames</h2>
         <div class="playback">
           <button id="playBtn" class="btn" type="button">▶ Play</button>
@@ -47,19 +47,44 @@
         </div>
         <div class="frame-strip" id="frameStrip"></div>
         <div class="btn-row">
-          <button id="addFrameBtn" class="btn btn-quiet" type="button">+ Duplicate</button>
+          <button id="addFrameBtn" class="btn btn-quiet" type="button" aria-label="Duplicate this frame">+ Duplicate</button>
           <button id="addBlankFrameBtn" class="btn btn-quiet" type="button">+ Blank</button>
           <button id="deleteFrameBtn" class="btn btn-quiet danger" type="button">Delete frame</button>
           <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part">Start over</button>
           <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
         </div>
+        <button id="moreBtn" class="btn btn-quiet" type="button" hidden aria-expanded="false" aria-controls="sheet">More</button>
+        <div class="move-block" id="moveBlock">
+          <hr class="sub-rule">
+          <h3 class="sub-h" id="moveTitle">Move and layers</h3>
+          <div class="nudge" role="group" aria-label="Move the picture one pixel">
+            <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
+            <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
+            <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
+            <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
+          </div>
+          <div class="move-ctl">
+            <label class="check"><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
+            <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
+              <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
+              <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
+            </div>
+            <p class="hint" id="layerHint"></p>
+          </div>
+        </div>
       </section>
     </section>
 
-    <aside class="panel-col">
+    <aside class="panel-col" id="sheet">
+      <div class="sheet-head" id="sheetHead" hidden><span>More</span><button id="sheetClose" class="btn btn-quiet" type="button">Done</button></div>
+      <section class="card" id="frameMore" hidden>
+        <h2>Frames</h2>
+        <div class="frame-more-top" id="fmTop"></div>
+        <div class="btn-row" id="fmRow"></div>
+      </section>
       <section class="card">
         <h2>Tools</h2>
-        <div class="tool-row" role="group" aria-label="Drawing tool">
+        <div class="tool-row" id="toolRow" role="group" aria-label="Drawing tool">
           <button class="tool-btn active" data-tool="paint" type="button">Paint</button>
           <button class="tool-btn" data-tool="fill" type="button">Fill</button>
           <button class="tool-btn" data-tool="erase" type="button">Erase</button>
@@ -74,30 +99,16 @@
             <div class="hover-chip" id="hoverChip" hidden><i></i><span>#000000</span></div>
           </div>
         </div>
-        <div class="swatch-group"><div class="swatch-label">Palette</div><div class="swatches" id="swatches"></div></div>
+        <div class="swatch-group" id="paletteGroup"><div class="swatch-label">Palette</div><div class="swatches" id="swatches"></div></div>
         <div class="swatch-group" id="imgSwatchGroup" hidden><div class="swatch-label">In this picture</div><div class="swatches" id="imgSwatches"></div></div>
         <div class="btn-row">
-          <button id="undoBtn" class="btn btn-quiet" type="button" disabled>Undo</button>
-          <button id="redoBtn" class="btn btn-quiet" type="button" disabled>Redo</button>
+          <span id="historyRow" class="history-row">
+            <button id="undoBtn" class="btn btn-quiet" type="button" aria-label="Undo" disabled>Undo</button>
+            <button id="redoBtn" class="btn btn-quiet" type="button" aria-label="Redo" disabled>Redo</button>
+          </span>
           <button id="clearBtn" class="btn btn-quiet" type="button">Clear frame</button>
         </div>
         <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint. Clear frame blanks this frame. Start over and Restore last session are in the Frames card.</p>
-      </section>
-
-      <section class="card" aria-labelledby="moveTitle">
-        <h2 id="moveTitle">Move and layers</h2>
-        <div class="nudge" role="group" aria-label="Move the picture one pixel">
-          <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
-          <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
-          <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
-          <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
-        </div>
-        <label class="check"><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
-        <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
-          <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
-          <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
-        </div>
-        <p class="hint" id="layerHint"></p>
       </section>
 
       <section class="card">
@@ -152,6 +163,15 @@
   </main>
 </div>
 
+<nav class="dock" id="dock" hidden aria-label="Drawing tools">
+  <div id="dockTools"></div>
+  <div class="dock-row">
+    <button id="dockColor" class="dock-color" type="button" aria-label="Paint color. Opens the color wheel"></button>
+    <div class="dock-palette" id="dockPalette"></div>
+    <div class="dock-history" id="dockHistory"></div>
+  </div>
+</nav>
+
 <dialog id="helpDlg" class="photo-dlg help-dlg" aria-labelledby="helpTitle">
   <div class="photo-wrap">
     <div class="photo-head">
@@ -184,7 +204,8 @@
           </ul>
           <h3>Drawing on a phone</h3>
           <ul>
-            <li><strong>The grid stays pinned</strong> at the top of the screen while you scroll the tools underneath, so you always see what you are drawing. In landscape the page scrolls normally.</li>
+            <li><strong>The grid fills the width</strong> with nothing to scroll while you draw. At the bottom is a dock: Paint, Fill, Erase and Pick, your color (tap it for the color wheel), the palette (swipe it sideways) and Undo and Redo. Under the grid is a one-line strip of frames with Play, <strong>+</strong> to duplicate a frame and <strong>More</strong>.</li>
+            <li><strong>More</strong> opens a sheet with everything else: frame speed, blank, delete and start over, Move and layers, the color wheel and hex, Clear frame and the Panel settings. The grid stays visible above it, so you can see what a color or a nudge does. Tap <strong>Done</strong> to close it. Turn the phone sideways and the page goes back to the scrolling layout.</li>
             <li><strong>The magnifier:</strong> while a finger or pen is painting or erasing, a close-up of the pixels around it floats beside your finger, with the pixel you are on outlined. It appears only for touch and pen, never for a mouse.</li>
           </ul>
           <h3>Getting a picture onto the panel</h3>
@@ -300,6 +321,7 @@
 <script src="js/import.js"></script>
 <script src="js/export.js"></script>
 <script src="js/tools.js"></script>
+<script src="js/phone.js"></script>
 <script src="js/main.js"></script>
 
 </body>
