@@ -91,8 +91,9 @@
           <button id="undoBtn" class="btn btn-quiet" type="button" disabled>Undo</button>
           <button id="redoBtn" class="btn btn-quiet" type="button" disabled>Redo</button>
           <button id="clearBtn" class="btn btn-quiet" type="button">Clear frame</button>
+          <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part">Start over</button>
         </div>
-        <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint.</p>
+        <p class="hint">Ctrl+Z / Ctrl+Y. Erase sets a pixel to black, which is "off" on the panel. Pick (or Alt+click) takes the color under the cursor and goes back to Paint. Clear frame blanks this frame; Start over throws away every frame and the still part (Undo brings them back).</p>
       </section>
 
       <section class="card">
@@ -190,7 +191,7 @@
       <section class="card">
         <h2>Export image</h2>
         <div class="form-row">
-          <label class="grow">Name <input id="nameInput" type="text" value="smiley" spellcheck="false"></label>
+          <label class="grow">Name <input id="nameInput" type="text" value="sprite" spellcheck="false"></label>
           <label>Export for
             <select id="targetInput">
               <option value="pi">Raspberry Pi</option>
