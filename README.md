@@ -23,6 +23,7 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 | `js/led.js` | the LED model (mirrors `grid_common.py`: gamma, brightness, current estimate) and the shared layer |
 | `js/editor.js` | undo/redo, rendering, frames, drawing (strokes are filled in between pointer samples so fast drags don't skip cells), the editing view |
 | `js/loupe.js` | touch magnifier: a close-up of the pixels around a painting finger or pen |
+| `js/phone.js` | phone layout (portrait): moves the tools into a bottom dock and the frame extras into a "More" sheet, and puts everything back on rotate or resize |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
 | `js/export.js` | the PNG text chunk (`glow-grid` metadata), the Export dialog (Pi, view/share, and the future C3 target) and the status toast |
 | `js/tools.js` | move, "animate one part only", playback |
@@ -30,7 +31,7 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only.
 
-- **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen): one column with the grid pinned to the top while the cards scroll beneath it (Tools, Frames, Move and layers, Panel settings). While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
+- **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen, portrait): the grid fills the width and nothing scrolls while you draw. A dock at the bottom holds Paint/Fill/Erase/Pick, your color (tap it for the wheel), the palette and Undo/Redo; a one-line frame strip sits under the grid (Play, thumbnails, duplicate, **More**); **More** opens a sheet with the rest (frame speed and delete, Move and layers, wheel and hex, Panel settings) while the grid stays visible above it. While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. Landscape falls back to the scrolling page. This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
 - **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI by `web/make_icons.py`). It is a project site, so it sits beside the blog at `dwooods.github.io` without touching it. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 - **Install as an app**: open the hosted page in Chrome, Edge or iPhone Safari (*Share → Add to Home Screen*) and it runs in its own window and works offline. After an update, close and reopen it to pick up the new version.
@@ -100,7 +101,7 @@ Other rules: avoid spaces in names (they complicate `scp`), and use `.png`, `.gi
 
 ### Animating one part: move and still part
 
-The *Move and layers* card makes animations from a single drawing without repainting every frame.
+The *Move and layers* section of the Frames card makes animations from a single drawing without repainting every frame.
 
 - **Move:** the arrow buttons (or Shift + arrow keys) shift this frame by one pixel. Duplicate a frame, nudge it, repeat to make a bob or a slide.
 - **Animate one part only:** draw the whole character, duplicate it for each frame, then tick *Animate one part only*. Every pixel that is identical in all frames moves into one shared layer under every frame (the still part), so each frame holds only what changes (a hand, legs, eyes, a mouth). Paint just those bits with *Moving part (this frame)* selected, or pick *Still part (all frames)* to edit the body for all frames at once. In a frame, black means see-through while a still part exists. Untick the box to join it back into every frame. It is optional: you can also just paint each frame.
