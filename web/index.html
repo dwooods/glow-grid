@@ -48,6 +48,46 @@
           <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
         </div>
       </section>
+
+      <section class="card">
+        <h2>Import and export</h2>
+        <h3 class="sub-h">Import</h3>
+        <div class="btn-row">
+          <label class="btn file-photo">Import image…<input id="imageInput" type="file" accept="image/*" hidden></label>
+        </div>
+        <p class="hint">One button for everything. A sprite sheet saved from here (or a file with the right <code>_8fps</code> / <code>_sheet</code> name) loads straight in as separate frames, and so does a single frame saved from here. Any other picture opens a crop-and-zoom editor: tick <strong>Exact pixels</strong> for pixel art (no averaging, no dithering), or leave it off for photos (averaged per cell, with optional dithering). Both can remove the background. On a phone the picker offers the camera too.</p>
+        <hr class="sub-rule">
+        <h3 class="sub-h">Export</h3>
+        <div class="form-row">
+          <label class="grow">Name <input id="nameInput" type="text" value="sprite" spellcheck="false"></label>
+          <label>Export for
+            <select id="targetInput">
+              <option value="pi">Raspberry Pi</option>
+              <option value="view">View or share (PNG)</option>
+              <option value="c3" disabled>ESP32-C3 (not built yet)</option>
+            </select>
+          </label>
+          <label class="only-view" hidden>Scale
+            <select id="scaleInput">
+              <option value="8">8×</option>
+              <option value="16" selected>16×</option>
+              <option value="32">32×</option>
+            </select>
+          </label>
+        </div>
+        <div class="form-row only-pi">
+          <label class="grow">Pi login <input id="piInput" type="text" value="user@raspberrypi.local" spellcheck="false"></label>
+          <label class="grow">Folder on your PC <input id="pcDirInput" type="text" value="$HOME\Downloads" spellcheck="false"></label>
+        </div>
+        <div class="btn-row">
+          <button id="exportBtn" class="btn" type="button">Save for the Pi</button>
+        </div>
+        <p class="hint" id="exportInfo"></p>
+        <p class="hint"><strong>Raspberry Pi:</strong> one pixel per LED, with brightness, gamma, grid size and (for an animation) frame count and fps stored inside the file, so the name can stay plain. Copy it with the command below, then pick it from the <code>glow-grid</code> menu. <strong>View or share:</strong> a sharp, enlarged copy (named <code>_x16</code> etc.). Don't copy it to the Pi: an enlarged animation would play as one squashed still. <strong>ESP32-C3:</strong> comes with the C3 build.</p>
+        <code class="cmd only-pi" id="cmdOut"></code>
+        <button id="copyCmdBtn" class="btn btn-quiet only-pi" type="button">Copy commands</button>
+        <p class="status" id="statusEl" role="status"></p>
+      </section>
     </section>
 
     <aside class="panel-col">
@@ -142,48 +182,6 @@
         <p class="hint" id="diagHint">Barely lit means the pixel isn't black but ends up at 1–3 out of 255 on the LED, so it reads as off or a faint smudge. Use pure black for "off", or brighten it.</p>
         <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
       </section>
-
-      <section class="card">
-        <h2>Import and export</h2>
-        <h3 class="sub-h">Import</h3>
-        <div class="btn-row">
-          <label class="btn file-photo">Import image…<input id="imageInput" type="file" accept="image/*" hidden></label>
-        </div>
-        <p class="hint">One button for everything. A sprite sheet saved from here (or a file with the right <code>_8fps</code> / <code>_sheet</code> name) loads straight in as separate frames, and so does a single frame saved from here. Any other picture opens a crop-and-zoom editor: tick <strong>Exact pixels</strong> for pixel art (no averaging, no dithering), or leave it off for photos (averaged per cell, with optional dithering). Both can remove the background. On a phone the picker offers the camera too.</p>
-        <hr class="sub-rule">
-        <h3 class="sub-h">Export</h3>
-        <div class="form-row">
-          <label class="grow">Name <input id="nameInput" type="text" value="sprite" spellcheck="false"></label>
-          <label>Export for
-            <select id="targetInput">
-              <option value="pi">Raspberry Pi</option>
-              <option value="view">View or share (PNG)</option>
-              <option value="c3" disabled>ESP32-C3 (not built yet)</option>
-            </select>
-          </label>
-          <label class="only-view" hidden>Scale
-            <select id="scaleInput">
-              <option value="8">8×</option>
-              <option value="16" selected>16×</option>
-              <option value="32">32×</option>
-            </select>
-          </label>
-        </div>
-        <div class="form-row only-pi">
-          <label class="grow">Pi login <input id="piInput" type="text" value="user@raspberrypi.local" spellcheck="false"></label>
-          <label class="grow">Folder on your PC <input id="pcDirInput" type="text" value="$HOME\Downloads" spellcheck="false"></label>
-        </div>
-        <div class="btn-row">
-          <button id="exportBtn" class="btn" type="button">Save for the Pi</button>
-        </div>
-        <p class="hint" id="exportInfo"></p>
-        <p class="hint"><strong>Raspberry Pi:</strong> one pixel per LED, with brightness, gamma, grid size and (for an animation) frame count and fps stored inside the file, so the name can stay plain. Copy it with the command below, then pick it from the <code>glow-grid</code> menu. <strong>View or share:</strong> a sharp, enlarged copy (named <code>_x16</code> etc.). Don't copy it to the Pi: an enlarged animation would play as one squashed still. <strong>ESP32-C3:</strong> comes with the C3 build.</p>
-        <code class="cmd only-pi" id="cmdOut"></code>
-        <button id="copyCmdBtn" class="btn btn-quiet only-pi" type="button">Copy commands</button>
-        <p class="status" id="statusEl" role="status"></p>
-      </section>
-
-
     </aside>
   </main>
 </div>
