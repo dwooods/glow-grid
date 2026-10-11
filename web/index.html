@@ -237,6 +237,16 @@
       <div class="photo-col">
         <p class="hint">Drag the photo to move it. Pinch or scroll to zoom. The faint lines are one LED each; the small picture is the result.</p>
         <label class="check"><input id="exactOn" type="checkbox"> Exact pixels (pixel art, no averaging)</label>
+        <label class="check"><input id="flatOn" type="checkbox"> Flat art: each LED takes the main color under it</label>
+        <label class="range-row" id="flatNRow">Colors to keep
+          <select id="flatN">
+            <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="8" selected>8</option>
+            <option value="12">12</option>
+            <option value="16">16</option>
+          </select>
+        </label>
         <label class="range-row">Zoom <input id="photoZoom" type="range" min="0" max="100" value="0"></label>
         <div class="btn-row">
           <button id="photoFit" class="btn btn-quiet" type="button">Fit whole photo</button>
@@ -260,7 +270,7 @@
             <option value="bayer">Ordered (patterned)</option>
           </select>
         </label>
-        <p class="hint" id="photoHint">Dithering is baked in at the current brightness and gamma. Change those later and re-run this.</p>
+        <p class="hint" id="photoHint">Flat art finds the picture's main colors and gives each LED whichever one covers most of its cell, so outlines and soft edges disappear and the result is already in a small palette. Use it for illustrations, logos and clip art; use averaging or dithering for photos. Dithering is baked in at the current brightness and gamma.</p>
       </div>
     </div>
     <div class="photo-foot">
