@@ -188,6 +188,35 @@ input[type=text] { width: 100%; box-sizing: border-box; }
   .layout { flex-direction: column; }
   .device-col, .panel-col { flex-basis: auto; width: 100%; max-width: 100%; }
 }
+/* Phones: pin the grid to the top while the tools scroll beneath it, so you always see what you are drawing.
+   The two columns dissolve into one stack and the cards are reordered: grid, frames, tools, move, panel, import/export. */
+@media (max-width: 760px) and (min-height: 600px) {
+  .layout { gap: var(--s-4); }
+  .device-col, .panel-col { display: contents; }
+  .device-col > :nth-child(1) { order: 1; }
+  .device-col > :nth-child(2) { order: 2; }
+  .device-col > :nth-child(3) { order: 6; }
+  .panel-col > :nth-child(1) { order: 3; }
+  .panel-col > :nth-child(2) { order: 4; }
+  .panel-col > :nth-child(3) { order: 5; }
+  .device {
+    position: sticky; top: max(var(--s-2), env(safe-area-inset-top)); z-index: 5;
+    width: min(100%, 44dvh); margin-inline: auto; align-self: center;
+    box-shadow: var(--well), 0 0 0 8px var(--bg), 0 14px 24px -6px rgba(0,0,0,.7);
+  }
+}
+
+/* Touch magnifier (js/loupe.js) */
+#loupe {
+  position: fixed; z-index: 100; width: 124px; height: 124px; box-sizing: border-box; padding: 6px;
+  display: grid; grid-template-columns: repeat(7, 1fr); grid-template-rows: repeat(7, 1fr); gap: 2px;
+  background: var(--grid-gap-bg); border-radius: var(--r-md); pointer-events: none;
+  box-shadow: 0 0 0 1px var(--border-strong), 0 12px 32px rgba(0,0,0,.6);
+}
+#loupe[hidden] { display: none; }
+#loupe i { display: block; border-radius: 25%; background: var(--grid-off); }
+#loupe i.out { background: transparent; }
+#loupe i.center { outline: 2px solid var(--accent); outline-offset: 1px; position: relative; z-index: 1; }
 
 /* Touch targets: fingers need bigger hit areas than a mouse */
 .grid { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

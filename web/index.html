@@ -208,6 +208,11 @@
             <li><strong>Animate one part only:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes the still part, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. Untick to join it back.</li>
             <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
           </ul>
+          <h3>Drawing on a phone</h3>
+          <ul>
+            <li><strong>The grid stays pinned</strong> at the top of the screen while you scroll the tools underneath, so you always see what you are drawing. In landscape the page scrolls normally.</li>
+            <li><strong>The magnifier:</strong> while a finger or pen is painting or erasing, a close-up of the pixels around it floats beside your finger, with the pixel you are on outlined. It appears only for touch and pen, never for a mouse.</li>
+          </ul>
           <h3>Getting a picture onto the panel</h3>
           <ul>
             <li><strong>Save for the Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
@@ -286,6 +291,7 @@
 <script src="js/core.js"></script>
 <script src="js/led.js"></script>
 <script src="js/editor.js"></script>
+<script src="js/loupe.js"></script>
 <script src="js/import.js"></script>
 <script src="js/export.js"></script>
 <script src="js/tools.js"></script>
