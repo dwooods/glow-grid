@@ -5,7 +5,7 @@ const basePalette = ['#e63946','#f1c40f','#2a9d8f','#457b9d','#ffffff','#000000'
 const gridEl = $('grid'), deviceEl = $('device');
 let cellEls = [];
 let downloadsCap = null;
-let playing = false, playTimer = null, painting = false;
+let playing = false, playTimer = null, painting = false, lastPaintIdx = null;
 
 (async () => {
   try { if (window.claude && window.claude.use) downloadsCap = await window.claude.use('downloads'); }

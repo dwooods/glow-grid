@@ -133,13 +133,40 @@ gridEl.addEventListener('pointerdown', (e) => {
   if (playing) return;
   const idx = cellAt(e.clientX, e.clientY); if (idx === null) return;
   if (state.tool === 'pick' || e.altKey) { pickAt(idx, state.tool === 'pick'); e.preventDefault(); return; }
-  pushUndo(); painting = true; applyTool(idx); e.preventDefault();
+  pushUndo(); painting = true; lastPaintIdx = idx; applyTool(idx); e.preventDefault();
 });
+// Cell under a point by geometry, so the gaps between cells still count and fast strokes don't drop pixels
+function cellNear(x, y) {
+  const r = gridEl.getBoundingClientRect();
+  const cx = Math.floor((x - r.left) / r.width * state.cols), cy = Math.floor((y - r.top) / r.height * state.rows);
+  return cx < 0 || cy < 0 || cx >= state.cols || cy >= state.rows ? null : cy * state.cols + cx;
+}
+// Paint every cell on the straight line between two cells (Bresenham)
+function paintLine(a, b) {
+  let x0 = a % state.cols, y0 = Math.floor(a / state.cols);
+  const x1 = b % state.cols, y1 = Math.floor(b / state.cols);
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (;;) {
+    applyTool(y0 * state.cols + x0);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
 window.addEventListener('pointermove', (e) => {
   if (!painting || state.tool === 'fill') return;
-  const idx = cellAt(e.clientX, e.clientY); if (idx !== null) applyTool(idx);
+  // Touch and pen deliver several samples per frame; use all of them
+  const pts = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  for (const pt of (pts.length ? pts : [e])) {
+    const idx = cellNear(pt.clientX, pt.clientY);
+    if (idx === null) continue;
+    if (lastPaintIdx === null) applyTool(idx); else if (idx !== lastPaintIdx) paintLine(lastPaintIdx, idx);
+    lastPaintIdx = idx;
+  }
 });
-const endPaint = () => { if (!painting) return; painting = false; syncRestoreBtn(); renderDiagnostics(); renderFrameStrip(); saveState(); };
+const endPaint = () => { lastPaintIdx = null; if (!painting) return; painting = false; syncRestoreBtn(); renderDiagnostics(); renderFrameStrip(); saveState(); };
 window.addEventListener('pointerup', endPaint);
 window.addEventListener('pointercancel', endPaint);
 
