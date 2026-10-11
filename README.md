@@ -1,13 +1,13 @@
 # glow-grid
 
-Pixel art and animations for a **16x16 WS2812B LED panel** on a **Raspberry Pi 5**, driven over hardware SPI, plus **Glow Grid**, a browser-based editor and LED simulator for designing them before they ever touch the panel.
+Pixel art and animations for a **16x16 WS2812B LED panel** on a **Raspberry Pi 5**, driven over hardware SPI, plus **Glow Grid**, a browser-based pixel editor for designing them before they ever touch the panel.
 
 Sister project to [led-strip](https://github.com/dwooods/led-strip), which drives a 1D strip with procedural effects. This one is about 2D images: draw, simulate, copy to the Pi, play.
 
 ## The workflow
 
 1. **Design** in the Glow Grid simulator (`https://dwooods.github.io/glow-grid/`, installed as an app, or `web/index.html` locally), or in [Piskel](#piskel).
-2. **Simulate and adjust**: switch to *LED sim* to see what survives on real LEDs, and tune *Brightness* and *Gamma* until it looks right. The *Panel check* flags pixels that will be barely lit or shift color, and estimates current draw against your power supply.
+2. **Check and adjust**: tune *Brightness* and *Gamma*, and watch the *Panel check*, which flags pixels that will be barely lit or shift color (dashed outlines on the grid) and estimates current draw against your power supply. The grid shows your colors as drawn; the Panel check is what tells you how the LEDs will treat them.
 3. **Export** from the *Export image* card. For the Pi it is one PNG: a still with 1 frame, an animation sprite sheet (frames side by side) with 2 or more. The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
 4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
 
@@ -19,9 +19,9 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 | File | Job |
 |---|---|
-| `js/core.js` | helpers, saved settings (`localStorage`), the blank starting frame |
+| `js/core.js` | helpers, saved settings and last session (`localStorage`), the blank starting frame |
 | `js/led.js` | the LED model (mirrors `grid_common.py`: gamma, brightness, current estimate) and the shared layer |
-| `js/editor.js` | undo/redo, rendering, frames, drawing, the Design/Simulate views |
+| `js/editor.js` | undo/redo, rendering, frames, drawing, the editing view |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
 | `js/export.js` | the PNG text chunk (`glow-grid` metadata) and the Export image card: Pi, view/share, and the future C3 target |
 | `js/tools.js` | move, "animate one part only", playback |
@@ -37,7 +37,7 @@ New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing too
 
 - **Paint, Fill, Erase, Pick.** Erase sets a pixel to pure black, which is "off" on the panel. Pick is an eyedropper: hover a pixel to see its color, click to make it the paint color, and the tool returns to Paint. Alt+click does the same without leaving the current tool.
 - **Color wheel.** Hue goes around the wheel, saturation outward, and the *Brightness* slider sets the value. The hex field accepts a typed color (`#1a73e8`).
-- **Clear frame** blanks the current frame. **Start over** throws away every frame and the still part and leaves one blank frame; so does *Delete frame* on the last remaining frame. Undo brings them back. A fresh browser starts with one blank frame; your work is kept per browser, so reopening the page shows what you left.
+- **Clear frame** blanks the current frame. **Start over** throws away every frame and the still part and leaves one blank frame; so does *Delete frame* on the last remaining frame. Undo brings them back. The page always opens on one blank frame; what you had last time is kept in this browser and the **Restore last session** button (shown while the frame is blank) brings it back. Undo goes back to blank.
 - **Palette** holds the fixed colors plus the last eight you used. **In this picture** lists the colors already in your frames, most used first, so touch-ups use the exact same values.
 
 ## Import image
@@ -316,14 +316,14 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 3. Export:
    - **Still:** Export → PNG, one frame.
    - **Animation:** Export → PNG as a spritesheet laid out in **one row**, so it's 16 px tall with frames side by side. Rename it to add the frame rate, e.g. `walk_8fps.png` (required: without `_8fps` or `_sheet` in the name it plays as one squashed still). Or export a **GIF**; `play.py` uses the GIF's own timing.
-4. Import the file into Glow Grid and switch to *LED sim* to check it before copying it to the Pi. A named one-row spritesheet loads back as separate frames.
+4. Import the file into Glow Grid and look at the Panel check before copying it to the Pi. A named one-row spritesheet loads back as separate frames.
 
 ### WLED
 
 [WLED](https://kno.wled.ge/) is popular open-source firmware for driving addressable LEDs from an **ESP32** over Wi-Fi. It has a web UI, a phone app, 2D matrix support, and (since v16) GIF and pixel-art playback. It runs on the ESP32, not on the Pi, so it's an alternative way to drive this same panel rather than part of this project.
 
 - To use WLED with a 16×16 panel, set *LED Preferences → 2D configuration* (panel size, first LED corner, orientation, serpentine). These are the same four facts `probe.py` finds.
-- Glow Grid's LED sim is still useful for WLED art: it shows what survives on real LEDs regardless of which board drives them.
+- Glow Grid's Panel check is still useful for WLED art: it flags what won't survive on real LEDs regardless of which board drives them.
 - Possible future directions (not built yet): a "Send to WLED" button in Glow Grid using WLED's JSON API, streaming animations from the Pi to WLED over DDP, and a standalone port of glow-grid to an ESP32-C3 board.
 
 ## License
