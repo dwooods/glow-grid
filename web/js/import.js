@@ -204,7 +204,113 @@ function ditherFrame(rgb, cols, rows, mode, lut, brightness, gamma) {
 }
 window.GlowPhoto = { boxCrop, ditherFrame }; // exposed so the Pi-parity test can call it
 
-const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', exact: false, queued: false };
+// Flat art: the picture's K main colours (median cut on a pixel sample, refined by k-means),
+// then each cell takes the palette colour that covers most of it. Outlines, anti-aliasing and
+// JPEG noise never win a cell, so flat illustrations come out crisp and already in a small palette.
+function flatPalette(d, w, h, k, bg) {
+  const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 60000)));   // sample ~60k pixels
+  const tol2 = bg ? bg.tol * bg.tol : 0, px = [];
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+    const i = (y * w + x) * 4;
+    if (d[i + 3] < 128) continue;
+    if (bg) {
+      if (bg.mask ? bg.mask[y * w + x] : ((d[i] - bg.rgb[0]) ** 2 + (d[i + 1] - bg.rgb[1]) ** 2 + (d[i + 2] - bg.rgb[2]) ** 2 <= tol2)) continue;
+    }
+    px.push([d[i], d[i + 1], d[i + 2]]);
+  }
+  if (!px.length) return [[0, 0, 0]];
+  // Over-split (so small features like a bow or a nose get their own box), refine, merge look-alikes, keep the K most used
+  let boxes = [px];
+  const want = Math.min(64, k * 4);
+  while (boxes.length < want) {                    // median cut: split the box with the widest channel
+    let bi = -1, bc = 0, br = -1;
+    boxes.forEach((b, idx) => {
+      if (b.length < 2) return;
+      for (let c = 0; c < 3; c++) {
+        let lo = 255, hi = 0; for (const p of b) { if (p[c] < lo) lo = p[c]; if (p[c] > hi) hi = p[c]; }
+        if (hi - lo > br) { br = hi - lo; bi = idx; bc = c; }
+      }
+    });
+    if (bi < 0 || br < 8) break;
+    const b = boxes[bi]; b.sort((p, q) => p[bc] - q[bc]);
+    const mid = b.length >> 1;
+    boxes.splice(bi, 1, b.slice(0, mid), b.slice(mid));
+  }
+  let pal = boxes.map((b) => { const s = [0, 0, 0]; for (const p of b) { s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; } return s.map((v) => v / b.length); });
+  let pop = boxes.map((b) => b.length);
+  for (let it = 0; it < 3; it++) {                 // k-means refinement
+    const sum = pal.map(() => [0, 0, 0, 0]);
+    for (const p of px) {
+      let best = 0, bd = Infinity;
+      for (let j = 0; j < pal.length; j++) { const dd = (p[0] - pal[j][0]) ** 2 + (p[1] - pal[j][1]) ** 2 + (p[2] - pal[j][2]) ** 2; if (dd < bd) { bd = dd; best = j; } }
+      const s = sum[best]; s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; s[3]++;
+    }
+    pal = pal.map((c, j) => sum[j][3] ? [sum[j][0] / sum[j][3], sum[j][1] / sum[j][3], sum[j][2] / sum[j][3]] : c);
+    pop = sum.map((s) => s[3]);
+  }
+  // merge colours closer than ~28 (shading, JPEG noise, anti-aliasing), weighted by how many pixels each has
+  const MERGE2 = 28 * 28;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let a = 0; a < pal.length; a++) for (let b = a + 1; b < pal.length; b++) {
+      const dd = (pal[a][0] - pal[b][0]) ** 2 + (pal[a][1] - pal[b][1]) ** 2 + (pal[a][2] - pal[b][2]) ** 2;
+      if (dd <= MERGE2) {
+        const n = pop[a] + pop[b] || 1;
+        pal[a] = pal[a].map((v, c) => (v * pop[a] + pal[b][c] * pop[b]) / n); pop[a] = n;
+        pal.splice(b, 1); pop.splice(b, 1); merged = true; break outer;
+      }
+    }
+  }
+  const order = pal.map((c, j) => j).sort((a, b) => pop[b] - pop[a]).slice(0, k);
+  pal = order.map((j) => pal[j]);
+  return pal.map((c) => c.map(Math.round));
+}
+// Nearest palette index for every opaque, non-background pixel (255 = background/transparent)
+function flatIndexMap(d, w, h, pal, bg) {
+  const idx = new Uint8Array(w * h), tol2 = bg ? bg.tol * bg.tol : 0;
+  for (let p = 0; p < w * h; p++) {
+    const i = p * 4;
+    if (d[i + 3] < 128) { idx[p] = 255; continue; }
+    if (bg) {
+      const isBg = bg.mask ? bg.mask[p] : ((d[i] - bg.rgb[0]) ** 2 + (d[i + 1] - bg.rgb[1]) ** 2 + (d[i + 2] - bg.rgb[2]) ** 2 <= tol2);
+      if (isBg) { idx[p] = 255; continue; }
+    }
+    let best = 0, bd = Infinity;
+    for (let j = 0; j < pal.length; j++) { const dd = (d[i] - pal[j][0]) ** 2 + (d[i + 1] - pal[j][1]) ** 2 + (d[i + 2] - pal[j][2]) ** 2; if (dd < bd) { bd = dd; best = j; } }
+    idx[p] = best;
+  }
+  return idx;
+}
+// Each cell: the palette colour that covers the most of it; off if under half of the cell is picture
+function flatCrop(idxMap, w, h, view, cols, rows, pal) {
+  const out = new Float32Array(cols * rows * 3);
+  const cw = view.vw / cols, ch = view.vh / rows, counts = new Uint32Array(pal.length);
+  for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
+    const x0 = Math.max(0, Math.round(view.x0 + cx * cw)), x1 = Math.min(w, Math.round(view.x0 + (cx + 1) * cw));
+    const y0 = Math.max(0, Math.round(view.y0 + cy * ch)), y1 = Math.min(h, Math.round(view.y0 + (cy + 1) * ch));
+    counts.fill(0); let fg = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const j = idxMap[y * w + x]; if (j !== 255) { counts[j]++; fg++; } }
+    const o = (cy * cols + cx) * 3;
+    if (fg < cw * ch * 0.5) { out[o] = out[o + 1] = out[o + 2] = 0; continue; }
+    let best = 0; for (let j = 1; j < pal.length; j++) if (counts[j] > counts[best]) best = j;
+    out[o] = pal[best][0]; out[o + 1] = pal[best][1]; out[o + 2] = pal[best][2];
+  }
+  return out;
+}
+// Does the picture look like flat art? Yes when its 8 most common 4-bit colour bins cover 90% of the opaque pixels.
+function looksFlat(d, w, h) {
+  const step = Math.max(1, Math.floor(Math.sqrt((w * h) / 40000))), bins = new Map(); let n = 0;
+  for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) {
+    const i = (y * w + x) * 4; if (d[i + 3] < 128) continue;
+    const key = (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4);
+    bins.set(key, (bins.get(key) || 0) + 1); n++;
+  }
+  const top = [...bins.values()].sort((a, b) => b - a).slice(0, 8).reduce((a, b) => a + b, 0);
+  return n > 0 && top / n >= 0.9;
+}
+
+const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', exact: false, flat: false, flatN: 8, queued: false };
 const cropCv = $('cropCanvas'), cropCtx = cropCv.getContext('2d');
 const viewH = () => photo.vw * state.rows / state.cols;
 
@@ -282,8 +388,17 @@ function renderPhoto() {
   cropCtx.stroke();
 
   const bg = photo.bg.on ? { rgb: photo.bg.rgb, tol: photo.bg.tol, mask: bgMask() } : null;
-  const rgb = (photo.exact ? pointCrop : boxCrop)(photo.data, photo.w, photo.h, v, cols, rows, bg);
-  photo.result = ditherFrame(rgb, cols, rows, photo.exact ? 'none' : photo.dither, LUT, sim.brightness, sim.gamma);
+  let rgb;
+  if (photo.flat) {
+    const key = [photo.flatN, bg ? bg.rgb.join(',') + '|' + bg.tol : 'nobg'].join(';');
+    if (photo.flatKey !== key) {              // palette and per-pixel index map are cached per setting
+      photo.pal = flatPalette(photo.data, photo.w, photo.h, photo.flatN, bg);
+      photo.idxMap = flatIndexMap(photo.data, photo.w, photo.h, photo.pal, bg);
+      photo.flatKey = key;
+    }
+    rgb = flatCrop(photo.idxMap, photo.w, photo.h, v, cols, rows, photo.pal);
+  } else rgb = (photo.exact ? pointCrop : boxCrop)(photo.data, photo.w, photo.h, v, cols, rows, bg);
+  photo.result = ditherFrame(rgb, cols, rows, (photo.exact || photo.flat) ? 'none' : photo.dither, LUT, sim.brightness, sim.gamma);
   const pv = $('photoPreview'); pv.width = cols; pv.height = rows;
   const px = pv.getContext('2d'), img = px.createImageData(cols, rows), asLed = $('photoLed').checked;
   photo.result.forEach((hex, p) => { img.data.set([...hexToRgb(asLed ? led(hex).disp : hex), 255], p * 4); });
@@ -347,7 +462,14 @@ $('bgPick').addEventListener('click', () => setPick(!photo.picking));
 $('bgCorners').addEventListener('click', () => { photo.bg.rgb = cornerColor(); photo.bg.on = true; photo.bgSet = true; $('bgOn').checked = true; schedulePhoto(); });
 $('bgOn').addEventListener('change', (e) => { photo.bg.on = e.target.checked; if (photo.bg.on && !photo.bgSet) { photo.bg.rgb = cornerColor(); photo.bgSet = true; } schedulePhoto(); });
 $('bgTol').addEventListener('input', (e) => { photo.bg.tol = Number(e.target.value); schedulePhoto(); });
-$('exactOn').addEventListener('change', (e) => { photo.exact = e.target.checked; $('ditherMode').disabled = photo.exact; schedulePhoto(); });
+function syncImportControls() {
+  $('exactOn').disabled = photo.flat;
+  $('ditherMode').disabled = photo.exact || photo.flat;
+  $('flatNRow').hidden = !photo.flat;
+}
+$('exactOn').addEventListener('change', (e) => { photo.exact = e.target.checked; syncImportControls(); schedulePhoto(); });
+$('flatOn').addEventListener('change', (e) => { photo.flat = e.target.checked; syncImportControls(); schedulePhoto(); });
+$('flatN').addEventListener('change', (e) => { photo.flatN = Number(e.target.value) || 8; schedulePhoto(); });
 $('ditherMode').addEventListener('change', (e) => { photo.dither = e.target.value; schedulePhoto(); });
 $('photoLed').addEventListener('change', schedulePhoto);
 $('photoZoom').addEventListener('input', setZoomFromSlider);
@@ -361,7 +483,7 @@ function applyPhoto(asNew) {
   if (asNew) { state.target = 'frame'; state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
   else setEditLayer(photo.result);
   afterFrameChange();
-  const how = photo.exact ? 'exact pixels' : photo.dither === 'none' ? 'no dithering' : (photo.dither === 'fs' ? 'Floyd–Steinberg' : 'ordered') + ' dithering';
+  const how = photo.flat ? `flat art, ${photo.pal.length} colors` : photo.exact ? 'exact pixels' : photo.dither === 'none' ? 'no dithering' : (photo.dither === 'fs' ? 'Floyd–Steinberg' : 'ordered') + ' dithering';
   setStatus((asNew ? `Image added as frame ${state.currentFrame + 1}` : `Image applied to frame ${state.currentFrame + 1}`) + ` (${how}${photo.bg.on ? ', background off' : ''}). Undo reverts.`);
   $('photoDlg').close();
 }
@@ -373,7 +495,9 @@ async function openImport(file) {
     Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, result: null, mask: null, maskKey: null });
     const small = d.w <= 2 * state.cols && d.h <= 2 * state.rows; // same rule the Pi uses for pixel art vs photo
     photo.exact = small; $('exactOn').checked = small;
-    photo.dither = 'none'; $('ditherMode').value = 'none'; $('ditherMode').disabled = small;
+    photo.flat = !small && looksFlat(d.data, d.w, d.h); $('flatOn').checked = photo.flat; photo.flatKey = null;
+    photo.dither = 'none'; $('ditherMode').value = 'none';
+    syncImportControls();
     // background off by default when the corners are a solid, non-black color
     const px = [[0, 0], [d.w - 1, 0], [0, d.h - 1], [d.w - 1, d.h - 1]].map(([x, y]) => d.data[(y * d.w + x) * 4 + 3]);
     const cc = cornerColor(), solid = px.every((a) => a >= 250) && (cc[0] + cc[1] + cc[2]) > 0;
