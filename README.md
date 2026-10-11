@@ -19,7 +19,7 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 | File | Job |
 |---|---|
-| `js/core.js` | helpers, saved settings (`localStorage`), the sample sprite |
+| `js/core.js` | helpers, saved settings (`localStorage`), the blank starting frame |
 | `js/led.js` | the LED model (mirrors `grid_common.py`: gamma, brightness, current estimate) and the shared layer |
 | `js/editor.js` | undo/redo, rendering, frames, drawing, the Design/Simulate views |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
@@ -37,6 +37,7 @@ New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing too
 
 - **Paint, Fill, Erase, Pick.** Erase sets a pixel to pure black, which is "off" on the panel. Pick is an eyedropper: hover a pixel to see its color, click to make it the paint color, and the tool returns to Paint. Alt+click does the same without leaving the current tool.
 - **Color wheel.** Hue goes around the wheel, saturation outward, and the *Brightness* slider sets the value. The hex field accepts a typed color (`#1a73e8`).
+- **Clear frame** blanks the current frame. **Start over** throws away every frame and the still part and leaves one blank frame; so does *Delete frame* on the last remaining frame. Undo brings them back. A fresh browser starts with one blank frame; your work is kept per browser, so reopening the page shows what you left.
 - **Palette** holds the fixed colors plus the last eight you used. **In this picture** lists the colors already in your frames, most used first, so touch-ups use the exact same values.
 
 ## Import image
@@ -45,6 +46,7 @@ New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing too
 
 - **Crop and zoom:** drag the photo to move it, pinch or scroll to zoom. *Fit whole photo* shows everything (letterboxed); *Fill grid* crops to the grid's shape. The faint lines are one LED each, and the small picture is the result.
 - **Exact pixels:** for small pixel art, tick *Exact pixels (pixel art, no averaging)*. Each LED takes the color at the middle of its cell, with no averaging or dithering. It is on by default for images no larger than twice the grid.
+- **Flat art:** for illustrations, logos and clip art. It finds the picture's main colors (4 to 16; 8 by default) and gives each LED whichever one covers most of its cell, so outlines, anti-aliasing and JPEG noise never win a cell and the result is already in a small palette. It switches itself on when the picture is mostly a few flat colors. Small details (a nose, whiskers) that never fill half a cell drop out; add them back with Paint and *Pick*.
 - **Background off:** tap *Pick on photo* (or *Use corners*) to choose the background color, then set the tolerance. Only the background connected to the picture's edge is removed, so white inside the subject (a face, an eye) stays. Background cells go black (LED off). Cells at the edge of the subject keep the subject's own color instead of a muddy blend. If the background leaks inside through a gap in an outline, lower the tolerance.
 - **Dithering:** *Floyd–Steinberg* (smooth) or *Ordered* (patterned). It works in LED space, using the brightness and gamma from *Panel settings*, so dark gradients that would collapse into a few levels keep their tones. Black stays black. It is baked in at the current brightness and gamma; change them and re-run.
 - *Apply to this frame* replaces the frame; *Add as new frame* appends one, so a few photos make an animation. Undo reverts.
