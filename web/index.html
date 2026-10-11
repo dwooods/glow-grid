@@ -37,31 +37,6 @@
         <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         <span class="frame-readout" id="frameReadout">Frame 1 / 1</span>
       </div>
-
-      <section class="card" aria-labelledby="diagTitle">
-        <h2 id="diagTitle">Panel check</h2>
-        <div class="diag">
-          <div>
-            <div class="metric-label">Est. draw, this frame</div>
-            <div class="metric" id="ampNow">0.00 A</div>
-          </div>
-          <div>
-            <div class="metric-label">Peak, all frames</div>
-            <div class="metric" id="ampPeak">0.00 A <small>of 6 A</small></div>
-          </div>
-          <div class="full"><div class="meter" id="ampMeter"><span></span></div></div>
-          <div>
-            <span class="chip faint"><i></i> Barely lit</span>
-            <div class="metric" id="faintCount">0</div>
-          </div>
-          <div>
-            <span class="chip shift"><i></i> Color shifts</span>
-            <div class="metric" id="shiftCount">0</div>
-          </div>
-        </div>
-        <p class="hint" id="diagHint">Barely lit means the pixel isn't black but ends up at 1–3 out of 255 on the LED, so it reads as off or a faint smudge. Use pure black for "off", or brighten it.</p>
-        <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
-      </section>
     </section>
 
     <aside class="panel-col">
@@ -93,7 +68,8 @@
       </section>
 
       <section class="card">
-        <h2>Panel settings</h2>
+        <h2>Panel settings and check</h2>
+        <h3 class="sub-h">Settings</h3>
         <div class="form-row">
           <label>Brightness <input id="brightInput" type="number" min="0.05" max="1" step="0.05" value="0.3"></label>
           <label>Gamma <input id="gammaInput" type="number" min="1" max="3" step="0.1" value="2.2"></label>
@@ -115,6 +91,29 @@
           <li>The Panel check uses the same rounding and "keep non-black pixels lit" rule as the Pi, so its warnings match what the panel will do. The grid itself shows your colors as drawn, not as the LEDs will glow.</li>
         </ul>
         </details></div>
+        <hr class="sub-rule">
+        <h3 class="sub-h" id="diagTitle">Panel check</h3>
+        <div class="diag">
+          <div>
+            <div class="metric-label">Est. draw, this frame</div>
+            <div class="metric" id="ampNow">0.00 A</div>
+          </div>
+          <div>
+            <div class="metric-label">Peak, all frames</div>
+            <div class="metric" id="ampPeak">0.00 A <small>of 6 A</small></div>
+          </div>
+          <div class="full"><div class="meter" id="ampMeter"><span></span></div></div>
+          <div>
+            <span class="chip faint"><i></i> Barely lit</span>
+            <div class="metric" id="faintCount">0</div>
+          </div>
+          <div>
+            <span class="chip shift"><i></i> Color shifts</span>
+            <div class="metric" id="shiftCount">0</div>
+          </div>
+        </div>
+        <p class="hint" id="diagHint">Barely lit means the pixel isn't black but ends up at 1–3 out of 255 on the LED, so it reads as off or a faint smudge. Use pure black for "off", or brighten it.</p>
+        <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
       </section>
 
       <section class="card">
