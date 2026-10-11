@@ -33,6 +33,12 @@ New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing too
 - **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI by `web/make_icons.py`). It is a project site, so it sits beside the blog at `dwooods.github.io` without touching it. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
 - **Install as an app**: open the hosted page in Chrome, Edge or iPhone Safari (*Share → Add to Home Screen*) and it runs in its own window and works offline. After an update, close and reopen it to pick up the new version.
 
+## Tools and color
+
+- **Paint, Fill, Erase, Pick.** Erase sets a pixel to pure black, which is "off" on the panel. Pick is an eyedropper: hover a pixel to see its color, click to make it the paint color, and the tool returns to Paint. Alt+click does the same without leaving the current tool.
+- **Color wheel.** Hue goes around the wheel, saturation outward, and the *Brightness* slider sets the value. The hex field accepts a typed color (`#1a73e8`).
+- **Palette** holds the fixed colors plus the last eight you used. **In this picture** lists the colors already in your frames, most used first, so touch-ups use the exact same values.
+
 ## Import image
 
 *Import image…* turns any picture into a 16×16 design. A sprite sheet or one of the simulator's own saved frames loads directly; any other picture opens the import dialog. On a phone the file picker offers the camera too.
