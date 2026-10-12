@@ -32,7 +32,7 @@
     put($('historyRow'), $('dockHistory'));
     put($('fpsInput').closest('.field-inline'), $('fmTop'));
     put($('frameReadout'), $('fmTop'));
-    ['addBlankFrameBtn', 'deleteFrameBtn', 'startOverBtn', 'restoreBtn'].forEach((id) => put($(id), $('fmRow')));
+    ['addBlankFrameBtn', 'clearBtn', 'deleteFrameBtn', 'startOverBtn', 'restoreBtn'].forEach((id) => put($(id), $('fmRow')));
     put($('moveBlock'), $('frameMore'));
     measure();
   }

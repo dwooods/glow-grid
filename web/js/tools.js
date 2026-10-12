@@ -8,9 +8,7 @@ function updateLayerUI() {
   $('targetFrame').classList.toggle('active', !sh); $('targetFrame').setAttribute('aria-pressed', String(!sh));
   $('targetShared').classList.toggle('active', sh); $('targetShared').setAttribute('aria-pressed', String(sh));
   deviceEl.classList.toggle('edit-shared', sh);
-  $('layerHint').innerHTML = has
-    ? 'Everything that was identical in every frame is now the <strong>still part</strong>. With <em>Moving part</em> selected, paint only what changes. Pick <em>Still part</em> to edit the body for all frames at once. On a frame, black means see-through. Untick to join it back. Saved files always combine both, so the Pi needs nothing new.'
-    : 'The arrows (or Shift+arrow keys) move this frame one pixel. To animate just one part (eyes, a hand, legs) while the rest stays put: draw the whole picture, press <em>+ Duplicate</em> once per extra frame, then tick <em>Animate one part only</em>. It is optional: you can also just paint each frame.';
+  $('layerHint').textContent = has ? 'Paint only what changes. Black on a frame is see-through. Details are in Help.' : '';
 }
 function shiftArr(arr, dx, dy, wrap) {
   const { cols, rows } = state, out = new Array(arr.length).fill('#000000');
@@ -96,4 +94,3 @@ $('fpsInput').addEventListener('change', (e) => {
   state.fps = clamp(Math.round(Number(e.target.value)) || 6, 1, 30); e.target.value = state.fps;
   if (playing) startPlay(); updateCmd(); saveState();
 });
-
