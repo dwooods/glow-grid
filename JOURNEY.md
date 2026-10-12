@@ -146,6 +146,12 @@ Splitting the grid and the cover gives up the reference's one-print trick, but e
 
 **The stand is a separate part, on purpose.** Rear feet built into the frame back were the obvious answer, and they don't work here. Printed back-down they overhang and need supports, and feet short enough to stay inside the frame's depth would put the centre of gravity behind the feet at a 12° tilt, so it tips back. A small cradle that the frame drops into balances with the assembly's centre of gravity inside the slab, at the cost of a fourth print.
 
+**A bug that shipped.** The first generated frame had no ledge and no C3 holder: the script cut the inside of the frame after adding them, which erased them, and I checked that the shapes were watertight rather than that the features existed. The preview showed only holes and walls, and I missed it. The second version cuts the pocket first and adds the lip, holder and spring fingers after it, and I now check each feature with a point-in-solid test.
+
+**Lip and springs.** A lip on all four walls holds the stack from falling back, with one notch for the panel's wire tail. Because the cover alone would leave the stack loose, four printed spring fingers on the back plate press the panel forward against it. The lip sits 2 mm behind the panel's resting position, so it only acts as a backstop.
+
+**The C3 changed the holder again.** I first sized it for a 22.5 × 18 mm board with a flat underside. The listing photos showed a 24 × 18 mm board with welded headers along both edges and pin tails hanging underneath, so the standoffs would have sat on the pins. The holder now has two channels for the headers and slots for the tails, wires are soldered on top, and two push-button holes and a marked antenna spot went into the back plate for later.
+
 **What's still unproven.** The whole set is generated and checked in software only: all four parts are watertight, the frame and cradle don't overlap, and the assembly's centre of gravity sits over the cradle. Nothing is printed. The C3 holder, the jack hole and the cover's friction fit are the likely places for the first print to be wrong, which is why every dimension is a variable at the top of `enclosure/build.py` rather than baked into an STL.
 
 ## What's next
