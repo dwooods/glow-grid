@@ -74,27 +74,43 @@ def finger(sx,sy,out):
     foot=sbox(min(yb,yb+out*5),BACK-0.1,max(yb,yb+out*5),BACK+4)
     poly=arm.union(cap).union(foot)
     return extrude_x(poly,sx-FING_W/2,sx+FING_W/2)
-# C3 SuperMini holder. Board 24 x 18 x 1.2 mm with 8-pin headers along both long edges (rows 15.24 apart) whose
-# plastic (HDR tall) and tails (TAIL long) hang BELOW the board. The headers drop into two channels, the tails into
-# slots below them, so the board lies flat on a platform. Wires are soldered to the pin pads on top. USB-C end faces the left wall.
-C3L,C3W=24.0,18.0; cy=-30.0; bx0=-HI+1.0; bx1=bx0+C3L
-ROW=15.24; HDR=2.5; TAIL=7.0; PCB=1.2
-ZCH=BACK+0.8+TAIL+0.2                 # channel floor (header plastic rests here)
-ZTOP=ZCH+HDR                          # platform the board's underside rests on
-ZB=ZTOP+PCB                           # top face of the board
-blk=B(bx0,bx1,cy-C3W/2,cy+C3W/2,BACK-0.1,ZTOP)
-for sgn in (1,-1):
-    yy=cy+sgn*ROW/2
-    blk=difference([blk,B(bx0-1,bx1+1,yy-1.5,yy+1.5,ZCH,ZTOP+1),B(bx0-1,bx1+1,yy-0.9,yy+0.9,BACK+0.8,ZCH+0.1)],engine='manifold')
-hold=[blk]
-for s_ in (1,-1):                      # side walls that keep the board from sliding sideways
-    y0=cy+s_*(C3W/2+0.25); y1=y0+s_*1.2
-    hold.append(B(bx0-0.3,bx1+0.6,min(y0,y1),max(y0,y1),BACK-0.1,ZB+0.5))
-hold.append(B(bx1+0.35,bx1+1.55,cy-C3W/2-0.25,cy+C3W/2+0.25,BACK-0.1,ZB+0.5))     # end stop
-hold.append(B(bx1-0.8,bx1+1.55,cy-3.0,cy+3.0,ZB+0.5-0.01,ZB+1.5))                 # snap hook over the far end of the board (press the board down to seat it)
+# C3 SuperMini holder: a SEPARATE small print that carries the board (component side down, header pins up toward the panel).
+# It drops into brackets on the frame's back plate and is glued there; the board is taped or glued to it. The USB-C end faces the
+# left wall so the plug reaches the board through the wall slot. Wires are soldered to the pin tips (no Dupont housings: they would hit the panel).
+# MEASURED block: caliper the real board, edit, rerun. Values are guesses until then.
+H_PCB, H_BOARD_L, H_BOARD_W = 1.2, 24.0, 18.0
+H_COMP_H=3.4; H_FIRST_PIN=2.6; H_PIN_TIP=1.2; H_HDR=2.5; H_PIN_UP=6.0     # tallest part under the board, first pin from end, tips under the board, header plastic, pin above plastic
+H_ROW=15.24
+H_BASE=2.0; H_CLR=0.2; H_RIB=0.10; H_RAIL=1.6; H_STOP=2.0                 # holder base, board clearance, crush-rib squeeze per side, rail and end-stop thickness
+H_UNDER=max(H_COMP_H,H_PIN_TIP)+1.5                                          # air under the board
+H_ZS=H_BASE+H_UNDER; H_ZP=H_ZS+H_PCB                                         # board underside / PCB top, holder coords (z=0 is the holder's bottom)
+H_LEDGE=H_FIRST_PIN-1.1; H_HW=H_BOARD_W/2+H_CLR; H_X1=H_BOARD_L+0.1; H_XEND=H_X1+H_CLR+H_STOP
+def make_holder():
+    p=[B(0,H_XEND,-H_HW-H_RAIL,H_HW+H_RAIL,0,H_BASE),
+       B(H_X1+H_CLR,H_XEND,-H_HW-H_RAIL,H_HW+H_RAIL,0,H_ZP+0.8),          # end stop: takes the USB plug-in push
+       B(H_X1-H_LEDGE,H_X1+H_CLR,-H_HW,H_HW,H_BASE,H_ZS)]                  # far-end seat
+    for sg_ in (1,-1):
+        y0,y1=(H_HW,H_HW+H_RAIL) if sg_==1 else (-H_HW-H_RAIL,-H_HW)
+        p.append(B(0,H_X1+H_CLR,y0,y1,H_BASE,H_ZP+0.8))                     # side rails
+        ya,yb=(H_BOARD_W/2-3.8,H_BOARD_W/2) if sg_==1 else (-H_BOARD_W/2,-H_BOARD_W/2+3.8)
+        p.append(B(0.1,0.1+H_LEDGE,ya,yb,H_BASE,H_ZS))                      # USB-end seat pads
+        for rx in (8.0,18.0):                                               # crush ribs at PCB level
+            inn=H_HW-(H_CLR+H_RIB); ya2,yb2=(inn,H_HW) if sg_==1 else (-H_HW,-inn)
+            p.append(B(rx,rx+2.0,ya2,yb2,H_ZS+0.1,H_ZP+0.5))
+    return clean(union(p,engine='manifold'))
+holder=make_holder(); report('c3_holder',holder); holder.export(OUT+'glow-grid_c3_holder_v1.stl')
+# placement: holder x=0 is 0.3 mm off the left wall's inner face, centred on y=cy; holder z=0 sits on the back plate
+cy=-30.0; HX=-HI+0.3; HZ=BACK
+def to_frame(m): m=m.copy(); m.apply_translation([HX,cy,HZ]); return m
+# brackets on the back plate: two side walls and a far wall around the holder (clearance H_BC), glued; the left wall is the fourth side
+H_BC=0.25; BR_H=5.0; BR_T=1.6
+bx_end=HX+H_XEND+H_BC; byo=H_HW+H_RAIL+H_BC
+hold=[B(-HI,bx_end+BR_T,cy+byo,cy+byo+BR_T,BACK-0.1,BACK+BR_H),
+      B(-HI,bx_end+BR_T,cy-byo-BR_T,cy-byo,BACK-0.1,BACK+BR_H),
+      B(bx_end,bx_end+BR_T,cy-byo-BR_T,cy+byo+BR_T,BACK-0.1,BACK+BR_H)]
 for sx in (-48,48):
     fingers.append(finger(sx,50,+1)); fingers.append(finger(sx,-50,-1))
-frame=union([frame]+pads+hold+fingers,engine='manifold')
+frame=union([frame]+pads+hold+fingers,engine='manifold')   # 'hold' = the C3 holder brackets
 # lip notch for the panel's wire tail
 if NOTCH_SIDE in ('left','right'):
     sg={'left':-1,'right':1}[NOTCH_SIDE]
@@ -105,7 +121,7 @@ else:
 # holes: jack and data lead in the BACK plate; USB-C slot in the left wall at the C3 port
 cuts.append(Cz(45,25,6.15,-1,BACK+1))                              # 12 mm panel-mount DC jack (12.3 bore)
 cuts.append(Cz(20,25,3.5,-1,BACK+1))                               # 7 mm data lead
-cuts.append(B(-HO-1,-HI+1.5,cy-5.2,cy+5.2,ZB-0.3,ZB+3.9))          # USB-C slot 10.4 x 4.2 in the left wall, at the connector's height
+cuts.append(B(-HO-1,-HI+0.01,cy-6.0,cy+6.0,HZ+H_BASE,HZ+H_ZP-0.2))     # USB-C plug slot 12 wide, from the holder's top face up to just under the PCB top
 cuts.append(B(-HI-0.01,-HI+4.0,cy-8.0,cy+8.0,LIPZ-LIP_W-1,LIPZ+0.5))  # second, short lip notch so the USB-C plug clears the lip
 for bxx in (-20,-45):
     cuts.append(Cz(bxx,25,6.15,-1,BACK+1))                         # two 12 mm panel-mount push buttons (next image, on/off)
@@ -163,13 +179,15 @@ for m in (frame,grid,cover):
 tot=sum(p.volume for p in parts); cg=sum(p.center_mass*p.volume for p in parts)/tot
 print('assembly c.g. (x,u,v):',np.round(cg,1),' slab u range',round(ub[0]-30,1),'to',round(ub[2]+12,1))
 
-# ---------------- fit check: a 24 x 18 board with its headers, USB-C plug and wire clearance placed in the holder ----------------
-brd=[B(bx0,bx1,cy-C3W/2,cy+C3W/2,ZTOP,ZB),                                     # PCB
-     B(bx0-1.3,bx0+9.0,cy-4.5,cy+4.5,ZB,ZB+3.2)]                              # USB-C shell (sticks out 1.3 mm past the edge)
-for sgn in (1,-1):
-    yy=cy+sgn*ROW/2
-    brd.append(B(bx0+1.9,bx0+1.9+20.32,yy-1.27,yy+1.27,ZCH,ZTOP))             # header plastic
-    brd.append(B(bx0+1.9,bx0+1.9+20.32,yy-0.5,yy+0.5,ZCH-TAIL,ZCH))           # pin tails (shown as one bar)
-brd=union(brd,engine='manifold')
-print('C3 board vs frame overlap (want ~0):',round(intersection([brd,frame],engine='manifold').volume,2),'mm3')
-print('board top z=%.1f, lip underside z=%.1f, panel back z=%.1f; spring-finger tip top z=%.1f'%(ZB,LIPZ-LIP_W,ZL,FING_TIP))
+# ---------------- fit check: dummy board seated in the holder, holder seated in the frame ----------------
+x0=0.1; hb=[B(x0,x0+H_BOARD_L,-H_BOARD_W/2,H_BOARD_W/2,H_ZS,H_ZP), B(x0-0.8,x0+6.0,-4.5,4.5,H_ZS-3.2,H_ZS), B(x0+8,x0+20,-5,5,H_ZS-2.5,H_ZS)]
+for sg_ in (1,-1):
+    yy=sg_*H_ROW/2
+    hb.append(B(x0+H_FIRST_PIN-1.27,x0+H_FIRST_PIN-1.27+8*2.54,yy-1.27,yy+1.27,H_ZP,H_ZP+H_HDR))
+    for i_ in range(8):
+        px=x0+H_FIRST_PIN+i_*2.54; hb.append(B(px-.3,px+.3,yy-.3,yy+.3,H_ZS-H_PIN_TIP,H_ZP+H_HDR+H_PIN_UP))
+board=to_frame(union(hb,engine='manifold')); hf=to_frame(holder)
+print('holder vs frame overlap (want 0): %.2f mm3'%intersection([hf,frame],engine='manifold').volume)
+print('board vs frame overlap (want 0): %.2f mm3'%intersection([board,frame],engine='manifold').volume)
+print('board vs holder overlap (crush ribs only, ~1): %.2f mm3'%intersection([board,hf],engine='manifold').volume)
+print('board underside z=%.1f  PCB top z=%.1f  pin tips z=%.1f  lip underside z=%.1f  panel back z=%.1f  USB slot z=%.1f..%.1f'%(HZ+H_ZS,HZ+H_ZP,HZ+H_ZP+H_HDR+H_PIN_UP,LIPZ-LIP_W,ZL,HZ+H_BASE,HZ+H_ZP-0.2))
