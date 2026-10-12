@@ -1,4 +1,4 @@
-// Phone layout (portrait; a desktop window only gets it when it is 900 px tall or less, a touch device always does): a bottom dock (tools, color, palette, undo/redo), a one-line frame strip under the grid,
+// Phone layout (portrait; a desktop window only gets it when it is 900 px tall or less, a touch device always does): a bottom dock (tools, color, palette), a frame strip under the grid with Play, Undo, Redo, + and More,
 // and the rest of the controls below the strip in normal flow (the page scrolls; More jumps to them). It only moves existing nodes, so ids, listeners and the desktop markup are untouched;
 // leaving the layout (rotate, resize) puts every node back. Classic script: shares the global scope ($ comes from core.js).
 (function () {
@@ -37,7 +37,8 @@
     dock.hidden = false; moreBtn.hidden = false; $('frameMore').hidden = false;
     put($('toolRow'), $('dockTools'));
     put($('paletteGroup'), $('dockPalette'));
-    put($('historyRow'), $('dockHistory'));
+    put($('imgSwatchGroup'), $('dockPalette'));
+    put($('historyRow'), card);
     put($('fpsInput').closest('.field-inline'), $('fmTop'));
     put($('frameReadout'), $('fmTop'));
     ['addBlankFrameBtn', 'clearBtn', 'deleteFrameBtn', 'startOverBtn', 'restoreBtn'].forEach((id) => put($(id), $('fmRow')));

@@ -214,25 +214,40 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .dock-palette { flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .dock-palette::-webkit-scrollbar { display: none; }
 .dock-palette .swatch-label { display: none; }
+.dock-palette { display: flex; align-items: center; gap: var(--s-2); }
+.dock-palette .swatch-group { flex: none; }
+/* the colors already used in the picture come first, set off by a hairline; hidden when the canvas is empty */
+.dock-palette #imgSwatchGroup { order: -1; padding-right: var(--s-2); border-right: 1px solid var(--border-strong); }
+.dock-palette #imgSwatchGroup[hidden] { display: none; }
 .dock-palette .swatches { flex-wrap: nowrap; gap: 6px; padding: 4px 3px; }
 .dock-palette .swatch { flex: none; width: 36px; height: 36px; }
 .dock-history { display: flex; gap: 6px; flex: none; }
-.dock #undoBtn, .dock #redoBtn { font-size: 0; width: var(--tap); padding: 0; }
-.dock #undoBtn::before { content: "\21B6"; font-size: 1.3rem; }
-.dock #redoBtn::before { content: "\21B7"; font-size: 1.3rem; }
+.dock-history:empty { display: none; }
+.phone-dock #undoBtn, .phone-dock #redoBtn { font-size: 0; width: var(--tap); padding: 0; }
+.phone-dock #undoBtn::before { content: "\21B6"; font-size: 1.3rem; }
+.phone-dock #redoBtn::before { content: "\21B7"; font-size: 1.3rem; }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) 2px var(--s-2); background: var(--bg); font-family: var(--font-display); font-weight: 600; }
 .phone-dock { --dock-h: 150px; --sheet-top: 440px; }
 .phone-dock .page { padding-block: var(--s-2) calc(var(--dock-h) + var(--s-3)); padding-inline: max(8px, env(safe-area-inset-left), env(safe-area-inset-right)); gap: var(--s-2); }
 .phone-dock .layout { gap: 0; }
 .phone-dock .device-col { gap: var(--s-2); max-width: 100%; }
 .phone-dock .device { width: min(100%, calc(100dvh - var(--dock-h) - 180px)); margin-inline: auto; padding: 8px; }
-.phone-dock #framesCard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: var(--s-2); padding: var(--s-2) 10px; }
+.phone-dock #framesCard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; align-items: start; gap: var(--s-2); padding: var(--s-2) 10px; }
 .phone-dock #framesCard > h2 { display: none; }
+/* Row 1 reads: Play, (frames when they fit), Undo, Redo, +, More */
+.phone-dock #framesCard #playBtn { order: 1; }
+.phone-dock #framesCard .frame-strip { order: 2; }
+.phone-dock #framesCard #undoBtn { order: 3; }
+.phone-dock #framesCard #redoBtn { order: 4; }
+.phone-dock #framesCard #addFrameBtn { order: 5; }
+.phone-dock #framesCard #moreBtn { order: 6; }
 .phone-dock #framesCard.stack #playBtn { grid-column: 1; grid-row: 1; }
-.phone-dock #framesCard.stack #addFrameBtn { grid-column: 3; grid-row: 1; }
-.phone-dock #framesCard.stack #moreBtn { grid-column: 4; grid-row: 1; }
+.phone-dock #framesCard.stack #undoBtn { grid-column: 3; grid-row: 1; }
+.phone-dock #framesCard.stack #redoBtn { grid-column: 4; grid-row: 1; }
+.phone-dock #framesCard.stack #addFrameBtn { grid-column: 5; grid-row: 1; }
+.phone-dock #framesCard.stack #moreBtn { grid-column: 6; grid-row: 1; }
 .phone-dock #framesCard.stack .frame-strip { grid-column: 1 / -1; grid-row: 2; }
-.phone-dock #framesCard .playback, .phone-dock #framesCard > .btn-row { display: contents; }
+.phone-dock #framesCard .playback, .phone-dock #framesCard > .btn-row, .phone-dock #framesCard > .history-row { display: contents; }
 .phone-dock #framesCard > .sub-rule, .phone-dock #framesCard > .strip-meta, .phone-dock #historyWrap { display: none; }
 .phone-dock .frame-strip { box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
 .phone-dock #framesCard.stack .frame-strip { flex-wrap: wrap; align-content: flex-start; overflow: visible; }
