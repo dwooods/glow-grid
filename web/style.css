@@ -340,3 +340,11 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .export-body { grid-template-columns: minmax(0, 1fr); }
 .export-body label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--text-dim); }
 @media (max-width: 600px) { .photo-dlg.export-dlg { height: fit-content; width: 100vw; max-height: 100dvh; margin: auto 0 0; border-radius: var(--r-md) var(--r-md) 0 0; } .export-dlg .photo-wrap { height: auto; } }
+
+/* blank-state hint: the restore action reads as a link; the line disappears when nothing in it is visible */
+.strip-meta .btn { display: inline; min-height: 0; padding: 0; font-size: inherit; background: none; box-shadow: none; color: var(--accent); text-decoration: underline; border-radius: 4px; }
+.strip-meta .btn:hover, .strip-meta .btn:active { background: none; box-shadow: none; transform: none; }
+.strip-meta:not(:has(> :not([hidden]))) { display: none; }
+/* Move and layers is its own card on desktop; on phones the block moves into the sheet and the empty card is hidden */
+#moveCard .move-block > .sub-rule { display: none; }
+.phone-dock #moveCard { display: none; }

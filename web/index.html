@@ -45,36 +45,17 @@
           <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         </div>
         <div class="frame-strip" id="frameStrip"></div>
-        <p class="strip-meta"><span class="frame-readout" id="frameReadout">Frame 1 / 1</span><span id="stripHint" hidden>Blank. Draw on the grid, or use File ▸ Import image.</span></p>
+        <p class="strip-meta"><span class="frame-readout" id="frameReadout">Frame 1 / 1</span><span id="stripHint" hidden>Blank. Draw on the grid, or use File ▸ Import image.</span><button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button></p>
         <div class="btn-row">
           <button id="addFrameBtn" class="btn btn-quiet" type="button" aria-label="Duplicate this frame">+ Duplicate</button>
           <button id="addBlankFrameBtn" class="btn btn-quiet" type="button">+ Blank</button>
         </div>
         <button id="moreBtn" class="btn btn-quiet" type="button" hidden aria-expanded="false" aria-controls="sheet">More</button>
-        <div class="move-block" id="moveBlock">
-          <hr class="sub-rule">
-          <h3 class="sub-h" id="moveTitle">Move and layers</h3>
-          <div class="nudge" role="group" aria-label="Move the picture one pixel">
-            <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
-            <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
-            <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
-            <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
-          </div>
-          <div class="move-ctl">
-            <label class="check" title="Draw the whole picture, duplicate it once per extra frame, then tick this: whatever is identical in every frame becomes the still part."><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
-            <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
-              <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
-              <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
-            </div>
-            <p class="hint" id="layerHint"></p>
-          </div>
-        </div>
         <hr class="sub-rule">
         <div class="btn-row" id="dangerRow" role="group" aria-label="Clear and reset">
           <button id="clearBtn" class="btn btn-quiet danger" type="button" title="Blank this frame. Undo brings it back.">Clear frame</button>
           <button id="deleteFrameBtn" class="btn btn-quiet danger" type="button" title="Remove this frame. Undo brings it back.">Delete frame</button>
           <button id="startOverBtn" class="btn btn-quiet danger" type="button" title="One blank frame, no still part. Undo brings it back.">Start over</button>
-          <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
         </div>
       </section>
     </section>
@@ -98,7 +79,7 @@
           <canvas id="wheel" width="160" height="160" aria-label="Color wheel: hue around, saturation outward"></canvas>
           <div class="picker-side">
             <div class="cur-swatch" id="curSwatch" title="Current paint color"></div>
-            <label class="range-row">Brightness <input id="valInput" type="range" min="0" max="100" value="100"></label>
+            <label class="range-row">Shade <input id="valInput" type="range" min="0" max="100" value="100"></label>
             <label class="hex-row">Hex <input id="hexInput" type="text" value="#e63946" maxlength="7" spellcheck="false" autocomplete="off"></label>
             <div class="hover-chip" id="hoverChip" hidden><i></i><span>#000000</span></div>
           </div>
@@ -113,10 +94,31 @@
         </div>
       </section>
 
+      <section class="card" id="moveCard">
+        <div class="move-block" id="moveBlock">
+          <hr class="sub-rule">
+          <h3 class="sub-h" id="moveTitle">Move and layers</h3>
+          <div class="nudge" role="group" aria-label="Move the picture one pixel">
+            <button id="nudgeUp" class="btn btn-quiet n-up" type="button" aria-label="Move up one pixel" title="Move up (Shift+Up arrow)">↑</button>
+            <button id="nudgeLeft" class="btn btn-quiet n-left" type="button" aria-label="Move left one pixel" title="Move left (Shift+Left arrow)">←</button>
+            <button id="nudgeRight" class="btn btn-quiet n-right" type="button" aria-label="Move right one pixel" title="Move right (Shift+Right arrow)">→</button>
+            <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
+          </div>
+          <div class="move-ctl">
+            <label class="check" title="Draw the whole picture, duplicate it once per extra frame, then tick this: whatever is identical in every frame becomes the still part."><input id="stillOn" type="checkbox"> Animate one part only (the rest stays still)</label>
+            <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to" hidden>
+              <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true">Moving part (this frame)</button>
+              <button class="tool-btn" id="targetShared" type="button" aria-pressed="false">Still part (all frames)</button>
+            </div>
+            <p class="hint" id="layerHint"></p>
+          </div>
+        </div>
+      </section>
+
       <section class="card">
         <h2>Panel settings</h2>
         <div class="form-row">
-          <label>Brightness <input id="brightInput" type="number" min="0.05" max="1" step="0.05" value="0.3"></label>
+          <label>LED brightness <input id="brightInput" type="number" min="0.05" max="1" step="0.05" value="0.3"></label>
           <label>Gamma <input id="gammaInput" type="number" min="1" max="3" step="0.1" value="2.2"></label>
           <label>PSU amps <input id="psuInput" type="number" min="1" max="60" step="1" value="6"></label>
         </div>
@@ -128,7 +130,7 @@
         <div class="guide"><details>
           <summary class="hint">What these settings mean</summary>
         <ul style="margin-top:8px" class="hint-list">
-          <li><strong>Brightness:</strong> how bright the LEDs run, from 0.05 to 1. The Pi caps it at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white), so anything higher plays at 0.4.</li>
+          <li><strong>LED brightness:</strong> how bright the LEDs run, from 0.05 to 1. The Pi caps it at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white), so anything higher plays at 0.4.</li>
           <li><strong>Gamma:</strong> corrects for how eyes see light. LEDs get brighter in even steps, but we notice dark shades more than bright ones, so without correction mid-tones look washed out. Gamma darkens the middle of the range to compensate. 2.2 is the usual value. Raise it for more contrast and deeper colors (very dark shades can drop to off), lower it toward 1 for a flatter, brighter look.</li>
           <li><strong>PSU amps:</strong> your power supply's rating. It only sets the limit on the Peak meter under the grid.</li>
           <li><strong>Cols and Rows:</strong> the panel's width and height in LEDs. The Pi program is built for 16×16. Saved files record the grid size, and the Pi menu flags a file made for a different size instead of squashing it silently. Making the grid smaller crops every frame; Undo reverts.</li>

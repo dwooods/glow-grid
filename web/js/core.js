@@ -1,6 +1,6 @@
 // Helpers, saved settings, sample frame. Classic script: shares one global scope with the other files in js/ (load order is in index.html).
 const $ = (id) => document.getElementById(id);
-const basePalette = ['#e63946','#f1c40f','#2a9d8f','#457b9d','#ffffff','#000000','#ff8c1a','#b04cff'];
+const basePalette = ['#e63946','#f1c40f','#2a9d8f','#457b9d','#ffffff','#000000','#ff8c1a','#b04cff','#ff6fa8','#8b5a2b'];
 
 const gridEl = $('grid'), deviceEl = $('device');
 let cellEls = [];

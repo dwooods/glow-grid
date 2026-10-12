@@ -92,7 +92,7 @@ function paintCanvas(ctx, frame, offsetX) {
   }
   ctx.putImageData(img, offsetX, 0);
 }
-const updateReadout = () => { $('frameReadout').textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; };
+const updateReadout = () => { const r = $('frameReadout'); r.textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; r.hidden = state.frames.length < 2; };
 function afterFrameChange() { syncRestoreBtn(); renderFrame(); renderFrameStrip(); updateReadout(); updateLayerUI(); updateCmd(); saveState(); }
 function selectFrame(i) { stopPlay(); state.currentFrame = i; afterFrameChange(); }
 
@@ -266,7 +266,11 @@ function swatchButton(hex) {
 }
 function renderSwatches() {
   const el = $('swatches'); el.innerHTML = '';
-  [...new Set([...basePalette, ...state.recentColors])].slice(0, 16).forEach((hex) => el.appendChild(swatchButton(hex)));
+  // recents that are almost the same as a swatch already shown are skipped (near-duplicates just add noise)
+  const near = (a, b) => { const p = hexToRgb(a), q = hexToRgb(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < 24; };
+  const shown = [];
+  for (const hex of [...basePalette, ...state.recentColors]) if (!shown.some((s) => s === hex || near(s, hex))) shown.push(hex);
+  shown.slice(0, 16).forEach((hex) => el.appendChild(swatchButton(hex)));
 }
 // "In this picture": the colors used across every frame (and the still part), most used first
 let imgSwatchKey = '';
