@@ -36,8 +36,9 @@
   <main class="layout">
     <section class="device-col">
       <div class="device flags-on" id="device">
-        <div class="grid" id="grid" role="img" aria-label="LED grid preview"></div>
+        <div class="grid" id="grid" role="application" aria-roledescription="pixel grid" aria-label="LED grid. Arrow keys move the cursor, Space or Enter applies the current tool." tabindex="0"></div>
       </div>
+      <div id="gridSay" class="sr-only" aria-live="polite"></div>
       <section class="card" id="framesCard">
         <h2>Frames</h2>
         <div class="playback">
@@ -208,6 +209,7 @@
           </ul>
           <h3>Drawing tools</h3>
           <ul>
+            <li><strong>Keyboard drawing:</strong> Tab to the grid, move the cursor with the arrow keys, and press Space or Enter to apply the current tool (Paint, Fill, Erase or Pick) at the cursor. Hold Space while moving to keep painting. Shift+arrows still move the whole picture. Escape leaves the grid.</li>
             <li><strong>Undo and redo:</strong> Ctrl+Z and Ctrl+Y, or the buttons. Clear frame, Delete frame and Start over can all be undone.</li>
             <li><strong>Shade</strong> (the slider beside the color wheel) sets how light or dark the paint color is, from black at 0 to the full color at 100. It only changes the color you paint with. It is not the LED brightness in Panel settings, which sets how bright the panel runs.</li>
             <li><strong>Erase</strong> sets a pixel to black, which is "off" on the panel. <strong>Pick</strong> (or Alt+click while painting) takes the color under the cursor and goes back to Paint.</li>
