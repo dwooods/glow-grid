@@ -1,5 +1,5 @@
 // Phone layout (portrait; a desktop window only gets it when it is 900 px tall or less, a touch device always does): a bottom dock (tools, color, palette, undo/redo), a one-line frame strip under the grid,
-// and a "More" sheet for everything else. It only moves existing nodes, so ids, listeners and the desktop markup are untouched;
+// and the rest of the controls below the strip in normal flow (the page scrolls; More jumps to them). It only moves existing nodes, so ids, listeners and the desktop markup are untouched;
 // leaving the layout (rotate, resize) puts every node back. Classic script: shares the global scope ($ comes from core.js).
 (function () {
   const mq = window.matchMedia('(max-width: 760px) and (min-height: 600px) and ((max-height: 900px) or (pointer: coarse))');
@@ -34,16 +34,12 @@
     }
     measure();
   }
-  function setSheet(open) {
-    sheet.classList.toggle('open', open);
-    moreBtn.setAttribute('aria-expanded', String(open));
-    if (open) measure();
-  }
-  const toggleSheet = () => setSheet(!sheet.classList.contains('open'));
+  // More and the color chip jump to the controls below the strip
+  const jump = () => sheet.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
 
   function enter() {
     root.classList.add('phone-dock');
-    dock.hidden = false; moreBtn.hidden = false; $('sheetHead').hidden = false; $('frameMore').hidden = false;
+    dock.hidden = false; moreBtn.hidden = false; $('frameMore').hidden = false;
     put($('toolRow'), $('dockTools'));
     put($('paletteGroup'), $('dockPalette'));
     put($('historyRow'), $('dockHistory'));
@@ -54,19 +50,16 @@
     layoutStrip();
   }
   function leave() {
-    setSheet(false);
     card.classList.remove('stack');
     restoreAll();
-    dock.hidden = true; moreBtn.hidden = true; $('sheetHead').hidden = true; $('frameMore').hidden = true;
+    dock.hidden = true; moreBtn.hidden = true; $('frameMore').hidden = true;
     root.classList.remove('phone-dock');
     root.style.removeProperty('--dock-h'); root.style.removeProperty('--sheet-top'); root.style.removeProperty('--strip-max');
   }
   const sync = () => { if (mq.matches && !root.classList.contains('phone-dock')) enter(); else if (!mq.matches && root.classList.contains('phone-dock')) leave(); };
 
-  moreBtn.addEventListener('click', toggleSheet);
-  $('dockColor').addEventListener('click', () => setSheet(true));
-  $('sheetClose').addEventListener('click', () => setSheet(false));
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && sheet.classList.contains('open')) setSheet(false); });
+  moreBtn.addEventListener('click', jump);
+  $('dockColor').addEventListener('click', jump);
   // the dock's color chip mirrors the paint color without touching the editor code
   new MutationObserver(() => { $('dockColor').style.background = $('curSwatch').style.background; })
     .observe($('curSwatch'), { attributes: true, attributeFilter: ['style'] });

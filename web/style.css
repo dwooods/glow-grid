@@ -196,7 +196,7 @@ input[type=text] { width: 100%; box-sizing: border-box; }
   .layout { flex-direction: column; }
   .device-col, .panel-col { flex-basis: auto; width: 100%; max-width: 100%; }
 }
-/* Phones (portrait): dock + one-line frame strip + "More" sheet. Applies only while js/phone.js has added .phone-dock;
+/* Phones (portrait): dock + one-line frame strip; the rest of the controls scroll in below (More jumps to them). Applies only while js/phone.js has added .phone-dock;
    without it the page is the plain stacked column above. */
 .history-row { display: contents; }
 .move-block { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s-2) var(--s-4); align-items: start; }
@@ -241,13 +241,9 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .phone-dock .frame-n { font-size: 11px; }
 .phone-dock #addFrameBtn { font-size: 0; width: var(--tap); padding: 0; }
 .phone-dock #addFrameBtn::before { content: "+"; font-size: 1.4rem; }
-.phone-dock .panel-col { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; width: auto; flex: none; box-sizing: border-box;
-  max-height: calc(100dvh - var(--sheet-top)); overflow-y: auto; overscroll-behavior: contain;
-  padding: 0 max(10px, env(safe-area-inset-right)) max(var(--s-3), env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-  background: var(--bg); border-radius: var(--r-lg) var(--r-lg) 0 0; box-shadow: 0 0 0 1px var(--border-strong), 0 -16px 40px rgba(0,0,0,.6);
-  transform: translateY(105%); visibility: hidden; transition: transform .22s var(--ease), visibility 0s linear .22s; }
-.phone-dock .panel-col.open { transform: none; visibility: visible; transition: transform .22s var(--ease); }
-@media (prefers-reduced-motion: reduce) { .phone-dock .panel-col, .phone-dock .panel-col.open { transition: none; } }
+/* The rest of the controls sit below the strip in normal flow; the page scrolls and the dock stays fixed. */
+.phone-dock .panel-col { position: static; width: 100%; max-width: 100%; box-sizing: border-box; margin-top: var(--s-2); scroll-margin-top: var(--s-2); }
+.phone-dock .sheet-head { display: none; }
 
 /* Touch magnifier (js/loupe.js) */
 #loupe {
