@@ -15,12 +15,9 @@
 
   function measure() {
     root.style.setProperty('--dock-h', `${dock.offsetHeight}px`);
-    // the frame strip may wrap into whatever height is left between it and the dock
-    const top = strip.getBoundingClientRect().top + window.scrollY;
-    root.style.setProperty('--strip-max', `${Math.max(60, Math.floor(window.innerHeight - dock.offsetHeight - top - 30))}px`);
     root.style.setProperty('--sheet-top', `${Math.round($('device').getBoundingClientRect().bottom + 8)}px`);
   }
-  // One line of thumbnails fits beside Play, + and More; with more frames the strip drops to its own full-width row and wraps
+  // One line of thumbnails fits beside Play, + and More; with more frames the strip drops to its own full-width row and wraps as tall as it needs (the page scrolls)
   const strip = $('frameStrip'), card = $('framesCard');
   function layoutStrip() {
     if (!root.classList.contains('phone-dock')) return;
@@ -29,8 +26,6 @@
     if (first) {
       const cell = first.offsetWidth + 8, fits = Math.max(1, Math.floor((strip.clientWidth - 8 + 8) / cell));
       card.classList.toggle('stack', strip.children.length > fits);
-      // no room for a second row (short phones): keep one scrolling line instead
-      if (card.classList.contains('stack') && window.innerHeight - dock.offsetHeight - (strip.getBoundingClientRect().top + window.scrollY) - 30 < 50) card.classList.remove('stack');
     }
     measure();
   }
@@ -54,7 +49,7 @@
     restoreAll();
     dock.hidden = true; moreBtn.hidden = true; $('frameMore').hidden = true;
     root.classList.remove('phone-dock');
-    root.style.removeProperty('--dock-h'); root.style.removeProperty('--sheet-top'); root.style.removeProperty('--strip-max');
+    root.style.removeProperty('--dock-h'); root.style.removeProperty('--sheet-top');
   }
   const sync = () => { if (mq.matches && !root.classList.contains('phone-dock')) enter(); else if (!mq.matches && root.classList.contains('phone-dock')) leave(); };
 

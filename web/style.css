@@ -235,7 +235,7 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .phone-dock #framesCard .playback, .phone-dock #framesCard > .btn-row { display: contents; }
 .phone-dock #framesCard > .sub-rule, .phone-dock #framesCard > .strip-meta, .phone-dock #historyWrap { display: none; }
 .phone-dock .frame-strip { box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
-.phone-dock #framesCard.stack .frame-strip { flex-wrap: wrap; align-content: flex-start; overflow-x: hidden; overflow-y: auto; max-height: var(--strip-max, 60px); }
+.phone-dock #framesCard.stack .frame-strip { flex-wrap: wrap; align-content: flex-start; overflow: visible; }
 .phone-dock .frame-strip::-webkit-scrollbar { display: none; }
 .phone-dock .frame-thumb { flex: none; }
 .phone-dock .frame-n { font-size: 11px; }
