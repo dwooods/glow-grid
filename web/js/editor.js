@@ -277,7 +277,13 @@ let imgSwatchKey = '';
 function renderImgSwatches() {
   const counts = new Map();
   for (const f of state.frames) for (const h of flatten(f)) if (!isOff(h)) counts.set(h, (counts.get(h) || 0) + 1);
-  const list = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map((e) => e[0]);
+  // imported or hand-shaded art holds many almost-identical shades; fold each into the most used one within a small RGB distance
+  const reps = [];
+  for (const [hex, n] of [...counts.entries()].sort((x, y) => y[1] - x[1])) {
+    const c = hexToRgb(hex), hit = reps.find((r) => Math.hypot(r.c[0] - c[0], r.c[1] - c[1], r.c[2] - c[2]) < 48);
+    if (hit) hit.n += n; else reps.push({ hex, c, n });
+  }
+  const list = reps.sort((x, y) => y.n - x.n).slice(0, 16).map((r) => r.hex);
   const key = list.join(',');
   if (key === imgSwatchKey) return;
   imgSwatchKey = key;
