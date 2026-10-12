@@ -7,7 +7,7 @@ Sister project to [led-strip](https://github.com/dwooods/led-strip), which drive
 ## The workflow
 
 1. **Design** in the Glow Grid simulator (`https://dwooods.github.io/glow-grid/`, installed as an app, or `web/index.html` locally), or in [Piskel](#piskel).
-2. **Check and adjust**: tune *Brightness* and *Gamma*, and watch the *Panel check*, which flags pixels that will be barely lit or shift color (dashed outlines on the grid) and estimates current draw against your power supply. The grid shows your colors as drawn; the Panel check is what tells you how the LEDs will treat them.
+2. **Check and adjust**: tune *LED brightness* and *Gamma* (in *Panel settings*), and watch the *Panel check* (collapsed under *Panel settings*; its summary line shows the flag count), which flags pixels that will be barely lit or shift color (dashed outlines on the grid) and estimates current draw against your power supply. The grid shows your colors as drawn; the Panel check is what tells you how the LEDs will treat them.
 3. **Export** from the *File* menu (*File ▸ Export…*). For the Pi it is one PNG: a still with 1 frame, an animation sprite sheet (frames side by side) with 2 or more. The file name is just the sprite's name (`knight.png`); the frame count, fps, brightness and gamma are stored inside the PNG.
 4. **Copy** it to the Pi's `images/` folder and play it from the terminal: pick it in the `glow-grid` menu, or run `python3 play.py knight.png`. The Pi uses the same math and the image's own light settings, so the panel shows what the simulator showed.
 
@@ -31,17 +31,18 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 
 New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only.
 
-- **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen, portrait): the grid fills the width and nothing scrolls while you draw. A dock at the bottom holds Paint/Fill/Erase/Pick, your color (tap it for the wheel), the palette and Undo/Redo; a one-line frame strip sits under the grid (Play, thumbnails, duplicate, **More**); **More** opens a sheet with the rest (frame speed and delete, Move and layers, wheel and hex, Panel settings) while the grid stays visible above it. While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. Landscape falls back to the scrolling page. This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
+- **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen, portrait): the grid fills the width and nothing scrolls while you draw. A dock at the bottom holds Paint/Fill/Erase/Pick, your color (tap it for the wheel), the palette and Undo/Redo; a one-line frame strip sits under the grid (Play, thumbnails, duplicate, **More**); **More** opens a sheet with the rest (frame speed and delete, Move and layers, wheel and hex, Panel settings) while the grid stays visible above it. While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. The dock is used in portrait windows up to 900 px tall and on any touch device; a tall, narrow desktop window keeps the desktop layout, and landscape falls back to the scrolling page. With more frames than fit on one line, the strip wraps into the spare height under the grid (a single scrolling line when there is no room). This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
 - **Hosted**: every push to `main` that touches `web/` deploys it to GitHub Pages at `https://dwooods.github.io/glow-grid/` (see `.github/workflows/pages.yml`; app icons are generated in CI by `web/make_icons.py`). It is a project site, so it sits beside the blog at `dwooods.github.io` without touching it. One-time setup: *Settings → Pages → Build and deployment → Source: GitHub Actions*.
+- **Test on a phone**: open the hosted page in Chrome or Safari on the phone; both use the same engine on an iPhone, so the layout and touch drawing match. Install and offline use are the Safari route. Reload once more after an update, because the service worker serves the cached copy first.
 - **Install as an app**: open the hosted page in Chrome, Edge or iPhone Safari (*Share → Add to Home Screen*) and it runs in its own window and works offline. After an update, close and reopen it to pick up the new version.
 
 ## Tools and color
 
 - **Paint, Fill, Erase, Pick.** Erase sets a pixel to pure black, which is "off" on the panel. Pick is an eyedropper: hover a pixel to see its color, click to make it the paint color, and the tool returns to Paint. Alt+click does the same without leaving the current tool.
-- **Color wheel.** Hue goes around the wheel, saturation outward, and the *Brightness* slider sets the value. The hex field accepts a typed color (`#1a73e8`).
-- **Clear frame** blanks the current frame. **Start over** throws away every frame and the still part and leaves one blank frame; so does *Delete frame* on the last remaining frame. Undo brings them back. The page always opens on one blank frame; what you had last time is kept in this browser and the **Restore last session** button (shown while the frame is blank) brings it back. Undo goes back to blank.
-- **Palette** holds the fixed colors plus the last eight you used. **In this picture** lists the colors already in your frames, most used first, so touch-ups use the exact same values.
+- **Color wheel.** Hue goes around the wheel, saturation outward, and the *Shade* slider beside it sets how light or dark the paint color is (black at 0, the full color at 100). *Shade* only changes the color you paint with; it is not the *LED brightness* in *Panel settings*, which sets how bright the panel runs. The hex field accepts a typed color (`#1a73e8`).
+- **Clear frame** blanks the current frame. **Start over** throws away every frame and the still part and leaves one blank frame; so does *Delete frame* on the last remaining frame. Undo brings them back. The page always opens on one blank frame; what you had last time is kept in this browser and the **Restore last session** link (on the hint line under the frame strip, shown while the frame is blank) brings it back. Undo goes back to blank. The *Frame n / N* readout appears once there are two or more frames, because a single frame already shows its number on the thumbnail.
+- **Palette** holds ten fixed colors plus the last eight you used; a recent color that is almost the same as one already shown is skipped. **In this picture** lists the colors already in your frames, most used first, so touch-ups use the exact same values.
 
 ## Import image
 
@@ -60,7 +61,7 @@ The LED model matches `grid_common.py` exactly: `round(255 * BRIGHTNESS * (c/255
 
 ### Light settings travel with the image
 
-When you save a PNG, Glow Grid writes its current *Brightness* and *Gamma* into the file (a PNG text chunk named `glow-grid`; the pixels are unchanged). On the Pi, `play.py` reads them and uses them for that image, and prints what it used:
+When you save a PNG, Glow Grid writes its current *LED brightness* and *Gamma* into the file (a PNG text chunk named `glow-grid`; the pixels are unchanged). On the Pi, `play.py` reads them and uses them for that image, and prints what it used:
 
 ```
 knight.png: 4 frame(s), brightness 0.35, gamma 2.2 from the image
@@ -101,7 +102,7 @@ Other rules: avoid spaces in names (they complicate `scp`), and use `.png`, `.gi
 
 ### Animating one part: move and still part
 
-The *Move and layers* section of the Frames card makes animations from a single drawing without repainting every frame.
+The *Move and layers* card (under *Tools* on a desktop, inside the *More* sheet on a phone) makes animations from a single drawing without repainting every frame.
 
 - **Move:** the arrow buttons (or Shift + arrow keys) shift this frame by one pixel. Duplicate a frame, nudge it, repeat to make a bob or a slide.
 - **Animate one part only:** draw the whole character, duplicate it for each frame, then tick *Animate one part only*. Every pixel that is identical in all frames moves into one shared layer under every frame (the still part), so each frame holds only what changes (a hand, legs, eyes, a mouth). Paint just those bits with *Moving part (this frame)* selected, or pick *Still part (all frames)* to edit the body for all frames at once. In a frame, black means see-through while a still part exists. Untick the box to join it back into every frame. It is optional: you can also just paint each frame.
