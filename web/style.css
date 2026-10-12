@@ -226,11 +226,16 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .phone-dock .layout { gap: 0; }
 .phone-dock .device-col { gap: var(--s-2); max-width: 100%; }
 .phone-dock .device { width: min(100%, calc(100dvh - var(--dock-h) - 180px)); margin-inline: auto; padding: 8px; }
-.phone-dock #framesCard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s-2); padding: var(--s-2) 10px; }
+.phone-dock #framesCard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: start; gap: var(--s-2); padding: var(--s-2) 10px; }
 .phone-dock #framesCard > h2 { display: none; }
+.phone-dock #framesCard.stack #playBtn { grid-column: 1; grid-row: 1; }
+.phone-dock #framesCard.stack #addFrameBtn { grid-column: 3; grid-row: 1; }
+.phone-dock #framesCard.stack #moreBtn { grid-column: 4; grid-row: 1; }
+.phone-dock #framesCard.stack .frame-strip { grid-column: 1 / -1; grid-row: 2; }
 .phone-dock #framesCard .playback, .phone-dock #framesCard > .btn-row { display: contents; }
 .phone-dock #framesCard > .sub-rule, .phone-dock #framesCard > .strip-meta, .phone-dock #historyWrap { display: none; }
-.phone-dock .frame-strip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
+.phone-dock .frame-strip { box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
+.phone-dock #framesCard.stack .frame-strip { flex-wrap: wrap; align-content: flex-start; overflow-x: hidden; overflow-y: auto; max-height: var(--strip-max, 60px); }
 .phone-dock .frame-strip::-webkit-scrollbar { display: none; }
 .phone-dock .frame-thumb { flex: none; }
 .phone-dock .frame-n { font-size: 11px; }

@@ -1,8 +1,8 @@
-// Phone layout (portrait): a bottom dock (tools, color, palette, undo/redo), a one-line frame strip under the grid,
+// Phone layout (portrait; a desktop window only gets it when it is 900 px tall or less, a touch device always does): a bottom dock (tools, color, palette, undo/redo), a one-line frame strip under the grid,
 // and a "More" sheet for everything else. It only moves existing nodes, so ids, listeners and the desktop markup are untouched;
 // leaving the layout (rotate, resize) puts every node back. Classic script: shares the global scope ($ comes from core.js).
 (function () {
-  const mq = window.matchMedia('(max-width: 760px) and (min-height: 600px)');
+  const mq = window.matchMedia('(max-width: 760px) and (min-height: 600px) and ((max-height: 900px) or (pointer: coarse))');
   const root = document.documentElement;
   const sheet = $('sheet'), moreBtn = $('moreBtn'), dock = $('dock');
   const moved = [];
@@ -15,7 +15,24 @@
 
   function measure() {
     root.style.setProperty('--dock-h', `${dock.offsetHeight}px`);
+    // the frame strip may wrap into whatever height is left between it and the dock
+    const top = strip.getBoundingClientRect().top + window.scrollY;
+    root.style.setProperty('--strip-max', `${Math.max(60, Math.floor(window.innerHeight - dock.offsetHeight - top - 30))}px`);
     root.style.setProperty('--sheet-top', `${Math.round($('device').getBoundingClientRect().bottom + 8)}px`);
+  }
+  // One line of thumbnails fits beside Play, + and More; with more frames the strip drops to its own full-width row and wraps
+  const strip = $('frameStrip'), card = $('framesCard');
+  function layoutStrip() {
+    if (!root.classList.contains('phone-dock')) return;
+    card.classList.remove('stack');
+    const first = strip.firstElementChild;
+    if (first) {
+      const cell = first.offsetWidth + 8, fits = Math.max(1, Math.floor((strip.clientWidth - 8 + 8) / cell));
+      card.classList.toggle('stack', strip.children.length > fits);
+      // no room for a second row (short phones): keep one scrolling line instead
+      if (card.classList.contains('stack') && window.innerHeight - dock.offsetHeight - (strip.getBoundingClientRect().top + window.scrollY) - 30 < 50) card.classList.remove('stack');
+    }
+    measure();
   }
   function setSheet(open) {
     sheet.classList.toggle('open', open);
@@ -34,14 +51,15 @@
     put($('frameReadout'), $('fmTop'));
     ['addBlankFrameBtn', 'clearBtn', 'deleteFrameBtn', 'startOverBtn', 'restoreBtn'].forEach((id) => put($(id), $('fmRow')));
     put($('moveBlock'), $('frameMore'));
-    measure();
+    layoutStrip();
   }
   function leave() {
     setSheet(false);
+    card.classList.remove('stack');
     restoreAll();
     dock.hidden = true; moreBtn.hidden = true; $('sheetHead').hidden = true; $('frameMore').hidden = true;
     root.classList.remove('phone-dock');
-    root.style.removeProperty('--dock-h'); root.style.removeProperty('--sheet-top');
+    root.style.removeProperty('--dock-h'); root.style.removeProperty('--sheet-top'); root.style.removeProperty('--strip-max');
   }
   const sync = () => { if (mq.matches && !root.classList.contains('phone-dock')) enter(); else if (!mq.matches && root.classList.contains('phone-dock')) leave(); };
 
@@ -53,7 +71,9 @@
   new MutationObserver(() => { $('dockColor').style.background = $('curSwatch').style.background; })
     .observe($('curSwatch'), { attributes: true, attributeFilter: ['style'] });
   $('dockColor').style.background = $('curSwatch').style.background;
-  window.addEventListener('resize', () => { if (root.classList.contains('phone-dock')) measure(); });
+  window.addEventListener('resize', layoutStrip);
+  window.addEventListener('load', layoutStrip);
+  new MutationObserver(layoutStrip).observe(strip, { childList: true });
   if ('ResizeObserver' in window) new ResizeObserver(() => { if (root.classList.contains('phone-dock')) measure(); }).observe(dock);
   (mq.addEventListener ? mq.addEventListener('change', sync) : mq.addListener(sync));
   sync();
