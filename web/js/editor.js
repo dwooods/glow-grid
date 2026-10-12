@@ -61,12 +61,17 @@ function renderDiagnostics() {
   const fc = $('faintCount'), sc = $('shiftCount');
   fc.textContent = now.faint + ' px'; fc.classList.toggle('zero', !now.faint);
   sc.textContent = now.shift + ' px'; sc.classList.toggle('zero', !now.shift);
+  const flagged = now.faint + now.shift, ds = $('diagSum');
+  ds.textContent = now.amps.toFixed(2) + ' A · ' + (flagged ? flagged + ' px flagged' : 'no flags');
+  ds.classList.toggle('warn', flagged > 0 || pct > 0.85);
 }
 function renderFrame() { for (let i = 0; i < cellEls.length; i++) updateCell(i); renderDiagnostics(); }
 function renderFrameStrip() {
   renderImgSwatches();
   const strip = $('frameStrip'); strip.innerHTML = '';
+  $('stripHint').hidden = hasArt(state);
   state.frames.forEach((frame, i) => {
+    const cell = document.createElement('span'); cell.className = 'frame-cell';
     const t = document.createElement('canvas');
     t.width = state.cols; t.height = state.rows;
     t.className = 'frame-thumb' + (i === state.currentFrame ? ' active' : '');
@@ -74,7 +79,9 @@ function renderFrameStrip() {
     paintCanvas(t.getContext('2d'), flatten(frame), 0);
     t.addEventListener('click', () => selectFrame(i));
     t.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectFrame(i); } });
-    strip.appendChild(t);
+    const n = document.createElement('span'); n.className = 'frame-n'; n.textContent = i + 1; n.setAttribute('aria-hidden', 'true');
+    cell.append(t, n);
+    strip.appendChild(cell);
   });
 }
 function paintCanvas(ctx, frame, offsetX) {
