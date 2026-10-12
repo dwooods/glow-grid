@@ -88,7 +88,9 @@ h1 { font-family: var(--font-display); font-size: clamp(1.4rem, 2.4vw, 1.9rem); 
 
 .playback { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-dim); }
 .field-inline { display: flex; align-items: center; gap: 6px; }
-.frame-readout { font-variant-numeric: tabular-nums; margin-left: auto; }
+.frame-readout { font-variant-numeric: tabular-nums; }
+.strip-meta { margin: calc(-1 * var(--s-1)) 0 0; display: flex; gap: var(--s-3); flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-dim); }
+.hint:empty { display: none; }
 
 /* Cards: one quiet surface, hairline ring, no heavy borders */
 .card { background: var(--panel); box-shadow: 0 0 0 1px var(--border); border-radius: var(--r-md); padding: var(--s-4) 18px; display: flex; flex-direction: column; gap: var(--s-3); }
@@ -145,6 +147,9 @@ button:focus-visible, .swatch:focus-visible, input:focus-visible, select:focus-v
 }
 
 .frame-strip { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.frame-cell { position: relative; display: block; flex: none; }
+.frame-n { position: absolute; left: 3px; bottom: 2px; font-size: 10px; line-height: 1; color: var(--text-dim); text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; font-variant-numeric: tabular-nums; }
+.frame-thumb.active + .frame-n { color: var(--accent); }
 .frame-thumb { width: 40px; height: 40px; image-rendering: pixelated; border-radius: 6px; cursor: pointer; border: 0; box-shadow: 0 0 0 1px var(--border-strong); display: block; transition: box-shadow var(--ease), transform var(--ease); }
 .frame-thumb:active { transform: scale(.94); }
 .frame-thumb.active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
@@ -224,9 +229,11 @@ input[type=text] { width: 100%; box-sizing: border-box; }
 .phone-dock #framesCard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s-2); padding: var(--s-2) 10px; }
 .phone-dock #framesCard > h2 { display: none; }
 .phone-dock #framesCard .playback, .phone-dock #framesCard > .btn-row { display: contents; }
+.phone-dock #framesCard > .sub-rule, .phone-dock #framesCard > .strip-meta, .phone-dock #historyWrap { display: none; }
 .phone-dock .frame-strip { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
 .phone-dock .frame-strip::-webkit-scrollbar { display: none; }
 .phone-dock .frame-thumb { flex: none; }
+.phone-dock .frame-n { font-size: 11px; }
 .phone-dock #addFrameBtn { font-size: 0; width: var(--tap); padding: 0; }
 .phone-dock #addFrameBtn::before { content: "+"; font-size: 1.4rem; }
 .phone-dock .panel-col { position: fixed; z-index: 30; left: 0; right: 0; bottom: 0; width: auto; flex: none; box-sizing: border-box;
@@ -299,7 +306,15 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 /* Help dialog */
 .help-dlg .help-body { overflow: auto; padding: 14px var(--s-4) 18px; display: flex; flex-direction: column; gap: var(--s-1); }
 .help-dlg .help-body h3:first-of-type { margin-top: var(--s-2); }
-.sub-h { margin: 2px 0 0; font-size: var(--fs-md); font-weight: 600; color: var(--text); font-family: var(--font-display); }
+.sub-h { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); font-weight: 500; font-family: inherit; }
+.check-details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: var(--s-2); min-height: 28px; }
+.check-details > summary::-webkit-details-marker { display: none; }
+.check-details > summary::before { content: "▸"; color: var(--accent); transition: transform .15s; }
+.check-details[open] > summary::before { transform: rotate(90deg); }
+.check-details[open] > summary { margin-bottom: var(--s-3); }
+.check-details[open] > .diag, .check-details[open] > .hint { margin-bottom: var(--s-3); }
+.diag-sum { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.diag-sum.warn { color: var(--warn); }
 .sub-rule { border: 0; border-top: 1px solid var(--border); margin: 6px 0 2px; width: 100%; }
 
 /* App bar, File menu, toast, export dialog */
