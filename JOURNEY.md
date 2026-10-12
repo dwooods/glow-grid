@@ -129,9 +129,28 @@ and a reboot. Solid red for thirty seconds, then a perfect check pattern, then t
 
 The lesson that stings: the symptom was a near-perfect match for three hardware faults, and all three had plausible fixes to try, so that is where the time went. A software limit that happens to sit between 1482 and 6186 bytes never made the list. Reading the driver first would have taken fifteen minutes.
 
+## A case for the panel: two wrong starts and a cradle
+
+The panel wants a grid in front of it, or each LED is a soft dot instead of a pixel. The reference I started from, [Thingiverse 5737371](https://www.thingiverse.com/thing:5737371), is one print: a 165 × 165 × 8.5 mm cell grid with 1 mm walls on a 10 mm pitch and a 0.54 mm floor that becomes the diffuser (pause the print at layer 4 and swap to white). I measured it from the STL, because the point was to match its pitch, not to copy it.
+
+**Attempt 1 was the wrong shape.** I built a one-piece case with side lugs, because the reference has a separate back plate with keyholes and I mixed up which part was which. It was also the wrong idea for this desk: the LED panel, a C3 and its wiring all have to live somewhere, and that needs a frame with a back.
+
+**Attempt 2 had the right parts.** The actual requirement was four separate things:
+
+- a frame that is open at the front, with four walls and a back, holes in the back so it can sit on a desk, and a holder for the ESP32-C3
+- a 16 × 16 grid printed on its own, black, so it separates the LEDs
+- a very thin white cover over the front, acting as the glass
+- something at the back so it doesn't fall over
+
+Splitting the grid and the cover gives up the reference's one-print trick, but each part becomes a simple single-colour job with no mid-print pause: the grid prints black, the cover prints white, the frame prints in whatever is on the spool. A 0.6 mm cover is only three layers, so it should pass enough light to diffuse without hiding the LEDs.
+
+**The stand is a separate part, on purpose.** Rear feet built into the frame back were the obvious answer, and they don't work here. Printed back-down they overhang and need supports, and feet short enough to stay inside the frame's depth would put the centre of gravity behind the feet at a 12° tilt, so it tips back. A small cradle that the frame drops into balances with the assembly's centre of gravity inside the slab, at the cost of a fourth print.
+
+**What's still unproven.** The whole set is generated and checked in software only: all four parts are watertight, the frame and cradle don't overlap, and the assembly's centre of gravity sits over the cradle. Nothing is printed. The C3 holder, the jack hole and the cover's friction fit are the likely places for the first print to be wrong, which is why every dimension is a variable at the top of `enclosure/build.py` rather than baked into an STL.
+
 ## What's next
 
 - Play a Glow Grid PNG saved at brightness 0.35 and check the printed "from the image" line matches.
-- A 3D-printed grid and diffuser, so each LED reads as a square pixel instead of a dot.
+- Print the case (frame, grid, cover, cradle) and fix whatever the first print gets wrong: the C3 holder, the jack hole and the cover fit are the likeliest. See [`enclosure/`](enclosure/build.py).
 - A "WLED JSON" export, so the same art can run on an ESP32 with [WLED](https://kno.wled.ge/).
 - A current limiter that dims a frame based on its actual estimated draw rather than a flat cap.
