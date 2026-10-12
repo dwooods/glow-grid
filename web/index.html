@@ -294,7 +294,13 @@
             <option value="16">16</option>
           </select>
         </label>
-        <label class="check" id="flatDetailRow" hidden><input id="flatDetail" type="checkbox"> Keep small details (eyes, nose, thin lines)</label>
+        <label class="range-row" id="flatDetailRow" hidden>Small details (eyes, nose, thin lines)
+          <select id="flatDetail">
+            <option value="off">Off</option>
+            <option value="some" selected>Some</option>
+            <option value="more">More</option>
+          </select>
+        </label>
         <label class="range-row">Zoom <input id="photoZoom" type="range" min="0" max="100" value="0"></label>
         <div class="btn-row">
           <button id="photoFit" class="btn btn-quiet" type="button">Fit whole photo</button>
@@ -319,7 +325,7 @@
           </select>
         </label>
         <p class="hint" id="ditherNote" hidden>Dithering is off while Flat art or Exact pixels is on. Untick both to use it.</p>
-        <p class="hint" id="photoHint">Flat art finds the picture's main colors and gives each LED whichever one covers most of its cell, so outlines and soft edges disappear and the result is already in a small palette. Tick Keep small details if an eye, nose or thin strip drops out. Use it for illustrations, logos and clip art; use averaging or dithering for photos. Dithering is baked in at the current brightness and gamma.</p>
+        <p class="hint" id="photoHint">Flat art finds the picture's main colors and gives each LED whichever one covers most of its cell, so outlines and soft edges disappear and the result is already in a small palette. Raise Small details if an eye, nose or thin strip drops out; More suits artwork shown small, Some suits zoomed-in artwork. Use it for illustrations, logos and clip art; use averaging or dithering for photos. Dithering is baked in at the current brightness and gamma.</p>
       </div>
     </div>
     <div class="photo-foot">

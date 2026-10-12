@@ -284,12 +284,13 @@ function flatIndexMap(d, w, h, pal, bg) {
 }
 // Each cell: the palette colour that covers the most of it; off if under half of the cell is picture.
 // With `share` (each colour's fraction of all picture pixels) the vote favours rare colours (a nose, an eye, a thin
-// sleeve) so small features survive: vote = count / sqrt(share), a colour needs 12% of the cell to compete, and a
-// cell is kept when 35% of it is picture instead of 50%.
-function flatCrop(idxMap, w, h, view, cols, rows, pal, share) {
+// sleeve) so small features survive: vote = count / sqrt(share). `level` sets how much of a cell a colour needs to compete
+// and how much of the cell must be picture: 'some' 35% / 45%, 'more' 12% / 35% (plain majority and 50% when off).
+const DETAIL = { some: { need: 0.35, keep: 0.45 }, more: { need: 0.12, keep: 0.35 } };
+function flatCrop(idxMap, w, h, view, cols, rows, pal, share, level) {
   const out = new Float32Array(cols * rows * 3);
   const cw = view.vw / cols, ch = view.vh / rows, counts = new Uint32Array(pal.length);
-  const keepFg = share ? 0.35 : 0.5, minCount = cw * ch * 0.12;
+  const dt = share && DETAIL[level] || DETAIL.some, keepFg = share ? dt.keep : 0.5, minCount = cw * ch * dt.need;
   const wt = share ? Array.from(share, (f) => 1 / Math.sqrt(Math.max(f, 0.005))) : null;
   for (let cy = 0; cy < rows; cy++) for (let cx = 0; cx < cols; cx++) {
     const x0 = Math.max(0, Math.round(view.x0 + cx * cw)), x1 = Math.min(w, Math.round(view.x0 + (cx + 1) * cw));
@@ -327,7 +328,7 @@ function looksFlat(d, w, h) {
   return n > 0 && top / n >= 0.9;
 }
 
-const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', exact: false, flat: false, flatN: 8, flatDetail: false, queued: false };
+const photo = { w: 0, h: 0, data: null, canvas: null, cx: 0, cy: 0, vw: 1, vwMin: 1, vwMax: 1, bg: { on: false, rgb: [0, 0, 0], tol: 45 }, picking: false, dither: 'none', exact: false, flat: false, flatN: 8, flatDetail: 'some', queued: false };
 const cropCv = $('cropCanvas'), cropCtx = cropCv.getContext('2d');
 const viewH = () => photo.vw * state.rows / state.cols;
 
@@ -414,7 +415,7 @@ function renderPhoto() {
       photo.share = flatShare(photo.idxMap, photo.pal.length);
       photo.flatKey = key;
     }
-    rgb = flatCrop(photo.idxMap, photo.w, photo.h, v, cols, rows, photo.pal, photo.flatDetail ? photo.share : null);
+    rgb = flatCrop(photo.idxMap, photo.w, photo.h, v, cols, rows, photo.pal, photo.flatDetail !== 'off' ? photo.share : null, photo.flatDetail);
   } else rgb = (photo.exact ? pointCrop : boxCrop)(photo.data, photo.w, photo.h, v, cols, rows, bg);
   photo.result = ditherFrame(rgb, cols, rows, (photo.exact || photo.flat) ? 'none' : photo.dither, LUT, sim.brightness, sim.gamma);
   const pv = $('photoPreview'); pv.width = cols; pv.height = rows;
@@ -491,7 +492,7 @@ function syncImportControls() {
 }
 $('exactOn').addEventListener('change', (e) => { photo.exact = e.target.checked; syncImportControls(); schedulePhoto(); });
 $('flatOn').addEventListener('change', (e) => { photo.flat = e.target.checked; syncImportControls(); schedulePhoto(); });
-$('flatDetail').addEventListener('change', (e) => { photo.flatDetail = e.target.checked; schedulePhoto(); });
+$('flatDetail').addEventListener('change', (e) => { photo.flatDetail = e.target.value; schedulePhoto(); });
 $('flatN').addEventListener('change', (e) => { photo.flatN = Number(e.target.value) || 8; schedulePhoto(); });
 $('ditherMode').addEventListener('change', (e) => { photo.dither = e.target.value; schedulePhoto(); });
 $('photoLed').addEventListener('change', schedulePhoto);
@@ -520,6 +521,7 @@ async function openImport(file) {
     photo.exact = small; $('exactOn').checked = small;
     photo.flat = !small && looksFlat(d.data, d.w, d.h); $('flatOn').checked = photo.flat; photo.flatKey = null;
     photo.dither = 'none'; $('ditherMode').value = 'none';
+    photo.flatDetail = 'some'; $('flatDetail').value = 'some';
     syncImportControls();
     // background off by default when the corners are a solid, non-black color
     const px = [[0, 0], [d.w - 1, 0], [0, d.h - 1], [d.w - 1, d.h - 1]].map(([x, y]) => d.data[(y * d.w + x) * 4 + 3]);
