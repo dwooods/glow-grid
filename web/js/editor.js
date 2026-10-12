@@ -177,6 +177,46 @@ const endPaint = () => { lastPaintIdx = null; if (!painting) return; painting = 
 window.addEventListener('pointerup', endPaint);
 window.addEventListener('pointercancel', endPaint);
 
+/* ---------- keyboard drawing: arrows move a cursor, Space or Enter applies the tool ---------- */
+let kbIdx = null, kbHeld = false;
+const kbRefresh = () => { syncRestoreBtn(); renderDiagnostics(); renderFrameStrip(); saveState(); };
+function kbMark() {
+  cellEls.forEach((c) => c.classList.remove('kb'));
+  if (kbIdx !== null && cellEls[kbIdx]) cellEls[kbIdx].classList.add('kb');
+}
+function kbSay() {
+  if (kbIdx === null) return;
+  const hex = layerHex(state.frames[state.currentFrame], kbIdx);
+  $('gridSay').textContent = `Row ${Math.floor(kbIdx / state.cols) + 1}, column ${kbIdx % state.cols + 1}, ${isOff(hex) ? 'off' : hex}`;
+}
+function kbApply(repeat) {
+  if (playing || kbIdx === null) return;
+  if (state.tool === 'pick') { pickAt(kbIdx, true); kbSay(); return; }
+  if (!repeat) pushUndo();
+  applyTool(kbIdx); kbRefresh(); kbSay();
+}
+gridEl.addEventListener('focus', () => {
+  if (kbIdx === null || kbIdx >= state.cols * state.rows) kbIdx = Math.floor(state.rows / 2) * state.cols + Math.floor(state.cols / 2);
+  if (gridEl.matches(':focus-visible')) { gridEl.classList.add('kb-on'); kbMark(); kbSay(); }   // keyboard focus only; a tap or click shows no cursor
+});
+gridEl.addEventListener('pointerdown', () => gridEl.classList.remove('kb-on'));
+gridEl.addEventListener('blur', () => { gridEl.classList.remove('kb-on'); kbHeld = false; });
+gridEl.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || kbIdx === null) return;
+  const d = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+  if (d || e.key === ' ' || e.key === 'Enter') gridEl.classList.add('kb-on');
+  if (d) {
+    e.preventDefault();
+    const x = clamp(kbIdx % state.cols + d[0], 0, state.cols - 1), y = clamp(Math.floor(kbIdx / state.cols) + d[1], 0, state.rows - 1);
+    kbIdx = y * state.cols + x; kbMark();
+    if (kbHeld && state.tool !== 'pick' && state.tool !== 'fill') { applyTool(kbIdx); kbRefresh(); }
+    kbSay();
+  } else if (e.key === ' ' || e.key === 'Enter') {
+    e.preventDefault(); kbMark(); kbHeld = e.key === ' '; kbApply(e.repeat);
+  } else if (e.key === 'Escape') gridEl.blur();
+});
+gridEl.addEventListener('keyup', (e) => { if (e.key === ' ') kbHeld = false; });
+
 function setTool(t) {
   state.tool = t;
   document.querySelectorAll('.tool-btn[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));

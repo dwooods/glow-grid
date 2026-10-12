@@ -37,7 +37,14 @@ function hueSat(r, g, b) {
 }
 
 /* ---------- persistence (per-browser convenience only) ---------- */
-function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {} }
+let saveWarned = false;
+function store(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); saveWarned = false; }
+  catch (e) {
+    // storage full or blocked (private window, site data off): say so once instead of silently losing the session
+    if (!saveWarned && typeof setStatus === 'function') { saveWarned = true; setStatus('Could not save your work in this browser (storage is full or blocked). Export a PNG to keep it.'); }
+  }
+}
 function recall(key) { try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
 
 const newBlankFrame = (c, r) => new Array(c * r).fill('#000000');
