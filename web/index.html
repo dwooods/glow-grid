@@ -79,7 +79,7 @@
           <canvas id="wheel" width="160" height="160" aria-label="Color wheel: hue around, saturation outward"></canvas>
           <div class="picker-side">
             <div class="cur-swatch" id="curSwatch" title="Current paint color"></div>
-            <label class="range-row">Shade <input id="valInput" type="range" min="0" max="100" value="100"></label>
+            <label class="range-row" title="How light or dark the paint color is. Not the LED brightness in Panel settings.">Shade <input id="valInput" type="range" min="0" max="100" value="100"></label>
             <label class="hex-row">Hex <input id="hexInput" type="text" value="#e63946" maxlength="7" spellcheck="false" autocomplete="off"></label>
             <div class="hover-chip" id="hoverChip" hidden><i></i><span>#000000</span></div>
           </div>
@@ -209,6 +209,7 @@
           <h3>Drawing tools</h3>
           <ul>
             <li><strong>Undo and redo:</strong> Ctrl+Z and Ctrl+Y, or the buttons. Clear frame, Delete frame and Start over can all be undone.</li>
+            <li><strong>Shade</strong> (the slider beside the color wheel) sets how light or dark the paint color is, from black at 0 to the full color at 100. It only changes the color you paint with. It is not the LED brightness in Panel settings, which sets how bright the panel runs.</li>
             <li><strong>Erase</strong> sets a pixel to black, which is "off" on the panel. <strong>Pick</strong> (or Alt+click while painting) takes the color under the cursor and goes back to Paint.</li>
             <li><strong>Panel check</strong> (under Panel settings) shows the estimated current draw and how many pixels are barely lit or will shift color. Its one-line summary shows a warning color when anything is flagged.</li>
           </ul>
