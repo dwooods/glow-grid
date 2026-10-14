@@ -34,6 +34,9 @@ PALETTE = {
     "o": (196, 84, 12),
     "T": (255, 226, 170),  # cream
     "H": (60, 255, 130),   # eye green
+    # fish
+    "A": (40, 200, 255),   # aqua
+    "a": (20, 120, 220),   # stripe blue
 }
 
 _KNIGHT = [
@@ -250,6 +253,192 @@ def cat_frames():
             g[14][14] = "O"
         frames.append(["".join(r) for r in g])
     return frames
+
+
+_FOX = [
+    "................",
+    "..OO........OO..",
+    "..OOO......OOO..",
+    "..OoOO....OOoO..",
+    "..OooOOOOOOooO..",
+    "..OOOOOOOOOOOO..",
+    "..OEOOOOOOOOEO..",
+    "..WWOOOOOOOOWW..",
+    "...WWWOOOOWWW...",
+    "....WWWWWWWW....",
+    ".....WWrrWW.....",
+    "......WWWW......",
+    "...OOOWWWWOOO...",
+    "...OOOWWWWOOO...",
+    "...OOOOOOOOOO...",
+    "...ooo....ooo...",
+]
+
+
+def fox_frames():
+    """4-frame idle: the bushy tail swishes (white tip) and the fox blinks."""
+    tails = [
+        [(10, 14, "W"), (11, 14, "O"), (12, 13, "O"), (12, 14, "O"),
+         (13, 13, "O"), (13, 14, "O"), (14, 13, "O"), (14, 14, "O")],
+        [(12, 15, "W"), (13, 15, "W"), (12, 13, "O"), (12, 14, "O"),
+         (13, 13, "O"), (13, 14, "O"), (14, 13, "O"), (14, 14, "O")],
+    ]
+    frames = []
+    for i in range(4):
+        g = [list(r) for r in _FOX]
+        if i == 2:  # blink
+            g[6][3] = g[6][12] = "O"
+        for y, x, c in tails[i % 2]:
+            g[y][x] = c
+        frames.append(["".join(r) for r in g])
+    return frames
+
+
+_FISH_BODY = [
+    "...AAAAAA...",
+    ".AAAAAAAAAA.",
+    "AAWEAAAAAAAA",
+    "AAAAAAAAAAAA",
+    "AAaAAaAAaAAA",
+    "AAAAAAAAAAAA",
+    ".AAAAAAAAAA.",
+    "...AAAAAA...",
+]
+_FISH_TAIL = ["...O", "..OO", ".OOO", "OOO.", "OOO.", ".OOO", "..OO", "...O"]
+
+
+def fish_frames():
+    """4-frame swim: the tail waves and a bubble rises in front."""
+    frames = []
+    for i, dy in enumerate([0, -1, 0, 1]):
+        g = [list("." * 16) for _ in range(16)]
+        for k, row in enumerate(_FISH_BODY):
+            g[4 + k][0:12] = list(row)
+        for k, row in enumerate(_FISH_TAIL):
+            for j, c in enumerate(row):
+                if c != ".":
+                    g[4 + dy + k][12 + j] = c
+        g[3][4:7] = list("OOO")   # top fin
+        g[12][5:7] = list("OO")   # belly fin
+        g[3 - i][1] = "W"         # bubble
+        frames.append(["".join(r) for r in g])
+    return frames
+
+
+_POTION = [
+    "................",
+    "......LLLL......",
+    "......LLLL......",
+    ".....CCCCCC.....",
+    "......CCCC......",
+    "......CCCC......",
+    ".....CCCCCC.....",
+    "...CCMMMMMMCC...",
+    "..CMMMMMMMMMMC..",
+    "..WMMMMMMMMMMC..",
+    "..WMMMMMMMMMMC..",
+    "..CMMMMMMMMMMC..",
+    "..CMMMMMMMMmmC..",
+    "..CmmmmmmmmmmC..",
+    "...CCmmmmmmCC...",
+    "....CCCCCCCC....",
+]
+
+
+def potion_frames():
+    """4-frame brew: two bubbles rise through the liquid."""
+    frames = []
+    for i in range(4):
+        g = [list(r) for r in _POTION]
+        g[13 - i][5] = "W"
+        g[13 - (i + 2) % 4][9] = "W"
+        frames.append(["".join(r) for r in g])
+    return frames
+
+
+_KEY = [
+    "................",
+    "......GGGG......",
+    ".....GGooGG.....",
+    ".....GG..GG.....",
+    ".....GG..GG.....",
+    ".....GGooGG.....",
+    "......GGGG......",
+    ".......GG.......",
+    ".......Go.......",
+    ".......GG.......",
+    ".......Go.......",
+    ".......GGGGG....",
+    ".......GG.......",
+    ".......GGGGG....",
+    ".......Go.......",
+    ".......GG.......",
+]
+
+
+def key_frames():
+    """4-frame glint: a white spark travels along the key."""
+    frames = []
+    for y, x in [(2, 6), (5, 10), (9, 7), (13, 9)]:
+        g = [list(r) for r in _KEY]
+        g[y][x] = "W"
+        frames.append(["".join(r) for r in g])
+    return frames
+
+
+_HEART = [
+    "................",
+    "................",
+    "...RRRR..RRRR...",
+    "..RRWRRRRRRRRR..",
+    ".RRWRRRRRRRRRRR.",
+    ".RRRRRRRRRRRRRR.",
+    ".RRRRRRRRRRRRRR.",
+    "..RRRRRRRRRRRR..",
+    "...RRRRRRRRRR...",
+    "....RRRRRRRR....",
+    ".....RRRRRR.....",
+    "......RRRR......",
+    ".......RR.......",
+    "................",
+    "................",
+    "................",
+]
+_HEART_SMALL = [
+    "................",
+    "................",
+    "................",
+    "....RRR..RRR....",
+    "...RWRRRRRRRR...",
+    "...RRRRRRRRRR...",
+    "...RRRRRRRRRR...",
+    "....RRRRRRRR....",
+    ".....RRRRRR.....",
+    "......RRRR......",
+    ".......RR.......",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+]
+
+
+def _shade(rows):
+    """Darken the right-most red pixel of each lower row for a bit of volume."""
+    out = []
+    for y, r in enumerate(rows):
+        if y >= 5 and "R" in r:
+            i = r.rindex("R")
+            r = r[:i] + "r" + r[i + 1:]
+        out.append(r)
+    return out
+
+
+def heart_frames():
+    """4-frame heartbeat: small, full, full, small."""
+    big, small = _shade(_HEART), _shade(_HEART_SMALL)
+    return [small, big, big, small]
 
 
 def to_image(frames):

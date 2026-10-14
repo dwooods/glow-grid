@@ -314,7 +314,7 @@ The Pi fits any image to the grid and plays it. How good it looks depends on wha
 
 Tip: avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
 
-**Examples and characters:** the repo ships original example sprites only (`knight`, `slime`, `ghost`, `gem`, `cat`, drawn as text in `examples/sprites.py` and written to `images/` by `examples/make_examples.py`). It does not include other people's characters, and a free or open-source repo doesn't change that. To show art you made or have the right to use, import it with *Import image* or copy the PNG to `images/`.
+**Examples and characters:** the repo ships original example sprites only (`knight`, `slime`, `ghost`, `gem`, `cat`, `fox`, `fish`, `potion`, `key`, `heart`, drawn as text in `examples/sprites.py` and written to `images/` by `examples/make_examples.py`). It does not include other people's characters, and a free or open-source repo doesn't change that. To show art you made or have the right to use, import it with *Import image* or copy the PNG to `images/`.
 
 **Without the menu:** `play.py` is what the menu runs for each image, and you can call it directly to test one file:
 
