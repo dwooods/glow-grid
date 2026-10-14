@@ -76,7 +76,6 @@ function scaled(canvas) {
 function updateCmd() {
   const t = exportTarget();
   document.querySelectorAll('.only-view').forEach((el) => { el.hidden = t !== 'view'; });
-  $('exportBtn').textContent = t === 'pi' ? 'Save for the Pi' : 'Save to view';
 }
 async function saveCanvas(canvas, filename, extra) {
   const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));

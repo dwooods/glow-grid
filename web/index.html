@@ -224,7 +224,7 @@
           <h3>Getting a picture onto the panel</h3>
           <p class="hint"><strong>File ▸ Import image</strong> loads everything: a sprite sheet or single frame saved from here comes back as separate frames; any other picture opens a crop-and-zoom editor. Tick <strong>Exact pixels</strong> for pixel art, or leave it off for photos. Both can remove the background. On a phone the picker offers the camera too.</p>
           <ul>
-            <li><strong>Save for the Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
+            <li><strong>Raspberry Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
             <li><strong>Copy it to the Pi</strong> from your PC, then run <code>glow-grid</code>, press <code>r</code> to rescan and pick the file. In PowerShell: <code>scp "$HOME\Downloads\sprite.png" user@raspberrypi.local:~/glow-grid/images/</code> (change the file name and login to match yours).</li>
             <li><strong>View or share (PNG)</strong> saves a sharp, enlarged copy (named <code>_x16</code> etc.) to look at or send to someone. Don't copy it to the Pi: an enlarged animation would play as one squashed still.</li>
             <li><strong>ESP32-C3</strong> export comes with the C3 build.</li>
@@ -265,7 +265,7 @@
       <p class="hint">One frame saves a still; two or more save a sprite sheet. Brightness, gamma, frame count and speed are stored inside the PNG.</p>
     </div>
     <div class="photo-foot">
-      <button id="exportBtn" class="btn" type="button">Save for the Pi</button>
+      <button id="exportBtn" class="btn" type="button">Save</button>
     </div>
   </div>
 </dialog>
