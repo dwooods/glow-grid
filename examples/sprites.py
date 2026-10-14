@@ -441,6 +441,132 @@ def heart_frames():
     return [small, big, big, small]
 
 
+# ---- frog ----
+_FROG = [
+    "................",
+    "................",
+    "....NNN..NNN....",
+    "...NWWWNNWWWN...",
+    "...NW.WNNW.WN...",
+    "..NNNNNNNNNNNN..",
+    ".NNNNNNNNNNNNNN.",
+    ".NnnnnnnnnnnnnN.",
+    ".NNNNNNNNNNNNNN.",
+    "NNNNYYYYYYYYNNNN",
+    "NNNYYYYYYYYYYNNN",
+    "NNNYYYYYYYYYYNNN",
+    ".NNNYYYYYYYYNNN.",
+    "NNNNN......NNNNN",
+    "nnnnn......nnnnn",
+    "................",
+]
+
+
+def frog_frames():
+    """4 frames: idle, blink, idle, tongue flick."""
+    idle = list(_FROG)
+    blink = list(_FROG)
+    blink[3] = "...NNNNNNNNNN..."
+    blink[4] = "...NnnnNNnnnN..."
+    tongue = list(_FROG)
+    tongue[7] = ".NnnnnnPPnnnnnN."
+    tongue[8] = ".NNNNNNPPNNNNNN."
+    return [idle, blink, idle, tongue]
+
+
+# ---- owl ----
+_OWL = [
+    "................",
+    "...LL......LL...",
+    "...LLLLLLLLLL...",
+    "..LLLLLLLLLLLL..",
+    "..LYYYLLLLYYYL..",
+    "..LY.YLLLLY.YL..",
+    "..LYYYLLLLYYYL..",
+    "..LLLLLOOLLLLL..",
+    "..LLTTTOOTTTLL..",
+    "..LTTLTTTTLTTL..",
+    "..LTLTTTTTTLTL..",
+    "..LLTTLTTLTTLL..",
+    "...LLTTTTTTLL...",
+    "....LLLLLLLL....",
+    "....OO....OO....",
+    "................",
+]
+
+
+def owl_frames():
+    """4 frames: idle, look right, idle, blink."""
+    look = list(_OWL)
+    look[5] = "..LYY.LLLLYY.L.."
+    blink = list(_OWL)
+    blink[4] = "..LLLLLLLLLLLL.."
+    blink[6] = "..LLLLLLLLLLLL.."
+    return [list(_OWL), look, list(_OWL), blink]
+
+
+# ---- coin ----
+def _coin(rx, glint):
+    rows = []
+    for y in range(16):
+        r = ""
+        for x in range(16):
+            dx, dy = (x - 7.5) / rx, (y - 7.5) / 6.4
+            d = dx * dx + dy * dy
+            if d > 1:
+                r += "."
+            elif d > 0.62 and rx >= 2:
+                r += "o"
+            else:
+                r += "G"
+        rows.append(r)
+    if rx >= 4:  # embossed bar in the middle
+        for y in range(5, 11):
+            rows[y] = rows[y][:7] + "oo" + rows[y][9:]
+    if glint:
+        rows[3] = rows[3][:5] + "WW" + rows[3][7:]
+        rows[4] = rows[4][:4] + "W" + rows[4][5:]
+    return rows
+
+
+def coin_frames():
+    """4-frame spin: face, tilting, edge-on, tilting back."""
+    return [_coin(6.2, True), _coin(3.6, False), _coin(1.4, False), _coin(3.6, False)]
+
+
+# ---- lantern ----
+_LANTERN_TOP = [
+    "................",
+    "................",
+    "......SSSS......",
+    ".....S....S.....",
+    "....SSSSSSSS....",
+]
+_LANTERN_BOTTOM = [
+    "....sYYYYYYs....",
+    "....SSSSSSSS....",
+    ".....ssssss.....",
+    "................",
+    "................",
+    "................",
+]
+_FLAMES = [
+    ["YYGGYY", "YGOOGY", "YGWWGY", "YGWWGY", "YYGGYY"],
+    ["YYOOYY", "YGOOGY", "YGOWGY", "YGWOGY", "YYGGYY"],
+    ["YYYYYY", "YYGGYY", "YGOOGY", "YGWWGY", "YYGGYY"],
+    ["YYGGYY", "YYOOYY", "YGOWGY", "YGOOGY", "YYGGYY"],
+]
+
+
+def lantern_frames():
+    """4-frame flicker of the flame inside a steel lantern."""
+    frames = []
+    for fl in _FLAMES:
+        mid = ["....s" + r + "s...." for r in fl]
+        frames.append(_LANTERN_TOP + mid + _LANTERN_BOTTOM)
+    return frames
+
+
 def to_image(frames):
     """Render frames side by side as a sprite sheet (a single frame is a still)."""
     from PIL import Image
