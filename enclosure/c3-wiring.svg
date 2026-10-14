@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1190" font-family="Helvetica, Arial, sans-serif">
 <rect width="1240" height="1190" fill="#fff"/>
 <text x="30" y="40" font-size="24" font-weight="700" fill="#111">Glow Grid wiring: power, data, buttons (C3 build)</text>
-<text x="30" y="64" font-size="14" fill="#444">Thick = panel current (up to ~4.7 A at brightness 0.3). Thin = C3 branch (well under 0.3 A). Pin choices are a proposal, not built yet.</text>
+<text x="30" y="64" font-size="14" fill="#444">Thick = panel current (up to ~4.7 A at brightness 0.3). Thin = C3 branch (well under 0.3 A).</text>
+<text x="30" y="84" font-size="14" fill="#444">Pin map checked against the SuperMini pinout (2026-10-14). Bench-tested: USB flashing, Wi-Fi, onboard RGB LED (WS2812 on GPIO8, unused here).</text>
+<text x="30" y="104" font-size="14" fill="#444">Not built or tested: panel output from GPIO6, the buttons. The C3 has 2 RMT TX channels: one for the panel, the onboard LED only if one is left.</text>
 
 <!-- supply -->
 <rect x="30" y="130" width="170" height="130" rx="8" fill="#eef2f7" stroke="#333" stroke-width="2"/>
