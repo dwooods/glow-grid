@@ -30,7 +30,7 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 | `js/tools.js` | move, "animate one part only", playback |
 | `js/main.js` | app install, service worker, File menu, boot |
 
-**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, and that a PNG saved by the simulator is read back correctly by the Pi code. Run it before pushing a change to `led.js`, `export.js` or `grid_common.py`.
+**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, that a PNG saved by the simulator is read back correctly by the Pi code, that the example generator writes the same metadata, and the menu's delete helpers. Run it before pushing a change to `led.js`, `export.js` or `grid_common.py`.
 
 `tests/test_smoke.py` is a browser smoke test (import naming, Save with a stubbed picker, a saved sheet restoring its frames, the Help dialog). Run it by hand before pushing a change under `web/`: `pip install playwright pillow && playwright install chromium`, then `python3 -m unittest tests.test_smoke -v` from the repo root. It skips itself if Playwright is missing.
 
@@ -265,12 +265,16 @@ Glow Grid (16x16)
   1. heart.png  (still)
   2. knight.png  (4 frames, 4 fps, bright 0.35, gamma 2.2)
   r. Rescan images
+  e. Write the example sprites into images/
+  d. Delete images (d 3 5 7-9)
   o. Turn off
   q. Quit
 ```
 
 - **Numbers** play an image or animation. They're assigned automatically to everything in `images/`. Add a number after it to override the frame rate (`2 8` plays file 2 at 8 fps).
 - **`r` (Rescan images)** re-reads `images/`, so files you just copied in appear without restarting the menu.
+- **`e`** writes the example sprites into `images/` (the same as `python3 examples/make_examples.py`), after a `y/N` check, because it replaces any file with the same name. Use it on a fresh clone or after deleting examples you want back.
+- **`d`** deletes files from `images/`: `d 3` for one, `d 1 4 7-9` for several (numbers and ranges). It lists the names and asks `y/N` first, and the deletion is permanent. Anything not a number in the list cancels the whole command, so a typo deletes nothing. If a deleted file is playing, the panel is turned off.
 - **`o`** clears the panel and stops whatever is playing.
 - **`q`** stops playback and quits.
 - Until the wiring is confirmed, the menu also shows a warning and a `k` option (see the wiring section above); both disappear once you press `k`.

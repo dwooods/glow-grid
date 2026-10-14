@@ -2,7 +2,8 @@
 background until you pick something else, turn the panel off, or quit.
 
 Type a number to play that file; add a number after it to override the frame
-rate (e.g. "2 10" plays file 2 at 10 fps).
+rate (e.g. "2 10" plays file 2 at 10 fps). "d 3 5 7-9" deletes those files
+(after a y/N check); "e" writes the example sprites into images/.
 """
 import os
 import re
@@ -59,6 +60,39 @@ def scan_images():
     return items
 
 
+def parse_selection(tokens, count):
+    """Turn ["1", "4", "6-8"] into [1, 4, 6, 7, 8] (1-based, sorted, no repeats).
+    Raises ValueError with a readable message for anything that is not a number
+    or range inside 1..count."""
+    picked = set()
+    for tok in tokens:
+        lo, sep, hi = tok.partition("-")
+        if not (lo.isdigit() and (not sep or hi.isdigit())):
+            raise ValueError(f"'{tok}' is not a number or a range like 7-9")
+        a, b = int(lo), int(hi) if sep else int(lo)
+        if a > b:
+            raise ValueError(f"'{tok}' runs backwards")
+        for n in range(a, b + 1):
+            if not 1 <= n <= count:
+                raise ValueError(f"{n} is not in the list (1 to {count})")
+            picked.add(n)
+    if not picked:
+        raise ValueError("no numbers given")
+    return sorted(picked)
+
+
+def delete_images(names):
+    """Delete the named files from images/. Returns (deleted, failed) name lists."""
+    deleted, failed = [], []
+    for name in names:
+        try:
+            os.remove(os.path.join(IMAGES_DIR, name))
+            deleted.append(name)
+        except OSError:
+            failed.append(name)
+    return deleted, failed
+
+
 def show_menu(images, running_name):
     print(f"\nGlow Grid ({COLS}x{ROWS})")
     if not wiring_confirmed:
@@ -73,6 +107,9 @@ def show_menu(images, running_name):
     if not wiring_confirmed:
         print("  k. Wiring looks right: mark it confirmed")
     print("  r. Rescan images")
+    print("  e. Write the example sprites into images/")
+    if images:
+        print("  d. Delete images (d 3 5 7-9)")
     print("  o. Turn off")
     print("  q. Quit")
     if running_name:
@@ -106,6 +143,41 @@ def main():
                 stop_process(current_proc)
                 break
             if key == "r":
+                images = scan_images()
+                continue
+            if key == "e":
+                print("\nThis writes the example sprites (knight, cat, fox, ...) into images/,")
+                print("replacing any file that has the same name (e.g. cat_sprite.png).")
+                if input("Write them? [y/N] ").strip().lower() != "y":
+                    print("Cancelled.")
+                    continue
+                subprocess.run([sys.executable, os.path.join("examples", "make_examples.py")], cwd=SCRIPT_DIR)
+                images = scan_images()
+                continue
+            if key == "d":
+                if not extra:
+                    print("Say which ones, e.g. 'd 3' or 'd 1 4 7-9'.")
+                    continue
+                try:
+                    picked = parse_selection(extra, len(images))
+                except ValueError as e:
+                    print(f"Nothing deleted: {e}.")
+                    continue
+                names = [images[n - 1][0] for n in picked]
+                print("\nDelete permanently:")
+                for n in names:
+                    print(f"  {n}")
+                if input("Delete these? [y/N] ").strip().lower() != "y":
+                    print("Cancelled, nothing deleted.")
+                    continue
+                if current_name in names:
+                    stop_process(current_proc)
+                    subprocess.run([sys.executable, "off.py"], cwd=SCRIPT_DIR)
+                    current_proc, current_name = None, None
+                deleted, failed = delete_images(names)
+                print(f"Deleted {len(deleted)} file(s).")
+                if failed:
+                    print("Couldn't delete: " + ", ".join(failed))
                 images = scan_images()
                 continue
             if key == "k" and not wiring_confirmed:
