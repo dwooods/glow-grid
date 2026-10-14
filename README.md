@@ -314,7 +314,7 @@ The Pi fits any image to the grid and plays it. How good it looks depends on wha
 
 Tip: avoid spaces in filenames (`my_sprite.png`), since they complicate `scp`.
 
-**Examples and characters:** the repo ships original example sprites only (`knight`, `slime`, `ghost`, `gem`, `cat`, `fox`, `fish`, `potion`, `key`, `heart`, drawn as text in `examples/sprites.py` and written to `images/` by `examples/make_examples.py`). It does not include other people's characters, and a free or open-source repo doesn't change that. To show art you made or have the right to use, import it with *Import image* or copy the PNG to `images/`.
+**Examples and characters:** the repo ships original example sprites only (`knight`, `slime`, `ghost`, `gem`, `cat`, `fox`, `fish`, `potion`, `key`, `heart`, `frog`, `owl`, `coin`, `lantern`, drawn as text in `examples/sprites.py` and written to `images/` by `examples/make_examples.py`, named like the editor names a save, e.g. `fox_sprite.png`, with frame count, fps, brightness and gamma stored inside the PNG). It does not include other people's characters, and a free or open-source repo doesn't change that. To show art you made or have the right to use, import it with *Import image* or copy the PNG to `images/`.
 
 **Without the menu:** `play.py` is what the menu runs for each image, and you can call it directly to test one file:
 
@@ -334,7 +334,7 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 - **`probe.py`**: wiring diagnostics (markers / walk / check), run with `glow-grid probe`.
 - **`glowgrid.py`**: the menu/launcher. Scans `images/`, runs `play.py` as a background subprocess, runs only one at a time, and warns until the wiring is confirmed.
 - **`off.py`**: clears the panel.
-- **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/` (the knight, as a still and as an animation).
+- **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/` (14 characters, plus the knight as a still; each PNG carries the same `glow-grid` metadata the editor writes).
 - **`web/`**: the simulator (static site / installable app); see [The simulator](#the-simulator) for the file layout.
 - **`enclosure/build.py`**: generates the case STLs; see [Enclosure](#enclosure-3d-printed-not-yet-test-printed).
 
