@@ -2,8 +2,8 @@
 background until you pick something else, turn the panel off, or quit.
 
 Type a number to play that file; add a number after it to override the frame
-rate (e.g. "2 10" plays file 2 at 10 fps). "d 3 5 7-9" deletes those files
-(after a y/N check); "e" writes the example sprites into images/.
+rate (e.g. "2 10" plays file 2 at 10 fps). "d 3,5,7-9" deletes those files
+(after a y/N check); "e" creates the example sprites.
 """
 import os
 import re
@@ -60,12 +60,19 @@ def scan_images():
     return items
 
 
-def parse_selection(tokens, count):
-    """Turn ["1", "4", "6-8"] into [1, 4, 6, 7, 8] (1-based, sorted, no repeats).
-    Raises ValueError with a readable message for anything that is not a number
-    or range inside 1..count."""
+def parse_selection(text, count):
+    """Turn "1,4,6-8" into [1, 4, 6, 7, 8] (1-based, sorted, no repeats).
+
+    Items are separated by commas, never by spaces alone, so "1 2" can't be
+    mistaken for 12 (or the reverse). Spaces around a comma are fine. Raises
+    ValueError with a readable message for anything else."""
     picked = set()
-    for tok in tokens:
+    for tok in text.split(","):
+        tok = tok.strip()
+        if not tok:
+            raise ValueError("empty item: check for a stray comma")
+        if any(c.isspace() for c in tok):
+            raise ValueError(f"'{tok}' needs a comma between the items, like 1,2")
         lo, sep, hi = tok.partition("-")
         if not (lo.isdigit() and (not sep or hi.isdigit())):
             raise ValueError(f"'{tok}' is not a number or a range like 7-9")
@@ -76,8 +83,6 @@ def parse_selection(tokens, count):
             if not 1 <= n <= count:
                 raise ValueError(f"{n} is not in the list (1 to {count})")
             picked.add(n)
-    if not picked:
-        raise ValueError("no numbers given")
     return sorted(picked)
 
 
@@ -107,9 +112,9 @@ def show_menu(images, running_name):
     if not wiring_confirmed:
         print("  k. Wiring looks right: mark it confirmed")
     print("  r. Rescan images")
-    print("  e. Write the example sprites into images/")
+    print("  e. Create and store example sprites in images/ folder")
     if images:
-        print("  d. Delete images (d 3 5 7-9)")
+        print("  d. Delete images (for example d 3,5,7-9)")
     print("  o. Turn off")
     print("  q. Quit")
     if running_name:
@@ -156,10 +161,10 @@ def main():
                 continue
             if key == "d":
                 if not extra:
-                    print("Say which ones, e.g. 'd 3' or 'd 1 4 7-9'.")
+                    print("Say which ones, separated by commas, e.g. d 3 or d 1,4,7-9.")
                     continue
                 try:
-                    picked = parse_selection(extra, len(images))
+                    picked = parse_selection(" ".join(extra), len(images))
                 except ValueError as e:
                     print(f"Nothing deleted: {e}.")
                     continue
