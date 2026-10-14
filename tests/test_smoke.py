@@ -1,5 +1,5 @@
 """Browser smoke test for the Glow Grid editor (web/). Covers regressions we have already hit:
- import naming (_sprite), the Save button with a stubbed picker, the Help dialog, and a saved sheet restoring its frames.
+ import naming (_sprite), the Save button with a stubbed picker, the ESP32-C3 .gg export, the Help dialog, and a saved sheet restoring its frames.
 
 Run by hand before pushing a web/ change (not in CI):
     pip install playwright pillow && playwright install chromium
@@ -74,6 +74,7 @@ class Smoke(unittest.TestCase):
         self.pg.set_input_files('#imageInput', path); self.pg.wait_for_timeout(500)
     def dialog_open(self): return self.pg.evaluate("document.getElementById('photoDlg').open")
     def click_save(self): self.pg.evaluate("document.getElementById('exportBtn').click()")
+    def set_target(self, v): self.pg.evaluate("v => { const e = document.getElementById('targetInput'); e.value = v; e.dispatchEvent(new Event('change', {bubbles: true})); }", v)
 
     def test_photo_names_sprite_on_apply_and_cancel_keeps_name(self):
         self.set_name('mine')
@@ -111,6 +112,24 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate("delete window.showSaveFilePicker")  # no picker (Firefox, Safari): plain download
         with self.pg.expect_download() as d: self.click_save()
         self.assertEqual(d.value.suggested_filename, 'custom.png')
+
+    def test_c3_target_saves_gg_file(self):
+        self.pg.evaluate(STUB); self.set_name('custom')
+        self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#000000')];
+            state.currentFrame = 0; state.fps = 7.25; afterFrameChange(); }""")
+        self.set_target('c3')  # the select lives in the Export dialog, which is closed here
+        self.pg.evaluate("window.__mode = 'ok'"); self.click_save(); self.pg.wait_for_timeout(500)
+        self.assertEqual(self.pg.evaluate('window.__opts.suggestedName'), 'custom.gg')
+        self.assertIn('Saved custom.gg (2 frames, 1,548 bytes)', self.status())
+        head = self.pg.evaluate("(async () => Array.from(new Uint8Array(await window.__w[0].arrayBuffer()).slice(0, 15)))()")
+        self.assertEqual(head, [0x47, 0x47, 1, 0, 16, 16, 2, 0, 72, 0, 30, 22, 0xff, 0x88, 0x00], 'header: 2 frames, 72 (7.25 fps rounds half to even), 30%, 2.2; first pixel')
+        self.pg.evaluate("delete window.showSaveFilePicker")  # no picker: plain download, .gg name
+        with self.pg.expect_download() as d: self.click_save()
+        self.assertEqual(d.value.suggested_filename, 'custom.gg')
+        self.pg.evaluate("() => { state.cols = 8; state.rows = 32; afterFrameChange(); }")  # wrong size is refused, nothing saved
+        self.pg.evaluate("window.__w = []"); self.pg.evaluate(STUB); self.click_save(); self.pg.wait_for_timeout(300)
+        self.assertIn('16×16', self.status()); self.assertEqual(self.pg.evaluate('window.__w.length'), 0)
+        self.set_target('pi')
 
     def test_saved_sheet_restores_frames_under_another_name(self):
         self.pg.evaluate("""() => { const n = state.cols * state.rows; const cols = ['#ff0000', '#00ff00', '#0000ff'];

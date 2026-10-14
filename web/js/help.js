@@ -44,7 +44,7 @@ $('helpBody').innerHTML = `
             <li><strong>Raspberry Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
             <li><strong>Copy it to the Pi</strong> from your PC, then run <code>glow-grid</code>, press <code>r</code> to rescan and pick the file. In PowerShell: <code>scp "$HOME\\Downloads\\sprite.png" user@raspberrypi.local:~/glow-grid/images/</code> (change the file name and login to match yours).</li>
             <li><strong>View or share (PNG)</strong> saves a sharp, enlarged copy (named <code>_x16</code> etc.) to look at or send to someone. Don't copy it to the Pi: an enlarged animation would play as one squashed still.</li>
-            <li><strong>ESP32-C3</strong> export comes with the C3 build.</li>
+            <li><strong>ESP32-C3</strong> saves a small <code>.gg</code> sprite file for the C3 player (16×16 only, up to 64 frames). The pixels stay as drawn; the board applies the wiring, gamma and the brightness cap. Put it on the board from your PC: <code>python c3/tools/gg_tool.py put sprite.gg</code> (the same name replaces the old sprite).</li>
           </ul>
           <h3>Watch out for</h3>
           <ol>

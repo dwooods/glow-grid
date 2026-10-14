@@ -25,16 +25,16 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 | `js/loupe.js` | touch magnifier: a close-up of the pixels around a painting finger or pen |
 | `js/phone.js` | phone layout (portrait): moves the tools into a bottom dock and the frame extras below the strip (More jumps to them), and puts everything back on rotate or resize |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
-| `js/export.js` | the PNG text chunk (`glow-grid` metadata), the Export dialog (Pi, view/share, and the future C3 target), the Save-as picker and the status toast |
+| `js/export.js` | the PNG text chunk (`glow-grid` metadata), the `.gg` sprite file for the C3, the Export dialog (Pi, view/share, C3), the Save-as picker and the status toast |
 | `js/help.js` | the Help dialog text (kept out of `index.html` so page edits stay small) |
 | `js/tools.js` | move, "animate one part only", playback |
 | `js/main.js` | app install, service worker, File menu, boot |
 
-**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, that a PNG saved by the simulator is read back correctly by the Pi code, that the example generator writes the same metadata, and the menu's delete helpers. Run it before pushing a change to `led.js`, `export.js` or `grid_common.py`.
+**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, that a PNG saved by the simulator is read back correctly by the Pi code, that the example generator writes the same metadata, that the editor's `.gg` export is byte-identical to `c3/tools/gg_format.py` and accepted by the board's own check, and the menu's delete helpers. Run it before pushing a change to `led.js`, `export.js` or `grid_common.py`.
 
-`tests/test_smoke.py` is a browser smoke test (import naming, Save with a stubbed picker, a saved sheet restoring its frames, the Help dialog). Run it by hand before pushing a change under `web/`: `pip install playwright pillow && playwright install chromium`, then `python3 -m unittest tests.test_smoke -v` from the repo root. It skips itself if Playwright is missing.
+`tests/test_smoke.py` is a browser smoke test (import naming, Save with a stubbed picker, the ESP32-C3 `.gg` export, a saved sheet restoring its frames, the Help dialog). Run it by hand before pushing a change under `web/`: `pip install playwright pillow && playwright install chromium`, then `python3 -m unittest tests.test_smoke -v` from the repo root. It skips itself if Playwright is missing.
 
-New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only; Help text lives in `help.js`.
+New targets (BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only; Help text lives in `help.js`.
 
 - **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen, portrait): the grid fills the width. A dock at the bottom stays put and holds Paint/Fill/Erase/Pick, your color (tap it to jump to the wheel), the palette and Undo/Redo; a frame strip sits under the grid (Play, thumbnails, duplicate, **More**). The rest (frame speed and delete, Move and layers, wheel and hex, Panel settings) is below the strip: swipe up anywhere except on the grid (a finger on the grid paints), or tap **More** to jump to it. While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. The dock is used in portrait windows up to 900 px tall and on any touch device; a tall, narrow desktop window keeps the desktop layout, and landscape falls back to the scrolling page. With more frames than fit on one line, the strip wraps into the spare height under the grid (a single scrolling line when there is no room). This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
@@ -119,7 +119,7 @@ The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Exp
 
 - **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. Copy it to the Pi with `scp` (the command is in Help and below).
 - **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
-- **ESP32-C3:** listed but disabled until the C3 build exists. New targets slot in here.
+- **ESP32-C3:** a small `.gg` sprite file for the C3 player in [`c3/`](c3/) (16×16 only, up to 64 frames). The pixels stay as drawn; the board applies the wiring order, gamma and the 0.4 brightness cap itself. Put it on the board with `python c3/tools/gg_tool.py put sprite.gg`; the same name replaces the old sprite.
 
 ## Hardware and software (the tested build)
 
@@ -164,7 +164,7 @@ A four-part case for the 16×16 panel, plus a small separate holder for the ESP3
 
 Print at 0.18-0.2 mm layers, PLA.
 
-**Wiring and build checklist** (proposed, not yet built): [`enclosure/c3-wiring.svg`](enclosure/c3-wiring.svg). The panel's current runs on its own heavy wires from the DC jack; the C3 takes a thin branch from the same jack, plus a diode so USB (for flashing only) and the supply can't fight. Solder the wires to the C3's pin tips: with the pins up, a Dupont plug would top out near z = 25.6 mm, about 2.6 mm into the panel's back face (23 mm), while the soldered pin tips reach about 19.6 mm.
+**Wiring and build checklist** (pin map checked against the C3 SuperMini pinout; the board, Wi-Fi and onboard LED tested on the bench; panel output and buttons not yet built): [`enclosure/c3-wiring.svg`](enclosure/c3-wiring.svg). The panel's current runs on its own heavy wires from the DC jack; the C3 takes a thin branch from the same jack, plus a diode so USB (for flashing only) and the supply can't fight. Solder the wires to the C3's pin tips: with the pins up, a Dupont plug would top out near z = 25.6 mm, about 2.6 mm into the panel's back face (23 mm), while the soldered pin tips reach about 19.6 mm.
 
 ![Wiring and build checklist](enclosure/c3-wiring.svg)
 
@@ -341,6 +341,7 @@ A still stays up until you press Ctrl+C; an animation loops. Either way the pane
 - **`examples/sprites.py`**: the example sprites, drawn as text so they're diffable source rather than binary files. `make_examples.py` renders them into `images/` (14 characters, plus the knight as a still; each PNG carries the same `glow-grid` metadata the editor writes).
 - **`web/`**: the simulator (static site / installable app); see [The simulator](#the-simulator) for the file layout.
 - **`enclosure/build.py`**: generates the case STLs; see [Enclosure](#enclosure-3d-printed-not-yet-test-printed).
+- **`c3/`**: the ESP32-C3 player; see [ESP32-C3 player](#esp32-c3-player).
 
 Frame rate for an animation comes from, in order: the menu argument, the fps stored in the PNG, `_<n>fps` in the filename, the GIF's own timing, then `DEFAULT_FPS` (6).
 
@@ -372,6 +373,15 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 - To use WLED with a 16×16 panel, set *LED Preferences → 2D configuration* (panel size, first LED corner, orientation, serpentine). These are the same four facts `probe.py` finds.
 - Glow Grid's Panel check is still useful for WLED art: it flags what won't survive on real LEDs regardless of which board drives them.
 - Possible future directions (not built yet): a "Send to WLED" button in Glow Grid using WLED's JSON API, streaming animations from the Pi to WLED over DDP, and a standalone port of glow-grid to an ESP32-C3 board.
+
+## ESP32-C3 player
+
+[`c3/`](c3/) is a standalone player for the same panel on an ESP32-C3 SuperMini: it keeps several sprites in the board's flash, plays one at a time, and takes new ones over USB. No Pi, no PC once the sprites are on it. It is the first stage of the phone-app path (Bluetooth comes next and will carry the same files).
+
+- **Sprites are `.gg` files** (12-byte header plus raw RGB as drawn, 3 KB for 4 frames). The editor's *Export for: ESP32-C3* writes one; `c3/tools/png_to_gg.py` converts an existing Glow Grid PNG. The file has no wiring order and no gamma correction: the board applies both (`gg_core.h`, same maths as `grid_common.py`, checked by tests) and caps brightness at 0.4, so a file works on any panel and nothing on the phone side can overload the LEDs.
+- **On and off the board:** `python c3/tools/gg_tool.py put a.gg b.gg`, `list`, `show a`, `del a`. Add is a new name, replace is the same name. An upload lands in a temporary file and is swapped in only after the size, CRC-32 and header check out.
+- **Buttons:** Next (GPIO5 to GND) cycles sprites, On/off (GPIO7) blanks the panel. Data on GPIO6. Wiring and the build checklist are in [`enclosure/c3-wiring.svg`](enclosure/c3-wiring.svg).
+- **Tested:** 12 tests in `c3/tests` (`cd c3 && python3 -m unittest discover -s tests -v`; needs g++) compile the real firmware logic on a PC and drive the real sketch through the real upload tool. On the board: two sprites stored and played, and the player came back on its own after a power cycle. Buttons and Bluetooth: not yet. Setup is in [`c3/README.md`](c3/README.md).
 
 ## License
 

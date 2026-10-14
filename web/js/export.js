@@ -1,4 +1,4 @@
-// PNG metadata and Export image. Classic script: shares one global scope with the other files in js/ (load order is in index.html).
+// PNG metadata, the .gg sprite file and Export. Classic script: shares one global scope with the other files in js/ (load order is in index.html).
 /* ---------- light settings stored in the PNG (read by grid_common.image_light) ---------- */
 const LIGHT_KEY = 'glow-grid';
 const CRC_TABLE = (() => {
@@ -52,6 +52,26 @@ function applySavedLight(raw) {
   return true;
 }
 
+/* ---------- .gg sprite file for the ESP32-C3 player (read by c3/gg_core.h) ---------- */
+// 12-byte header: "GG", version 1, flags, cols, rows, frames (u16), fps x10 (u16), brightness %, gamma x10; then raw RGB
+// per frame, row by row from the top-left, exactly as drawn. The board applies wiring, gamma and the brightness cap itself.
+const GG_MAX_FRAMES = 64;
+function ggBytes(frames, cols, rows, fps, brightness, gamma) {
+  const n = frames.length;
+  if (n < 1 || n > GG_MAX_FRAMES) throw new Error(`1 to ${GG_MAX_FRAMES} frames`);
+  const fps10 = pyRound(fps * 10), bright = pyRound(brightness * 100), gamma10 = pyRound(gamma * 10);
+  if (fps10 < 5 || fps10 > 300) throw new Error('fps 0.5 to 30');
+  if (bright < 1 || bright > 100) throw new Error('brightness 0.01 to 1');
+  if (gamma10 < 10 || gamma10 > 30) throw new Error('gamma 1.0 to 3.0');
+  const out = new Uint8Array(12 + n * cols * rows * 3);
+  out.set([0x47, 0x47, 1, 0, cols, rows, n & 0xff, n >> 8, fps10 & 0xff, fps10 >> 8, bright, gamma10], 0);
+  let p = 12;
+  frames.forEach((f) => {
+    for (let i = 0; i < cols * rows; i++) { const [r, g, b] = hexToRgb(f[i]); out[p++] = r; out[p++] = g; out[p++] = b; }
+  });
+  return out;
+}
+
 /* ---------- export ---------- */
 let toastTimer = 0;
 function setStatus(msg) {
@@ -62,7 +82,7 @@ const safeName = () => (state.name || '').trim().replace(/[^a-z0-9_-]+/gi, '_').
 // File name is just the sprite's name. Frames, fps, brightness and gamma live inside the PNG (text chunk).
 const frameFile = () => `${safeName()}.png`;
 const sheetFile = () => `${safeName()}.png`;
-const exportTarget = () => (sim.target === 'view' ? 'view' : 'pi');
+const exportTarget = () => (sim.target === 'view' || sim.target === 'c3' ? sim.target : 'pi');
 const exportScale = () => exportTarget() === 'view' ? (Number($('scaleInput').value) || 16) : 1;
 const scaledName = (file) => exportScale() > 1 ? file.replace(/\.png$/, `_x${exportScale()}.png`) : file;
 // Enlarge each pixel into a sharp block (no smoothing) for viewing/sharing
@@ -77,19 +97,19 @@ function updateCmd() {
   const t = exportTarget();
   document.querySelectorAll('.only-view').forEach((el) => { el.hidden = t !== 'view'; });
 }
-async function saveCanvas(canvas, filename, extra) {
-  // Chrome and Edge on desktop can ask where to save (File System Access API). Ask first, while the click still counts as a user gesture.
+// Save a file: Chrome and Edge on desktop ask where (File System Access API), asked first while the click still counts as a
+// user gesture; other browsers download. makeBlob builds the file after the picker so the picker never waits on it.
+async function saveFile(filename, type, makeBlob, detail) {
   let handle = null;
   if (window.showSaveFilePicker && !downloadsCap) {
-    try { handle = await window.showSaveFilePicker({ suggestedName: filename, types: [{ description: 'PNG image', accept: { 'image/png': ['.png'] } }] }); }
+    try { handle = await window.showSaveFilePicker({ suggestedName: filename, types: [type] }); }
     catch (err) { if (err && err.name === 'AbortError') { setStatus('Save cancelled.'); return; } handle = null; } // any other error: plain download below
   }
-  const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));
-  const blob = new Blob([withPngText(await png.arrayBuffer(), LIGHT_KEY, lightJson(extra))], { type: 'image/png' });
+  const blob = await makeBlob();
   if (handle) {
     try {
       const w = await handle.createWritable(); await w.write(blob); await w.close();
-      setStatus(`Saved ${handle.name} (${canvas.width}×${canvas.height}).`);
+      setStatus(`Saved ${handle.name} (${detail}).`);
       return;
     } catch (err) { setStatus('The file couldn’t be saved.'); return; }
   }
@@ -99,13 +119,13 @@ async function saveCanvas(canvas, filename, extra) {
     a.href = URL.createObjectURL(blob); a.download = filename;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    setStatus(`Saved ${filename} (${canvas.width}×${canvas.height}).`);
+    setStatus(`Saved ${filename} (${detail}).`);
     return;
   }
   if (!downloadsCap) { setStatus('Saving files isn’t available in this view.'); return; }
   try {
     const r = await downloadsCap.save({ filename, data: blob });
-    if (r && r.status === 'saved') setStatus(`Saved ${filename} (${canvas.width}×${canvas.height}).`);
+    if (r && r.status === 'saved') setStatus(`Saved ${filename} (${detail}).`);
     else setStatus('Handed off to the destination you picked.');
   } catch (err) {
     const code = err && err.code;
@@ -115,8 +135,28 @@ async function saveCanvas(canvas, filename, extra) {
     else setStatus('The file couldn’t be saved.');
   }
 }
+const PNG_TYPE = { description: 'PNG image', accept: { 'image/png': ['.png'] } };
+const GG_TYPE = { description: 'Glow Grid sprite', accept: { 'application/octet-stream': ['.gg'] } };
+function saveCanvas(canvas, filename, extra) {
+  saveFile(filename, PNG_TYPE, async () => {
+    const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    return new Blob([withPngText(await png.arrayBuffer(), LIGHT_KEY, lightJson(extra))], { type: 'image/png' });
+  }, `${canvas.width}×${canvas.height}`);
+}
+// ESP32-C3: a .gg sprite file for the C3 player (c3/). Put it on the board with c3/tools/gg_tool.py put <file>.
+function saveGg() {
+  const n = state.frames.length;
+  if (state.cols !== 16 || state.rows !== 16) { setStatus(`The C3 player is 16×16; this picture is ${state.cols}×${state.rows}.`); return; }
+  if (n > GG_MAX_FRAMES) { setStatus(`The C3 player takes up to ${GG_MAX_FRAMES} frames; this has ${n}.`); return; }
+  let bytes;
+  try { bytes = ggBytes(state.frames.map(flatten), state.cols, state.rows, state.fps, sim.brightness, sim.gamma); }
+  catch (err) { setStatus(`Can’t save for the C3: ${err.message}.`); return; }
+  const detail = `${n} frame${n === 1 ? '' : 's'}, ${bytes.length.toLocaleString()} bytes`;
+  saveFile(`${safeName()}.gg`, GG_TYPE, async () => new Blob([bytes], { type: 'application/octet-stream' }), detail);
+}
 // One Save button: 1 frame saves a still, 2 or more save a sprite sheet. Settings go inside the PNG.
 $('exportBtn').addEventListener('click', () => {
+  if (exportTarget() === 'c3') { saveGg(); return; }
   const n = state.frames.length;
   const c = document.createElement('canvas'); c.width = state.cols * n; c.height = state.rows;
   const ctx = c.getContext('2d');
