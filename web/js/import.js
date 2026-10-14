@@ -37,6 +37,15 @@ function put(out, x, y, d, i) {
   const a = d[i + 3] / 255;
   out[y * state.cols + x] = toHex(Math.round(d[i] * a), Math.round(d[i + 1] * a), Math.round(d[i + 2] * a));
 }
+// Export name after an import: the file's name (extension and our own light/fps/sheet/scale tags dropped) plus "_sprite".
+// The user can still edit it in the Export dialog. Never doubled: "cat_sprite.png" gives "cat_sprite".
+function spriteNameFor(file) {
+  const base = (file.name || '').replace(/\.[^.]+$/, '')
+    .replace(/_x\d+$/i, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '').replace(/_sprite$/i, '')
+    .replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '');
+  return (base || 'sprite') + '_sprite';
+}
+function setSpriteName(file) { state.name = spriteNameFor(file); $('nameInput').value = state.name; saveState(); }
 // One import path. Sprite sheets (and single frames saved from here) load straight in; everything else opens the crop dialog.
 $('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0]; e.target.value = ''; if (!file) return;
@@ -65,11 +74,11 @@ $('imageInput').addEventListener('change', async (e) => {
       const m = /_(\d+)fps/i.exec(file.name);
       if (typeof meta.fps === 'number' && meta.fps > 0) { state.fps = clamp(meta.fps, 1, 30); $('fpsInput').value = state.fps; }
       else if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
-      const base = file.name.replace(/\.[^.]+$/, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?(_x\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '');
-      if (base) { state.name = base; $('nameInput').value = base; }
+      setSpriteName(file);
       setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
     } else {
       setEditLayer(fitImage(img, w, h, 'pixel'));
+      setSpriteName(file);
       setStatus(`Frame loaded onto frame ${state.currentFrame + 1}. Undo reverts.`);
     }
     afterFrameChange();
@@ -504,6 +513,7 @@ $('photoDlg').addEventListener('close', () => { setPick(false); ptrs.clear(); ph
 function applyPhoto(asNew) {
   if (!photo.result) return;
   stopPlay(); pushUndo();
+  if (photo.file) setSpriteName(photo.file);
   if (asNew) { state.target = 'frame'; state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
   else setEditLayer(photo.result);
   afterFrameChange();
@@ -514,6 +524,7 @@ function applyPhoto(asNew) {
 $('photoApply').addEventListener('click', () => applyPhoto(false));
 $('photoAdd').addEventListener('click', () => applyPhoto(true));
 async function openImport(file) {
+  photo.file = file;
   try {
     const d = await decodeFile(file);
     Object.assign(photo, { w: d.w, h: d.h, data: d.data, canvas: d.canvas, result: null, mask: null, maskKey: null });
