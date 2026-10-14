@@ -25,11 +25,14 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 | `js/loupe.js` | touch magnifier: a close-up of the pixels around a painting finger or pen |
 | `js/phone.js` | phone layout (portrait): moves the tools into a bottom dock and the frame extras below the strip (More jumps to them), and puts everything back on rotate or resize |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
-| `js/export.js` | the PNG text chunk (`glow-grid` metadata), the Export dialog (Pi, view/share, and the future C3 target) and the status toast |
+| `js/export.js` | the PNG text chunk (`glow-grid` metadata), the Export dialog (Pi, view/share, and the future C3 target), the Save-as picker and the status toast |
+| `js/help.js` | the Help dialog text (kept out of `index.html` so page edits stay small) |
 | `js/tools.js` | move, "animate one part only", playback |
-| `js/main.js` | app install, service worker, help dialog, File menu, boot |
+| `js/main.js` | app install, service worker, File menu, boot |
 
-New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only.
+**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, and that a PNG saved by the simulator is read back correctly by the Pi code. Run it before pushing a change to `led.js`, `export.js` or `grid_common.py`.
+
+New targets (the ESP32-C3 bundle, BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only; Help text lives in `help.js`.
 
 - **On a phone** (iPhone Safari or Android Chrome, or installed to the home screen, portrait): the grid fills the width. A dock at the bottom stays put and holds Paint/Fill/Erase/Pick, your color (tap it to jump to the wheel), the palette and Undo/Redo; a frame strip sits under the grid (Play, thumbnails, duplicate, **More**). The rest (frame speed and delete, Move and layers, wheel and hex, Panel settings) is below the strip: swipe up anywhere except on the grid (a finger on the grid paints), or tap **More** to jump to it. While a finger or pen paints or erases, a magnifier shows the pixels around it. Touch targets are 44 px. The dock is used in portrait windows up to 900 px tall and on any touch device; a tall, narrow desktop window keeps the desktop layout, and landscape falls back to the scrolling page. With more frames than fit on one line, the strip wraps into the spare height under the grid (a single scrolling line when there is no room). This is a web app only for now; a native app is a later stage (see `claude/phone-app-design.md` in the project docs).
 - **Open it locally**: double-click `web/index.html`. Everything works except app install.
@@ -110,7 +113,7 @@ The *Move and layers* card (under *Tools* on a desktop, below the frame strip on
 
 ### Export: choose what it is for
 
-The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Export…* opens a dialog with the sprite's name, an *Export for* choice and one Save button (a bottom sheet on a phone). The File menu is a native `popover` and the dialog a native `<dialog>`, so there is no UI library.
+The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Export…* opens a dialog with the sprite's name, an *Export for* choice and one **Save** button (a bottom sheet on a phone). The name starts as the imported file's name plus `_sprite` (`cat.png` becomes `cat_sprite`) and can be edited. In Chrome and Edge on desktop, Save opens a Save-as dialog so you choose the folder and file name; other browsers download straight to the Downloads folder. The File menu is a native `popover` and the dialog a native `<dialog>`, so there is no UI library.
 
 - **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. Copy it to the Pi with `scp` (the command is in Help and below).
 - **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
