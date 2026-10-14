@@ -78,8 +78,21 @@ function updateCmd() {
   document.querySelectorAll('.only-view').forEach((el) => { el.hidden = t !== 'view'; });
 }
 async function saveCanvas(canvas, filename, extra) {
+  // Chrome and Edge on desktop can ask where to save (File System Access API). Ask first, while the click still counts as a user gesture.
+  let handle = null;
+  if (window.showSaveFilePicker && !downloadsCap) {
+    try { handle = await window.showSaveFilePicker({ suggestedName: filename, types: [{ description: 'PNG image', accept: { 'image/png': ['.png'] } }] }); }
+    catch (err) { if (err && err.name === 'AbortError') { setStatus('Save cancelled.'); return; } handle = null; } // any other error: plain download below
+  }
   const png = await new Promise((res) => canvas.toBlob(res, 'image/png'));
   const blob = new Blob([withPngText(await png.arrayBuffer(), LIGHT_KEY, lightJson(extra))], { type: 'image/png' });
+  if (handle) {
+    try {
+      const w = await handle.createWritable(); await w.write(blob); await w.close();
+      setStatus(`Saved ${handle.name} (${canvas.width}×${canvas.height}).`);
+      return;
+    } catch (err) { setStatus('The file couldn’t be saved.'); return; }
+  }
   if (!downloadsCap && !window.claude) {
     // Opened as a plain file (web/index.html from the repo): ordinary browser download
     const a = document.createElement('a');
