@@ -72,6 +72,23 @@ function ggBytes(frames, cols, rows, fps, brightness, gamma) {
   return out;
 }
 
+// The reverse of ggBytes: a .gg file (from File ▸ Open, or read back from the board with GET) to frames and light settings.
+// Throws an Error with a plain message for anything that is not a sprite this editor can show.
+function ggDecode(b) {
+  if (b.length < 12 || b[0] !== 0x47 || b[1] !== 0x47) throw new Error('that is not a Glow Grid sprite file');
+  if (b[2] !== 1) throw new Error(`sprite file version ${b[2]} is newer than this editor understands`);
+  const cols = b[4], rows = b[5], n = b[6] | (b[7] << 8), fps10 = b[8] | (b[9] << 8), bright = b[10], gamma10 = b[11];
+  if (!cols || !rows || n < 1 || n > GG_MAX_FRAMES) throw new Error('the sprite file header is not valid');
+  if (b.length !== 12 + n * cols * rows * 3) throw new Error(`the sprite file is ${b.length} bytes but its header says ${12 + n * cols * rows * 3}; it was cut off or damaged`);
+  const frames = [];
+  let p = 12;
+  for (let k = 0; k < n; k++) {
+    const f = new Array(cols * rows);
+    for (let i = 0; i < f.length; i++, p += 3) f[i] = toHex(b[p], b[p + 1], b[p + 2]);
+    frames.push(f);
+  }
+  return { cols, rows, frames, fps: fps10 / 10, brightness: bright / 100, gamma: gamma10 / 10 };
+}
 /* ---------- export ---------- */
 let toastTimer = 0;
 function setStatus(msg) {
@@ -167,3 +184,26 @@ $('exportBtn').addEventListener('click', () => {
 $('scaleInput').addEventListener('change', updateCmd);
 $('targetInput').addEventListener('change', (e) => { sim.target = e.target.value; saveSim(); updateCmd(); });
 $('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
+
+// Put a decoded sprite into the editor: frames, size, name, fps, and the file's own brightness and gamma. Undo brings the old drawing back.
+function loadGgSprite(d, name, from) {
+  stopPlay(); pushUndo();
+  const resized = d.cols !== state.cols || d.rows !== state.rows;
+  state.cols = d.cols; state.rows = d.rows; state.frames = d.frames; state.currentFrame = 0; state.shared = null; state.target = 'frame';
+  if (resized) { $('colsInput').value = state.cols; $('rowsInput').value = state.rows; buildGridDOM(); }
+  state.fps = clamp(Math.round(d.fps), 1, 30); $('fpsInput').value = state.fps;
+  state.name = name; $('nameInput').value = name;
+  $('brightInput').value = d.brightness; $('gammaInput').value = d.gamma;
+  readLedSettings();
+  afterFrameChange();
+  const n = d.frames.length;
+  setStatus(`Loaded ${name} from ${from}: ${n} frame${n === 1 ? '' : 's'}, ${state.fps} fps, brightness ${d.brightness}, gamma ${d.gamma}.` + (Math.abs(d.fps - state.fps) > 0.01 ? ` The file plays at ${d.fps} fps; the editor uses whole numbers.` : '') + ' Undo reverts.');
+}
+const needsReplaceOk = () => !hasArt(state) || confirm('Replace the drawing in the editor with this sprite? Undo brings the old one back.');
+async function openGgFile(file) {
+  let d;
+  try { d = ggDecode(new Uint8Array(await file.arrayBuffer())); } catch (err) { setStatus(`Can’t open ${file.name}: ${err.message}.`); return; }
+  if (!needsReplaceOk()) return;
+  loadGgSprite(d, ((file.name || '').replace(/\.[^.]+$/, '').replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '') || 'sprite').slice(0, 31), 'the file');
+}
+$('ggInput').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) openGgFile(f); });

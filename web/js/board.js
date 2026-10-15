@@ -12,6 +12,7 @@ const BOARD_BAUD = 115200;
 const BOARD_PAGE = 5;                // rows per page in the list
 const BOARD_MAX_SPRITES = 64;        // the firmware's MAX_SPRITES
 const BOARD_CRC_FW = 7;              // the first firmware with the CRC command (Remove examples needs it)
+const BOARD_GET_FW = 8;              // the first firmware with the GET command (Load needs it)
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
 class SerialTransport {
@@ -130,6 +131,17 @@ class GgBoard {
     if (!m) throw new Error(`unexpected reply: ${line}`);
     return { crc: m[1], size: Number(m[2]) };
   }
+  async get(name) {                   // the stored file as bytes, read back as hex lines and checked against the board's own CRC (firmware 8 and later)
+    const lines = [];
+    const end = await this.cmd(`GET ${name}`, ['OK'], 20000, lines);
+    const hex = lines.filter((l) => l.startsWith('D ')).map((l) => l.slice(2).trim()).join('');
+    const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(end);
+    if (!m || hex.length % 2) throw new Error(`unexpected reply: ${end}`);
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(2 * i, 2), 16);
+    if (bytes.length !== Number(m[2]) || crc32(bytes).toString(16).padStart(8, '0') !== m[1]) throw new Error('the sprite came through damaged; try Load again');
+    return bytes;
+  }
   async close() { await this.t.close(); }
 }
 
@@ -173,6 +185,7 @@ async function boardRefresh(showName) {            // showName: jump to the page
   if (!board) return;
   const [{ files, free }, info] = [await board.list(), await board.info()];
   boardFiles = files; boardCurrent = info.current || '';
+  boardFw = info.fw || '';           // before the list is drawn: Load greys itself out on a firmware without GET
   boardNames = files.map((f) => f.name);
   if (showName && boardNames.includes(showName)) boardPage = Math.floor(boardNames.indexOf(showName) / BOARD_PAGE);
   boardRenderList();
@@ -180,7 +193,6 @@ async function boardRefresh(showName) {            // showName: jump to the page
   $('boardOnBtn').disabled = info.panel !== 'off';
   $('boardOffBtn').disabled = info.panel === 'off';
   boardShowRotate(info.rotate);
-  boardFw = info.fw || '';
 }
 function boardRenderList() {
   const files = boardFiles;
@@ -194,18 +206,35 @@ function boardRenderList() {
     li.className = 'board-row' + (playing ? ' playing' : '');
     const nm = document.createElement('span'); nm.className = 'board-name'; nm.textContent = f.name;
     const sz = document.createElement('small'); sz.textContent = `${(f.size / 1024).toFixed(1)} KB` + (playing ? ' · playing' : '');
+    const load = document.createElement('button'); load.type = 'button'; load.className = 'btn btn-quiet'; load.textContent = 'Load';
+    const canGet = Number(boardFw) >= BOARD_GET_FW;
+    load.disabled = !canGet;
+    load.title = canGet ? 'Put this sprite in the editor grid to change it' : `Load needs firmware ${BOARD_GET_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+    load.addEventListener('click', () => boardLoad(f.name));
     const play = document.createElement('button'); play.type = 'button'; play.className = 'btn btn-quiet'; play.textContent = 'Play';
     play.disabled = playing;
     play.addEventListener('click', () => boardAct(() => board.show(f.name), `Playing ${f.name}.`));
     const del = document.createElement('button'); del.type = 'button'; del.className = 'btn btn-quiet danger'; del.textContent = 'Delete';
     del.addEventListener('click', () => { if (confirm(`Delete ${f.name} from the board? This cannot be undone.`)) boardAct(() => board.del(f.name), `Deleted ${f.name}.`); });
-    li.append(nm, sz, play, del);
+    li.append(nm, sz, load, play, del);
     ul.appendChild(li);
   }
   $('boardPager').hidden = files.length <= BOARD_PAGE;
   $('boardPageInfo').textContent = `${boardPage * BOARD_PAGE + 1}–${Math.min((boardPage + 1) * BOARD_PAGE, files.length)} of ${files.length}`;
   $('boardPrevBtn').disabled = boardPage <= 0;
   $('boardNextBtn').disabled = boardPage >= pages - 1;
+}
+async function boardLoad(name) {       // read the sprite back from the board into the editor grid
+  if (!board) return;
+  boardBusy(true);
+  try {
+    boardSay(`Reading ${name} from the board…`, '');
+    const d = ggDecode(await board.get(name));
+    if (!needsReplaceOk()) { boardSay('Not loaded.', ''); return; }
+    loadGgSprite(d, name, 'the board');
+    boardSay(`Loaded ${name} into the editor. Change it, then Send to board (the Export name is now “${name}”, so Send replaces it).`, 'ok');
+  } catch (err) { if (board) boardSay(`Could not load ${name}: ${err.message}`, 'err'); }
+  finally { boardBusy(false); }
 }
 async function boardAct(fn, doneMsg) {
   if (!board) return;
