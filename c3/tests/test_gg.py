@@ -347,7 +347,17 @@ class Board(unittest.TestCase):
         build(SIM, "-Wall", f"-I{os.path.join(HERE, 'arduino_stub')}", f"-I{SKETCH}", "-x", "c++",
               os.path.join(SKETCH, "c3_player.ino"), "-x", "c++", os.path.join(HERE, "sim_main.cpp"))
 
-    def start(self):
+    def sim_env(self, wifi=False):
+        """wifi=True lets the stand-in Wi-Fi library "join" at once (as 127.0.0.1) so the HTTP server starts."""
+        env = dict(os.environ, GG_FS_DIR=self.fs, GG_LED_LOG=self.led, GG_PINS=self.pins, GG_NVS=self.fs + "_nvs",
+                   GG_WIFI_LOG=self.fs + "_wifi.log", GG_HTTP_PORT_FILE=self.fs + "_port")
+        env.pop("GG_WIFI_SIM", None)
+        if wifi or getattr(self, "wifi_sim", False):
+            env["GG_WIFI_SIM"] = "1"
+        return env
+
+    def start(self, wifi=False):
+        self.wifi_sim = wifi
         self.fs = tempfile.mkdtemp(prefix="gg_fs_")
         self.led = os.path.join(self.fs + "_led.log")
         self.pins = self.fs + "_pins"
@@ -355,8 +365,7 @@ class Board(unittest.TestCase):
         self.press(None)
         master, slave = pty.openpty()
         tty.setraw(slave)                        # binary uploads must pass through untouched
-        env = dict(os.environ, GG_FS_DIR=self.fs, GG_LED_LOG=self.led, GG_PINS=self.pins)
-        self.proc = subprocess.Popen([SIM], stdin=slave, stdout=slave, env=env)
+        self.proc = subprocess.Popen([SIM], stdin=slave, stdout=slave, env=self.sim_env(wifi))
         os.close(slave)
         self.addCleanup(self.stop, master)
         self.port = FakePort(master)
@@ -653,10 +662,11 @@ class Board(unittest.TestCase):
         self.proc.kill()
         self.proc.wait()
         write_text(self.led, "")
+        if os.path.exists(self.fs + "_port"):
+            os.remove(self.fs + "_port")
         master, slave = pty.openpty()
         tty.setraw(slave)
-        env = dict(os.environ, GG_FS_DIR=self.fs, GG_LED_LOG=self.led, GG_PINS=self.pins)
-        self.proc = subprocess.Popen([SIM], stdin=slave, stdout=slave, env=env)
+        self.proc = subprocess.Popen([SIM], stdin=slave, stdout=slave, env=self.sim_env())
         os.close(slave)
         self.addCleanup(os.close, master)
         return gg_tool.Board(ser=FakePort(master))
@@ -755,6 +765,209 @@ class Board(unittest.TestCase):
         board.put(self.write_gg("beta", sample_frames(22, 1)))
         board = self.restart()
         self.assertIn("panel=on", board.simple("INFO"))
+
+
+    # ---- Wi-Fi (firmware 9) ----
+    def wifi_log(self):
+        p = self.fs + "_wifi.log"
+        return open(p).read() if os.path.exists(p) else ""
+
+    def wait_for(self, fn, what, timeout=6.0):
+        end = time.time() + timeout
+        while time.time() < end:
+            v = fn()
+            if v:
+                return v
+            time.sleep(0.05)
+        self.fail("timed out waiting for " + what)
+
+    def http_base(self):
+        """Waits until the board's HTTP server is up (the simulator writes its port to a file)."""
+        def port():
+            p = self.fs + "_port"
+            return open(p).read().strip() if os.path.exists(p) and open(p).read().strip() else None
+        return "127.0.0.1:" + self.wait_for(port, "the HTTP server to start")
+
+    def http(self, method, path, body=None, headers=None, base=None):
+        """-> (status, headers, body bytes); the 4xx/5xx body is returned too."""
+        import urllib.request, urllib.error
+        req = urllib.request.Request("http://" + (base or self.http_base()) + path, data=body, method=method, headers=headers or {})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, r.headers, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, e.read()
+
+    def test_wifi_credentials_over_usb(self):
+        self.start(wifi=True)
+        self.assertTrue(self.board.wifi_status().startswith("OK wifi=off "))
+        self.assertIn("wifi=off ip=-", self.board.simple("INFO"))
+        self.assertEqual(self.wifi_log(), "", "nothing joins until credentials are set")
+        # a name with spaces and a password with symbols survive the trip (hex on the wire)
+        ssid, pw = "My Home Net", 'p@ss "word" #1'
+        self.assertTrue(self.board.wifi_set(ssid, pw).startswith("OK wifi saved"))
+        st = self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "joining")
+        self.assertIn("ip=127.0.0.1", st)
+        self.assertIn("host=glowgrid.local", st)
+        self.assertTrue(st.endswith("ssid=" + ssid))
+        self.assertNotIn("p@ss", st, "the password is never printed")
+        self.assertNotIn("p@ss", self.board.simple("INFO"))
+        log = self.wifi_log()
+        self.assertIn(f"begin {ssid} {pw}", log)
+        self.assertIn("hostname glowgrid", log)
+        self.assertIn("mdns begin glowgrid", log)
+        self.assertIn("mdns service http.tcp 80", log)
+        self.assertIn("wifi=connected ip=127.0.0.1", self.board.simple("INFO"))
+        self.assertRegex(self.board.simple("INFO"), r"gap_ms=\d+")
+        # stored in NVS, so a power cycle joins again by itself
+        os.remove(self.fs + "_wifi.log")
+        board = self.restart()
+        st = self.wait_for(lambda: "wifi=connected" in board.wifi_status() and board.wifi_status(), "rejoining after a power cycle")
+        self.assertTrue(st.endswith("ssid=" + ssid))
+        self.assertIn(f"begin {ssid} {pw}", self.wifi_log())
+        # the sprites are not touched by any of this
+        self.assertEqual(board.list()[0], [])
+        # an open network, then clear
+        self.assertTrue(board.wifi_set("Cafe", "").startswith("OK wifi saved"))
+        self.assertIn("begin Cafe (open)", self.wifi_log())
+        self.assertTrue(board.wifi_clear().startswith("OK wifi cleared"))
+        self.assertTrue(board.wifi_status().startswith("OK wifi=off "))
+        board = self.restart()
+        self.assertTrue(board.wifi_status().startswith("OK wifi=off "))
+
+    def test_wifi_command_errors(self):
+        self.start(wifi=True)
+        for line, why in [("WIFI SET", "usage"), ("WIFI SET zz -", "usage"), ("WIFI SET 4142 abc", "usage|password"), ("WIFI SET 4142 6162", "password"),
+                          ("WIFI NOPE", "usage"), ("WIFI", "usage"), ("WIFI SET " + "41" * 33 + " -", "usage")]:
+            self.board.send(line)
+            with self.assertRaisesRegex(RuntimeError, why, msg=line):
+                self.board.expect(["OK"])
+        self.assertEqual(self.wifi_log(), "", "a bad command stores and joins nothing")
+        self.assertTrue(self.board.wifi_status().startswith("OK wifi=off "))
+        # the longest legal name and password fit on one command line
+        self.assertTrue(self.board.wifi_set("n" * 32, "p" * 63).startswith("OK wifi saved"))
+        self.assertIn("begin " + "n" * 32 + " " + "p" * 63, self.wifi_log())
+
+    def multipart(self, blob, name="x.gg", field="file"):
+        b = "----t" + os.urandom(6).hex()
+        body = (f'--{b}\r\nContent-Disposition: form-data; name="{field}"; filename="{name}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode() \
+            + blob + f"\r\n--{b}--\r\n".encode()
+        return body, {"Content-Type": "multipart/form-data; boundary=" + b}
+
+    def test_http_api(self):
+        self.start(wifi=True)
+        self.board.wifi_set("Net", "password1")
+        base = self.http_base()
+        st, hd, body = self.http("GET", "/ping")
+        self.assertEqual((st, body), (200, b"PONG\n"))
+        # every reply is readable from the https editor page (CORS), and a private-network pre-flight is answered
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "*")
+        st, hd, body = self.http("OPTIONS", "/put?name=a", headers={"Origin": "https://dwooods.github.io", "Access-Control-Request-Method": "POST",
+                                                                  "Access-Control-Request-Private-Network": "true"})
+        self.assertEqual((st, body), (204, b""))
+        self.assertEqual(hd["Access-Control-Allow-Private-Network"], "true")
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "*")
+        st, _, body = self.http("GET", "/info")
+        self.assertEqual(st, 200)
+        self.assertIn(b"wifi=connected ip=127.0.0.1", body)
+        self.assertEqual(self.http("GET", "/list")[2].decode(), "OK 0 files, 1500000 bytes free\n")
+        # a full 64-frame sprite (49,164 bytes, zero bytes included) goes in intact through multipart, with and without the optional checks
+        frames = [[(((i * 7 + f) & 255), ((i * 3) & 255), 0) for i in range(256)] for f in range(64)]
+        blob = gg.pack(frames, 12, 0.3, 2.2)
+        self.assertEqual(len(blob), 49164)
+        crc = zlib.crc32(blob) & 0xFFFFFFFF
+        body, h = self.multipart(blob)
+        st, _, out = self.http("POST", f"/put?name=big&size={len(blob)}&crc={crc:08x}", body, h)
+        self.assertEqual((st, out), (200, b"OK saved big\n"))
+        with open(os.path.join(self.fs, "big.gg"), "rb") as fh:
+            self.assertEqual(fh.read(), blob)
+        small = gg.pack(sample_frames(5, 2), 8, 0.3, 2.2)
+        body, h = self.multipart(small)
+        self.assertEqual(self.http("POST", "/put?name=small", body, h)[2], b"OK saved small\n")
+        self.assertEqual(self.last_frames(2)[-1] in self.led_of(sample_frames(5, 2)), True, "an HTTP upload plays at once, like USB")
+        files, _ = self.board.list()                         # USB and Wi-Fi see the same flash
+        self.assertEqual(dict(files), {"big": 49164, "small": len(small)})
+        self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[:2], ["FILE big 49164", f"FILE small {len(small)}"])
+        # download byte for byte, with the board's own CRC
+        st, hd, got = self.http("GET", "/get?name=big")
+        self.assertEqual((st, got), (200, blob))
+        self.assertEqual(hd["Content-Length"], "49164")
+        self.assertEqual(self.http("GET", "/crc?name=big")[2].decode(), f"OK crc={crc:08x} size=49164\n")
+        # the other commands
+        self.assertEqual(self.http("POST", "/show?name=big")[2], b"OK showing big\n")
+        self.assertIn("current=big", self.board.simple("INFO"))
+        self.assertEqual(self.http("POST", "/off")[2], b"OK panel off\n")
+        self.assertIn("panel=off", self.board.simple("INFO"))
+        self.assertEqual(self.http("POST", "/on")[2], b"OK panel on\n")
+        self.assertEqual(self.http("POST", "/rotate?s=30")[2], b"OK rotate 30\n")
+        self.assertIn("rotate=30", self.board.simple("INFO"))
+        self.assertEqual(self.http("POST", "/rotate?s=0")[2], b"OK rotate 0\n")
+        self.assertEqual(self.http("POST", "/del?name=big")[2], b"OK deleted big\n")
+        self.assertFalse(os.path.exists(os.path.join(self.fs, "big.gg")))
+        # errors come back as the same ERR text with a 4xx status, and leave the flash clean
+        for method, path, body_, hd_, code, text in [
+            ("GET", "/get?name=nope", None, None, 404, b"ERR no such sprite"),
+            ("GET", "/crc?name=../x", None, None, 404, b"ERR no such sprite"),
+            ("POST", "/show?name=nope", None, None, 404, b"ERR no such sprite"),
+            ("POST", "/del?name=nope", None, None, 404, b"ERR no such sprite"),
+            ("POST", "/rotate?s=-1", None, None, 400, b"ERR usage: ROTATE"),
+            ("POST", "/rotate", None, None, 400, b"ERR usage: ROTATE"),
+            ("GET", "/nothing", None, None, 404, b"ERR not found"),
+            ("GET", "/put?name=a", None, None, 404, b"ERR not found"),      # PUT is POST-only
+            ("POST", "/put?name=a", b"\x00\x01raw", {"Content-Type": "application/octet-stream"}, 400, b"ERR send the sprite as multipart"),
+        ]:
+            st, _, out = self.http(method, path, body_, hd_)
+            self.assertEqual(st, code, path)
+            self.assertTrue(out.startswith(text), (path, out))
+        body, h = self.multipart(small)
+        self.assertEqual(self.http("POST", "/put?name=bad%20name", body, h)[2][:7], b"ERR bad")
+        body, h = self.multipart(small)
+        self.assertEqual(self.http("POST", f"/put?name=a&crc=00000000", body, h)[2], b"ERR checksum mismatch\n")
+        body, h = self.multipart(b"XX" + small[2:])                     # right size, wrong magic
+        self.assertIn(b"ERR invalid sprite: bad magic", self.http("POST", "/put?name=a", body, h)[2])
+        body, h = self.multipart(small + b"\0")                         # not a whole number of frames
+        self.assertIn(b"ERR invalid sprite", self.http("POST", "/put?name=a", body, h)[2])
+        body, h = self.multipart(b"\0" * 60000)                         # bigger than any sprite
+        self.assertIn(b"ERR bad size", self.http("POST", "/put?name=a", body, h)[2])
+        body, h = self.multipart(small)
+        self.assertEqual(self.http("POST", "/put?name=a&size=999999999", body, h)[2], b"ERR bad size\n")
+        self.assertEqual(sorted(os.listdir(self.fs)), ["small.gg"], "no temp file or half-saved sprite left behind")
+        # and the board still answers on USB afterwards
+        self.board.send("PING")
+        self.assertEqual(self.board.expect(["PONG"]), "PONG")
+
+    def test_http_tool_mode(self):
+        """gg_tool.HttpBoard (the --host mode) does what the USB Board does, against the same firmware."""
+        self.start(wifi=True)
+        self.board.wifi_set("Net", "password1")
+        hb = gg_tool.HttpBoard(self.http_base())
+        self.assertEqual(hb.list()[0], [])
+        a = self.write_gg("alpha", sample_frames(21, 3))
+        self.assertTrue(hb.put(a).startswith("OK saved alpha"))
+        files, summary = hb.list()
+        self.assertEqual(files, [("alpha", 12 + 3 * 768)])
+        self.assertEqual(hb.get("alpha"), open(a, "rb").read())
+        self.assertIn("fw=", hb.simple("INFO"))
+        self.assertEqual(hb.simple("SHOW alpha"), "OK showing alpha")
+        self.assertEqual(hb.simple("OFF"), "OK panel off")
+        self.assertEqual(hb.simple("ON"), "OK panel on")
+        self.assertEqual(hb.simple("ROTATE 5"), "OK rotate 5")
+        self.assertEqual(hb.simple("DEL alpha"), "OK deleted alpha")
+        with self.assertRaisesRegex(RuntimeError, "no such sprite"):
+            hb.simple("DEL alpha")
+        with self.assertRaisesRegex(RuntimeError, "no such sprite"):
+            hb.get("alpha")
+        with self.assertRaises(ValueError):
+            hb.simple("WIFI STATUS")                    # Wi-Fi settings are USB-only
+        with self.assertRaisesRegex(TimeoutError, "cannot reach the board"):
+            gg_tool.HttpBoard("127.0.0.1:1")
+
+
+class Hex(unittest.TestCase):
+    def test_hex_decode(self):
+        for text, cap, want in [("4142", 8, "OK 2 AB"), ("41 42", 8, "no"), ("414", 8, "no"), ("4g", 8, "no"), ("", 8, "OK 0 "),
+                                ("48656c6c6f", 6, "OK 5 Hello"), ("48656c6c6f", 5, "no"), ("4A4b", 8, "OK 2 JK")]:
+            self.assertEqual(host("hex", text, cap).rstrip("\n"), want, text)
 
 
 if __name__ == "__main__":
