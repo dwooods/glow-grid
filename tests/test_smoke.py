@@ -26,7 +26,7 @@ STUB = """() => { window.__w = []; window.__calls = 0;
 # with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
 FAKE_BOARD = """() => {
   window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0;
-  window.__fakeChunks = []; window.__fakeBreak = null;     // 'full': PUT refused after READY; 'mute': no replies at all
+  window.__fakeChunks = []; window.__fakeBreak = null; window.__fakeFw = 7;     // 'full': PUT refused after READY; 'mute': no replies at all
   window.__ggFakeSerial = () => {
     const t = { onLine: null, onClose: null, closed: false, pending: null };
     window.__fakeTransport = t;
@@ -52,9 +52,12 @@ FAKE_BOARD = """() => {
       switch (cmd) {
         case 'PING': return say('PONG');
         case 'LIST': for (const n of names()) say('FILE ' + n + ' ' + window.__fakeStore.get(n).length); return say('OK ' + names().length + ' files, 1400000 bytes free');
-        case 'INFO': return say('OK fw=3 current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate);
+        case 'CRC': if (window.__fakeFw < 7) return say('ERR unknown command'); if (!window.__fakeStore.has(a1)) return say('ERR no such sprite');
+          return say('OK crc=' + crc32(window.__fakeStore.get(a1)).toString(16).padStart(8, '0') + ' size=' + window.__fakeStore.get(a1).length);
+        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate);
         case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
+          if (!window.__fakeStore.has(a1) && window.__fakeStore.size >= 64) return say('ERR board holds 64 sprites; delete one first');
           t.pending = { name: a1, size: Number(a2), crc: parseInt(a3, 16), buf: new Uint8Array(Number(a2)), got: 0, acked: 0 }; return say('READY');
         case 'SHOW': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeCurrent = a1; window.__fakePanel = 'on'; return say('OK showing ' + a1);
         case 'DEL': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeStore.delete(a1);
@@ -239,19 +242,18 @@ class Smoke(unittest.TestCase):
         self.fresh_page(f'({FAKE_BOARD})()')
         status = lambda: self.pg.evaluate("document.getElementById('boardStatus').textContent")
         rows = lambda: self.pg.evaluate("Array.from(document.querySelectorAll('#boardList .board-row .board-name')).map((e) => e.textContent)")
-        self.assertTrue(self.pg.evaluate("document.getElementById('boardUnsupported').hidden"), 'supported: the hint stays hidden')
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardUnsupported').hidden"), 'supported: no warning')
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardConnectBtn').disabled"))
+        self.assertIn('ESP32-C3', self.pg.evaluate("document.querySelector('#boardCard .board-purpose').textContent"), 'a first-time user is told what the card is for')
         self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"), 'tools hidden until connected')
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
-        self.assertEqual(status(), 'Connected. Firmware 3.')
+        self.assertEqual(status(), 'Connected. Firmware 7.')
         self.assertEqual(rows(), [])
         self.assertIn('Nothing stored', self.pg.evaluate("document.getElementById('boardList').textContent"))
         # a blank drawing is refused before anything is sent (the page opens on one black frame)
         self.set_name('flower')
         self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(300)
         self.assertIn('blank', status()); self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('PUT')).length"), 0)
-        # the card says which name Send will use, and follows the Export name as it is typed
-        self.assertIn('as “flower”', self.pg.evaluate("document.getElementById('boardAs').textContent"))
-        self.set_name('rose'); self.assertIn('as “rose”', self.pg.evaluate("document.getElementById('boardAs').textContent")); self.set_name('flower')
         # send the drawing: the bytes on the board are exactly what Export for ESP32-C3 would write
         self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#0000ff')];
             state.currentFrame = 0; state.fps = 5; afterFrameChange(); }""")
@@ -290,7 +292,6 @@ class Smoke(unittest.TestCase):
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
         self.assertEqual(rows(), ['flower'])
         self.assertEqual(status(), 'Deleted owl.')
-        self.set_name('flower'); self.assertIn('replaces the one on the board', self.pg.evaluate("document.getElementById('boardAs').textContent"))
         # the name is the Export name, trimmed to the board's 31-character limit
         self.set_name('a' * 40); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
         self.assertIn('a' * 31, rows())
@@ -302,6 +303,128 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.assertEqual(status(), 'Board disconnected.')
         self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"))
+
+    SEED = """(n) => { for (const k of n) window.__fakeStore.set(k, new Uint8Array([0x47, 0x47, ...new Array(10 + k.length).fill(1)])); }"""
+
+    def board_helpers(self):
+        self.status = lambda: self.pg.evaluate("document.getElementById('boardStatus').textContent")
+        self.rows = lambda: self.pg.evaluate("Array.from(document.querySelectorAll('#boardList .board-row .board-name')).map((e) => e.textContent)")
+        self.pager = lambda: self.pg.evaluate("""() => ({hidden: document.getElementById('boardPager').hidden, info: document.getElementById('boardPageInfo').textContent,
+            prev: document.getElementById('boardPrevBtn').disabled, next: document.getElementById('boardNextBtn').disabled})""")
+        self.store = lambda: self.pg.evaluate("[...window.__fakeStore.keys()].sort()")
+        self.puts = lambda: self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('PUT')).length")
+
+    def connect(self, seed=()):
+        self.pg.evaluate(self.SEED, list(seed))
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+
+    def test_board_list_pages_of_five(self):
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        self.pg.on('dialog', lambda d: d.accept())
+        names = [f's{i:02d}' for i in range(12)]
+        self.connect(names)
+        self.assertEqual(self.rows(), names[:5], 'five rows, not twelve')
+        self.assertEqual(self.pager(), {'hidden': False, 'info': '1–5 of 12', 'prev': True, 'next': False})
+        self.pg.click('#boardNextBtn')
+        self.assertEqual(self.rows(), names[5:10]); self.assertEqual(self.pager()['info'], '6–10 of 12')
+        self.assertFalse(self.pager()['prev'])
+        self.pg.click('#boardNextBtn')
+        self.assertEqual(self.rows(), names[10:]); self.assertEqual(self.pager(), {'hidden': False, 'info': '11–12 of 12', 'prev': False, 'next': True})
+        # Play works on a later page and the page stays put after the refresh
+        self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Play')"); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 's11')
+        self.assertEqual(self.rows(), names[10:])
+        self.assertTrue(self.pg.evaluate("document.querySelector('#boardList .board-row.playing .board-name').textContent === 's11'"))
+        # deleting everything on the last page falls back to the page before it, not an empty page
+        self.pg.click("#boardList .board-row:nth-child(1) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
+        self.pg.click("#boardList .board-row:nth-child(1) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.rows(), names[5:10])
+        self.assertEqual(self.pager()['info'], '6–10 of 10')
+        # five or fewer: no pager at all
+        for n in names[5:10]:
+            self.pg.evaluate("n => window.__fakeStore.delete(n)", n)
+        self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.rows(), names[:5]); self.assertTrue(self.pager()['hidden'])
+        # Send jumps to the page holding the new sprite (its name sorts last here)
+        for n in ['t1', 't2', 't3']:
+            self.pg.evaluate("n => window.__fakeStore.set(n, new Uint8Array([0x47, 0x47]))", n)
+        self.set_name('zz')
+        self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800')]; state.currentFrame = 0; afterFrameChange(); }""")
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(self.rows(), ['t1', 't2', 't3', 'zz'], 'the new sprite sorts last, so the card shows the last page')
+        self.assertEqual(self.pager()['info'], '6–9 of 9')
+        self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        self.assertTrue(self.pager()['hidden'], 'no pager once disconnected')
+
+    def test_add_and_remove_examples(self):
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        answer = {'ok': True}
+        self.pg.on('dialog', lambda d: d.accept() if answer['ok'] else d.dismiss())
+        total = self.pg.evaluate('GG_EXAMPLES.length')
+        self.assertEqual(total, 15)
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardExamples').hidden"), 'hidden until connected')
+        self.connect(['mine'])
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardExamples').hidden"))
+        self.pg.evaluate("window.__fakeCurrent = 'mine'")
+        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(300)
+        self.assertEqual(self.status(), 'No examples are on the board.')
+        # add: every example lands byte-for-byte as Export would write it; the sprite that was playing keeps playing
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
+        self.assertEqual(self.status(), f'Added {total} examples.')
+        self.assertEqual(len(self.store()), total + 1)
+        self.assertEqual(self.pg.evaluate("GG_EXAMPLES.every((e) => { const b = window.__fakeStore.get(e.name); const w = ggExampleBytes(e); return b && b.length === w.length && b.every((v, i) => v === w[i]); })"), True)
+        self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
+        self.assertEqual(self.pager()['info'], '1–5 of 16', 'the examples page like everything else')
+        # add again: nothing is sent
+        before = self.puts()
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.status(), f'All {total} examples are already on the board.'); self.assertEqual(self.puts(), before)
+        # you changed one and replaced another with your own drawing: remove deletes the rest and says what it kept
+        self.pg.evaluate("""() => { const a = GG_EXAMPLES[0].name, b = GG_EXAMPLES[1].name;
+            const x = ggExampleBytes(GG_EXAMPLES[0]).slice(); x[20] ^= 1; window.__fakeStore.set(a, x);
+            window.__fakeStore.set(b, new Uint8Array([0x47, 0x47, 1, 2, 3])); }""")
+        answer['ok'] = False
+        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(300)
+        self.assertEqual(self.status(), 'Nothing removed.'); self.assertEqual(len(self.store()), total + 1)
+        answer['ok'] = True
+        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(3000)
+        kept = self.pg.evaluate('[GG_EXAMPLES[0].name, GG_EXAMPLES[1].name]')
+        self.assertEqual(self.store(), sorted(['mine'] + kept))
+        self.assertEqual(self.status(), f'Removed {total - 2} examples. Kept 2 you changed: {kept[0]}, {kept[1]}.')
+        self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
+        # add never replaces: the two changed ones stay as they are
+        edited = self.pg.evaluate("Array.from(window.__fakeStore.get(GG_EXAMPLES[0].name))")
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
+        self.assertEqual(self.status(), f'Added {total - 2} examples; 2 already on the board were left alone.')
+        self.assertEqual(self.pg.evaluate("Array.from(window.__fakeStore.get(GG_EXAMPLES[0].name))"), edited)
+
+    def test_examples_old_firmware_full_board_and_errors(self):
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        self.pg.on('dialog', lambda d: d.accept())
+        # firmware before 7 has no CRC: Add still works, Remove refuses rather than guess, and deletes nothing
+        self.pg.evaluate('window.__fakeFw = 6')
+        self.connect()
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
+        n = len(self.store()); self.assertEqual(n, 15)
+        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(400)
+        self.assertIn('firmware 7', self.status()); self.assertEqual(len(self.store()), n)
+        self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('CRC') || l.startsWith('DEL')).length"), 0)
+        self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        # a board with no room for all of them: nothing is sent, and the message says why
+        self.pg.evaluate("() => { window.__fakeFw = 7; window.__fakeStore.clear(); }")
+        self.pg.evaluate(self.SEED, [f'p{i:02d}' for i in range(55)])
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        before = self.puts()
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
+        self.assertIn('would not fit', self.status()); self.assertEqual(self.puts(), before); self.assertEqual(len(self.store()), 55)
+        self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        # the board refuses mid-way (no space): the card reports how far it got and shows what is there
+        self.pg.evaluate("() => { window.__fakeStore.clear(); window.__fakeBreak = 'full'; }")
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(800)
+        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 15', self.status())
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardAddExBtn').disabled"), 'buttons come back after an error')
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
 
     def test_board_card_long_sprites_replace_and_errors(self):
         self.fresh_page(f'({FAKE_BOARD})()')
@@ -373,11 +496,20 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
     def test_board_card_without_web_serial(self):
-        # Firefox, Safari and every phone browser have no navigator.serial; headless Chromium does, so remove it
+        # Firefox, Safari and every iPhone browser have no navigator.serial; headless Chromium does, so remove it.
+        # The card stays visible but greyed out, with the reason, and the Help says where it works.
         self.fresh_page('delete Navigator.prototype.serial')
-        self.pg.evaluate("document.getElementById('boardConnectBtn').click()"); self.pg.wait_for_timeout(200)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardCard').hidden"))
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardCard').classList.contains('unsupported')"))
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardConnectBtn').disabled"))
         self.assertFalse(self.pg.evaluate("document.getElementById('boardUnsupported').hidden"))
-        self.assertIn('Chrome or Edge', self.pg.evaluate("document.getElementById('boardStatus').textContent"))
+        self.assertIn('Not supported in this browser', self.pg.evaluate("document.getElementById('boardUnsupported').textContent"))
+        self.assertEqual(self.pg.evaluate("getComputedStyle(document.querySelector('#boardCard .board-purpose')).opacity"), '0.5')
+        self.assertEqual(self.pg.evaluate("getComputedStyle(document.getElementById('boardUnsupported')).opacity"), '1')
+        self.pg.click('#helpBtn'); self.pg.wait_for_timeout(200)
+        help_text = self.pg.evaluate("document.getElementById('helpBody').textContent")
+        for want in ('Where the card works', 'Chrome, Edge', 'Safari', 'Firefox', 'iPhone'):
+            self.assertIn(want, help_text)
 
     def test_saved_sheet_restores_frames_under_another_name(self):
         self.pg.evaluate("""() => { const n = state.cols * state.rows; const cols = ['#ff0000', '#00ff00', '#0000ff'];
