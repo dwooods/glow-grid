@@ -1,5 +1,5 @@
 """Browser smoke test for the Glow Grid editor (web/). Covers regressions we have already hit:
- import naming (_sprite), the Save button with a stubbed picker, the ESP32-C3 .gg export (plain frames and with a still part), the Help dialog, and a saved sheet restoring its frames.
+ import naming (_sprite), the Save button with a stubbed picker, the ESP32-C3 .gg export (plain frames and with a still part), the Board card against a fake board, the Help dialog, and a saved sheet restoring its frames.
 
 Run by hand before pushing a web/ change (not in CI):
     pip install playwright pillow && playwright install chromium
@@ -22,6 +22,51 @@ STUB = """() => { window.__w = []; window.__calls = 0;
     if (window.__mode === 'abort') { const e = new Error('x'); e.name = 'AbortError'; throw e; }
     if (window.__mode === 'err') throw new Error('nope');
     return { name: o.suggestedName, createWritable: async () => ({ write: async (b) => { window.__w.push(b); }, close: async () => {} }) }; } }"""
+# A fake ESP32-C3 behind the Board card's transport interface: the same line protocol c3/c3_player.ino speaks,
+# with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
+FAKE_BOARD = """() => {
+  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = [];
+  window.__fakeChunks = []; window.__fakeBreak = null;     // 'full': PUT refused after READY; 'mute': no replies at all
+  window.__ggFakeSerial = () => {
+    const t = { onLine: null, onClose: null, closed: false, pending: null };
+    window.__fakeTransport = t;
+    const say = (l) => setTimeout(() => t.onLine && t.onLine(l), 0);
+    const crc32 = (b) => { let c = 0xffffffff; for (let i = 0; i < b.length; i++) { c ^= b[i]; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return (c ^ 0xffffffff) >>> 0; };
+    t.open = async () => {};
+    t.close = async () => { if (t.closed) return; t.closed = true; if (t.onClose) t.onClose(); };
+    t.write = async (bytes) => {
+      if (t.pending) {                                   // raw sprite bytes of a PUT in progress
+        const p = t.pending; p.buf.set(bytes, p.got); p.got += bytes.length; window.__fakeChunks.push(bytes.length);
+        if (window.__fakeBreak === 'full') { t.pending = null; return say('ERR not enough space'); }
+        if (p.got < p.size) { if (p.got - p.acked >= 1024) { p.acked = p.got; say('A'); } return; }
+        t.pending = null;
+        if (crc32(p.buf) !== p.crc) return say('ERR checksum mismatch');
+        if (!(p.buf[0] === 0x47 && p.buf[1] === 0x47)) return say('ERR invalid sprite: bad magic');
+        window.__fakeStore.set(p.name, p.buf); window.__fakeCurrent = p.name; window.__fakePanel = 'on';
+        return say('OK saved ' + p.name);
+      }
+      const line = new TextDecoder().decode(bytes).trim(); window.__fakeLog.push(line);
+      if (window.__fakeBreak === 'mute') return;
+      const [cmd, a1, a2, a3] = line.split(' ');
+      const names = () => [...window.__fakeStore.keys()].sort();
+      switch (cmd) {
+        case 'PING': return say('PONG');
+        case 'LIST': for (const n of names()) say('FILE ' + n + ' ' + window.__fakeStore.get(n).length); return say('OK ' + names().length + ' files, 1400000 bytes free');
+        case 'INFO': return say('OK fw=3 current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel);
+        case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
+          t.pending = { name: a1, size: Number(a2), crc: parseInt(a3, 16), buf: new Uint8Array(Number(a2)), got: 0, acked: 0 }; return say('READY');
+        case 'SHOW': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeCurrent = a1; window.__fakePanel = 'on'; return say('OK showing ' + a1);
+        case 'DEL': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeStore.delete(a1);
+          if (window.__fakeCurrent === a1) window.__fakeCurrent = names()[0] || '-'; return say('OK deleted ' + a1);
+        case 'OFF': window.__fakePanel = 'off'; return say('OK panel off');
+        case 'ON': window.__fakePanel = 'on'; return say('OK panel on');
+        default: return say('ERR unknown command');
+      }
+    };
+    return t;
+  };
+}"""
+
 SET_NAME = "v => { const e = document.getElementById('nameInput'); e.value = v; e.dispatchEvent(new Event('input', {bubbles: true})); }"
 
 
@@ -151,6 +196,111 @@ class Smoke(unittest.TestCase):
         blacks = sum(1 for i in range(0, len(px), 3) if px[i:i + 3] == [0, 0, 0])
         self.assertEqual(blacks, 0, 'no black pixel anywhere: every pixel is body or the moving one')
         self.set_target('pi')
+
+    def fresh_page(self, *init_scripts):
+        """A new page whose init scripts run before board.js, which reads its environment at load."""
+        self.ctx.close()
+        self.ctx = self.browser.new_context(viewport={'width': 1200, 'height': 1000}, service_workers='block')
+        self.pg = self.ctx.new_page(); self.pg.add_init_script('delete window.showSaveFilePicker')
+        for js in init_scripts:
+            self.pg.add_init_script(js)
+        self.pg.on('pageerror', lambda e: self.errors.append(str(e)))
+        self.pg.goto(self.url); self.pg.wait_for_timeout(400)
+
+    def test_board_card_with_a_fake_board(self):
+        self.fresh_page(f'({FAKE_BOARD})()')
+        status = lambda: self.pg.evaluate("document.getElementById('boardStatus').textContent")
+        rows = lambda: self.pg.evaluate("Array.from(document.querySelectorAll('#boardList .board-row .board-name')).map((e) => e.textContent)")
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardUnsupported').hidden"), 'supported: the hint stays hidden')
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"), 'tools hidden until connected')
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        self.assertEqual(status(), 'Connected. Firmware 3.')
+        self.assertEqual(rows(), [])
+        self.assertIn('Nothing stored', self.pg.evaluate("document.getElementById('boardList').textContent"))
+        # send the drawing: the bytes on the board are exactly what Export for ESP32-C3 would write
+        self.set_name('flower')
+        self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#0000ff')];
+            state.currentFrame = 0; state.fps = 5; afterFrameChange(); }""")
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertIn('Sent flower (2 frames, 1,548 bytes)', status())
+        self.assertEqual(rows(), ['flower'])
+        stored = self.pg.evaluate("Array.from(window.__fakeStore.get('flower'))")
+        want = self.pg.evaluate("Array.from(ggBytes(state.frames.map(flatten), 16, 16, state.fps, sim.brightness, sim.gamma))")
+        self.assertEqual(stored, want)
+        self.assertTrue(self.pg.evaluate("document.querySelector('#boardList .board-row').classList.contains('playing')"))
+        # a second sprite, play the first, panel off and on, delete
+        self.set_name('owl'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(rows(), ['flower', 'owl'])
+        self.pg.click("#boardList .board-row:nth-child(1) button:has-text('Play')"); self.pg.wait_for_timeout(400)
+        self.assertEqual(status(), 'Playing flower.')
+        self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'flower')
+        self.pg.click('#boardPanelBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakePanel'), 'off')
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardPanelBtn').textContent"), 'Panel on')
+        self.pg.click('#boardPanelBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakePanel'), 'on')
+        self.pg.on('dialog', lambda d: d.accept())
+        self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
+        self.assertEqual(rows(), ['flower'])
+        self.assertEqual(status(), 'Deleted owl.')
+        # the name is the Export name, trimmed to the board's 31-character limit
+        self.set_name('a' * 40); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertIn('a' * 31, rows())
+        # wrong grid size is refused before anything is sent
+        before = self.pg.evaluate('window.__fakeLog.length')
+        self.pg.evaluate("() => { state.cols = 8; state.rows = 32; afterFrameChange(); }")
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(300)
+        self.assertIn('16×16', status()); self.assertEqual(self.pg.evaluate('window.__fakeLog.length'), before)
+        self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        self.assertEqual(status(), 'Board disconnected.')
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"))
+
+    def test_board_card_long_sprites_replace_and_errors(self):
+        self.fresh_page(f'({FAKE_BOARD})()')
+        status = lambda: self.pg.evaluate("document.getElementById('boardStatus').textContent")
+        rows = lambda: self.pg.evaluate("Array.from(document.querySelectorAll('#boardList .board-row .board-name')).map((e) => e.textContent)")
+        frames = lambda n: self.pg.evaluate("""(n) => { const px = state.cols * state.rows; state.frames = Array.from({length: n}, (_, i) => new Array(px).fill(i % 2 ? '#ff0000' : '#00ff00'));
+            state.currentFrame = 0; state.fps = 8; afterFrameChange(); }""", n)
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        # a 4-frame sprite is 3,084 bytes: four chunks, three acks, bytes intact
+        self.set_name('walk'); frames(4)
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(1000)
+        self.assertIn('Sent walk (4 frames, 3,084 bytes)', status())
+        self.assertEqual(self.pg.evaluate('window.__fakeChunks'), [1024, 1024, 1024, 12])
+        self.assertEqual(self.pg.evaluate("Array.from(window.__fakeStore.get('walk'))"),
+                         self.pg.evaluate("Array.from(ggBytes(state.frames.map(flatten), 16, 16, state.fps, sim.brightness, sim.gamma))"))
+        # sending the same name again replaces: still one row, new bytes
+        frames(1); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(rows(), ['walk'])
+        self.assertEqual(self.pg.evaluate("window.__fakeStore.get('walk').length"), 780)
+        # too many frames is refused before anything is sent
+        before = self.pg.evaluate('window.__fakeLog.length')
+        frames(65); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(300)
+        self.assertIn('up to 64 frames', status()); self.assertEqual(self.pg.evaluate('window.__fakeLog.length'), before)
+        # the board refuses mid-upload: its message is shown and the Send button comes back
+        frames(1); self.set_name('nope'); self.pg.evaluate("window.__fakeBreak = 'full'")
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(status(), 'Board said: not enough space')
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
+        self.assertEqual(rows(), ['walk'])
+        # the board goes silent: the command times out with a message instead of hanging
+        self.pg.evaluate("window.__fakeBreak = 'mute'")
+        self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(4600)
+        self.assertEqual(status(), 'Board said: no reply from the board')
+        self.pg.evaluate("window.__fakeBreak = null")
+        # the cable is pulled: the card resets itself
+        self.pg.evaluate("window.__fakeTransport.close()"); self.pg.wait_for_timeout(300)
+        self.assertEqual(status(), 'Board disconnected.')
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"))
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardConnectBtn').hidden"))
+        self.assertEqual(self.errors, [])
+
+    def test_board_card_without_web_serial(self):
+        # Firefox, Safari and every phone browser have no navigator.serial; headless Chromium does, so remove it
+        self.fresh_page('delete Navigator.prototype.serial')
+        self.pg.evaluate("document.getElementById('boardConnectBtn').click()"); self.pg.wait_for_timeout(200)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardUnsupported').hidden"))
+        self.assertIn('Chrome or Edge', self.pg.evaluate("document.getElementById('boardStatus').textContent"))
 
     def test_saved_sheet_restores_frames_under_another_name(self):
         self.pg.evaluate("""() => { const n = state.cols * state.rows; const cols = ['#ff0000', '#00ff00', '#0000ff'];
