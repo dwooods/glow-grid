@@ -217,8 +217,14 @@ class Smoke(unittest.TestCase):
         self.assertEqual(status(), 'Connected. Firmware 3.')
         self.assertEqual(rows(), [])
         self.assertIn('Nothing stored', self.pg.evaluate("document.getElementById('boardList').textContent"))
-        # send the drawing: the bytes on the board are exactly what Export for ESP32-C3 would write
+        # a blank drawing is refused before anything is sent (the page opens on one black frame)
         self.set_name('flower')
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(300)
+        self.assertIn('blank', status()); self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('PUT')).length"), 0)
+        # the card says which name Send will use, and follows the Export name as it is typed
+        self.assertIn('as “flower”', self.pg.evaluate("document.getElementById('boardAs').textContent"))
+        self.set_name('rose'); self.assertIn('as “rose”', self.pg.evaluate("document.getElementById('boardAs').textContent")); self.set_name('flower')
+        # send the drawing: the bytes on the board are exactly what Export for ESP32-C3 would write
         self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#0000ff')];
             state.currentFrame = 0; state.fps = 5; afterFrameChange(); }""")
         self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
@@ -234,15 +240,19 @@ class Smoke(unittest.TestCase):
         self.pg.click("#boardList .board-row:nth-child(1) button:has-text('Play')"); self.pg.wait_for_timeout(400)
         self.assertEqual(status(), 'Playing flower.')
         self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'flower')
-        self.pg.click('#boardPanelBtn'); self.pg.wait_for_timeout(400)
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardOnBtn').disabled"), 'already on')
+        self.pg.click('#boardOffBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakePanel'), 'off')
-        self.assertEqual(self.pg.evaluate("document.getElementById('boardPanelBtn').textContent"), 'Panel on')
-        self.pg.click('#boardPanelBtn'); self.pg.wait_for_timeout(400)
+        self.assertIn('Lights off', status())
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardOffBtn').disabled"))
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardOnBtn').disabled"))
+        self.pg.click('#boardOnBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakePanel'), 'on')
         self.pg.on('dialog', lambda d: d.accept())
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
         self.assertEqual(rows(), ['flower'])
         self.assertEqual(status(), 'Deleted owl.')
+        self.set_name('flower'); self.assertIn('replaces the one on the board', self.pg.evaluate("document.getElementById('boardAs').textContent"))
         # the name is the Export name, trimmed to the board's 31-character limit
         self.set_name('a' * 40); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
         self.assertIn('a' * 31, rows())
@@ -261,6 +271,8 @@ class Smoke(unittest.TestCase):
         rows = lambda: self.pg.evaluate("Array.from(document.querySelectorAll('#boardList .board-row .board-name')).map((e) => e.textContent)")
         frames = lambda n: self.pg.evaluate("""(n) => { const px = state.cols * state.rows; state.frames = Array.from({length: n}, (_, i) => new Array(px).fill(i % 2 ? '#ff0000' : '#00ff00'));
             state.currentFrame = 0; state.fps = 8; afterFrameChange(); }""", n)
+        answer = {'ok': True}
+        self.pg.on('dialog', lambda d: d.accept() if answer['ok'] else d.dismiss())
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         # a 4-frame sprite is 3,084 bytes: four chunks, three acks, bytes intact
         self.set_name('walk'); frames(4)
@@ -269,8 +281,13 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate('window.__fakeChunks'), [1024, 1024, 1024, 12])
         self.assertEqual(self.pg.evaluate("Array.from(window.__fakeStore.get('walk'))"),
                          self.pg.evaluate("Array.from(ggBytes(state.frames.map(flatten), 16, 16, state.fps, sim.brightness, sim.gamma))"))
-        # sending the same name again replaces: still one row, new bytes
-        frames(1); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        # sending the same name again asks first; No sends nothing, Yes replaces: still one row, new bytes
+        frames(1); answer['ok'] = False
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(status(), 'Not sent.')
+        self.assertEqual(self.pg.evaluate("window.__fakeStore.get('walk').length"), 3084)
+        answer['ok'] = True
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
         self.assertEqual(rows(), ['walk'])
         self.assertEqual(self.pg.evaluate("window.__fakeStore.get('walk').length"), 780)
         # too many frames is refused before anything is sent
