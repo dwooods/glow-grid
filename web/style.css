@@ -387,6 +387,6 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .device-col, .panel-col { align-self: flex-start; }
 .layout:not(:has(#panelCard details[open])) .device-col, .layout:not(:has(#panelCard details[open])) .panel-col { align-self: stretch; }
 .layout:not(:has(#panelCard details[open])) #framesCard { flex-grow: 1; }
-#framesCard > .sub-rule { margin-top: auto; }
+#framesCard > .btn-row:not(#dangerRow) { margin-top: auto; }   /* Duplicate / Blank / Restore sit at the bottom, just above the red row */
 /* "Panel Check": capital P and C only, not the all-caps of the other small headings. */
 .check-label { text-transform: none; letter-spacing: 0; }
