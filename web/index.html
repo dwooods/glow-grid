@@ -46,10 +46,11 @@
           <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         </div>
         <div class="frame-strip" id="frameStrip"></div>
-        <p class="strip-meta"><span class="frame-readout" id="frameReadout">Frame 1 / 1</span><span id="stripHint" hidden>Blank. Draw on the grid, or use File ▸ Import image.</span><button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button></p>
+        <p class="strip-meta"><span class="frame-readout" id="frameReadout">Frame 1 / 1</span><span id="stripHint" hidden>Blank. Draw on the grid, or use File ▸ Import image.</span></p>
         <div class="btn-row">
           <button id="addFrameBtn" class="btn btn-quiet" type="button" aria-label="Duplicate this frame">+ Duplicate</button>
           <button id="addBlankFrameBtn" class="btn btn-quiet" type="button">+ Blank</button>
+          <button id="restoreBtn" class="btn btn-quiet" type="button" hidden title="Bring back what you had when you last closed the page">Restore last session</button>
         </div>
         <button id="moreBtn" class="btn btn-quiet" type="button" hidden aria-controls="sheet">More</button>
         <hr class="sub-rule">
@@ -116,7 +117,7 @@
         </div>
       </section>
 
-      <section class="card">
+      <section class="card" id="panelCard">
         <h2>Panel settings</h2>
         <div class="form-row">
           <label>LED brightness <input id="brightInput" type="number" min="0.05" max="1" step="0.05" value="0.3"></label>
@@ -140,7 +141,7 @@
         </ul>
         </details></div>
         <hr class="sub-rule">
-        <details class="check-details" id="diagDetails"><summary class="sub-h"><span>Panel check</span><span class="diag-sum" id="diagSum">0.00 A · no flags</span></summary>
+        <details class="check-details" id="diagDetails"><summary class="sub-h"><span class="check-label">Panel Check</span><span class="diag-sum" id="diagSum">0.00 A · no flags</span></summary>
         <div class="diag">
           <div>
             <div class="metric-label">Est. draw, this frame</div>
@@ -164,46 +165,46 @@
         <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
         </details>
       </section>
-      <section class="card" id="boardCard">
-        <h2>Board <small class="board-free" id="boardFree"></small></h2>
-        <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
-        <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>Not supported in this browser.</strong> The Board card needs Chrome or Edge on a computer; Help ▸ Board card lists where it works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
-        <div class="btn-row">
-          <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect board</button>
-          <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
-        </div>
-        <div class="btn-row" id="boardTools" hidden>
-          <button id="boardSendBtn" class="btn" type="button" title="Store this drawing on the board, under the name in Export, and play it">Send to board</button>
-          <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
-          <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
-          <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
-          <label class="field-inline" title="The board moves to the next stored sprite on its own, in list order. Kept across a power cycle.">Rotate
-            <select id="boardRotate">
-              <option value="0">off</option>
-              <option value="10">every 10 s</option>
-              <option value="30">every 30 s</option>
-              <option value="60">every minute</option>
-              <option value="300">every 5 min</option>
-              <option value="900">every 15 min</option>
-              <option value="3600">every hour</option>
-              <option value="21600">every 6 hours</option>
-              <option value="86400">every day</option>
-            </select>
-          </label>
-        </div>
-        <div class="btn-row" id="boardExamples" hidden>
-          <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the original example sprites from the repo on the board. Never replaces a sprite that is already there.">Add examples</button>
-          <button id="boardRemoveExBtn" class="btn btn-quiet" type="button" title="Delete the example sprites from the board. Keeps any you changed or replaced.">Remove examples</button>
-        </div>
-        <ul class="board-list" id="boardList" hidden></ul>
-        <div class="board-pager" id="boardPager" hidden>
-          <button id="boardPrevBtn" class="btn btn-quiet" type="button" aria-label="Previous page">‹ Prev</button>
-          <span id="boardPageInfo" role="status"></span>
-          <button id="boardNextBtn" class="btn btn-quiet" type="button" aria-label="Next page">Next ›</button>
-        </div>
-        <p class="hint board-status" id="boardStatus" role="status"></p>
-      </section>
     </aside>
+    <section class="card" id="boardCard">
+      <h2>Board <small class="board-free" id="boardFree"></small></h2>
+      <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
+      <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>Not supported in this browser.</strong> The Board card needs Chrome or Edge on a computer; Help ▸ Board card lists where it works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
+      <div class="btn-row">
+        <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect board</button>
+        <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
+      </div>
+      <div class="btn-row" id="boardTools" hidden>
+        <button id="boardSendBtn" class="btn" type="button" title="Store this drawing on the board, under the name in Export, and play it">Send to board</button>
+        <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
+        <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
+        <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
+        <label class="field-inline" title="The board moves to the next stored sprite on its own, in list order. Kept across a power cycle.">Rotate
+          <select id="boardRotate">
+            <option value="0">off</option>
+            <option value="10">every 10 s</option>
+            <option value="30">every 30 s</option>
+            <option value="60">every minute</option>
+            <option value="300">every 5 min</option>
+            <option value="900">every 15 min</option>
+            <option value="3600">every hour</option>
+            <option value="21600">every 6 hours</option>
+            <option value="86400">every day</option>
+          </select>
+        </label>
+      </div>
+      <div class="btn-row" id="boardExamples" hidden>
+        <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the original example sprites from the repo on the board. Never replaces a sprite that is already there.">Add examples</button>
+        <button id="boardRemoveExBtn" class="btn btn-quiet" type="button" title="Delete the example sprites from the board. Keeps any you changed or replaced.">Remove examples</button>
+      </div>
+      <ul class="board-list" id="boardList" hidden></ul>
+      <div class="board-pager" id="boardPager" hidden>
+        <button id="boardPrevBtn" class="btn btn-quiet" type="button" aria-label="Previous page">‹ Prev</button>
+        <span id="boardPageInfo" role="status"></span>
+        <button id="boardNextBtn" class="btn btn-quiet" type="button" aria-label="Next page">Next ›</button>
+      </div>
+      <p class="hint board-status" id="boardStatus" role="status"></p>
+    </section>
   </main>
 </div>
 
