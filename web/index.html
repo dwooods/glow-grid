@@ -164,6 +164,21 @@
         <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
         </details>
       </section>
+      <section class="card" id="boardCard">
+        <h2>Board <small class="board-free" id="boardFree"></small></h2>
+        <p class="hint" id="boardUnsupported" hidden>Connecting a board over USB needs Chrome or Edge on a computer. From here, use <em>Export for: ESP32-C3</em> and put the file on the board from a computer.</p>
+        <div class="btn-row">
+          <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect board</button>
+          <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
+        </div>
+        <div class="btn-row" id="boardTools" hidden>
+          <button id="boardSendBtn" class="btn" type="button" title="Store this drawing on the board, under the name in Export, and play it">Send to board</button>
+          <button id="boardPanelBtn" class="btn btn-quiet" type="button">Panel off</button>
+          <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
+        </div>
+        <ul class="board-list" id="boardList" hidden></ul>
+        <p class="hint board-status" id="boardStatus" role="status"></p>
+      </section>
     </aside>
   </main>
 </div>
@@ -288,6 +303,7 @@
 <script src="js/loupe.js"></script>
 <script src="js/import.js"></script>
 <script src="js/export.js"></script>
+<script src="js/board.js"></script>
 <script src="js/help.js"></script>
 <script src="js/tools.js"></script>
 <script src="js/phone.js"></script>
