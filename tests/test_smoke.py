@@ -537,6 +537,8 @@ class Smoke(unittest.TestCase):
         self.assertAlmostEqual(r['frames']['bottom'], r['panel']['bottom'], delta=1)
         self.assertAlmostEqual(r['restore']['top'], r['blank']['top'], delta=1); self.assertGreater(r['restore']['left'], r['blank']['left'])
         self.assertEqual((r['label'], r['upper']), ('Panel Check', 'none'))
+        self.assertGreater(r['blank']['top'], r['frames']['top'] + 100, 'Duplicate / Blank / Restore sit low in the Frames card, not under the hint')
+        self.assertLess(r['blank']['bottom'], r['frames']['bottom'] - 40, 'and above the red row')
         self.pg.evaluate("document.getElementById('diagDetails').open = true")
         r2 = self.pg.evaluate("""() => ({ frames: document.getElementById('framesCard').getBoundingClientRect().bottom, panel: document.getElementById('panelCard').getBoundingClientRect().bottom })""")
         self.assertLess(r2['frames'], r2['panel'] - 50, 'with a fold open the Frames card keeps its own height')
