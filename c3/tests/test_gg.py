@@ -569,12 +569,19 @@ class Board(unittest.TestCase):
     def test_sprite_list_limit(self):
         self.start()
         fr = sample_frames(51, 1)
-        for i in range(50):                                   # MAX_SPRITES is 48
+        for i in range(64):                                   # MAX_SPRITES is 64
             self.board.put(self.write_gg(f"s{i:02d}", fr))
         files, summary = self.board.list()
-        self.assertEqual(len(files), 48, "the list stops at MAX_SPRITES")
-        self.assertEqual(len(os.listdir(self.fs)), 50, "the files are all stored")
-        self.assertIn("48 files", summary)
+        self.assertEqual(len(files), 64)
+        self.assertIn("64 files", summary)
+        # a 65th name is refused before any bytes are sent, and nothing is stored
+        self.board.send(f"PUT s64 780 00000000")
+        with self.assertRaisesRegex(RuntimeError, "holds 64 sprites"):
+            self.board.expect(["READY"])
+        self.assertEqual(len(os.listdir(self.fs)), 64, "nothing stored unseen")
+        # replacing one of the 64 is still allowed
+        self.assertTrue(self.board.put(self.write_gg("s10", sample_frames(52, 1))).startswith("OK saved s10"))
+        self.assertEqual(len(self.board.list()[0]), 64)
 
     def test_empty_board_shows_dim_marker_and_survives_restart(self):
         self.start()
