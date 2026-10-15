@@ -524,6 +524,23 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate('state.frames.map((f) => f[0])'), ['#ff0000', '#00ff00', '#0000ff'])
         self.assertEqual(self.name(), 'renamed_anything_sprite')
 
+    def test_desktop_layout_board_full_width_restore_button_and_levelled_columns(self):
+        # 2026-10-15 layout: Board card under both columns; Restore last session is a button beside + Blank;
+        # Frames ends level with Panel settings while both folds are closed (and stops stretching when one is open);
+        # the fold is labelled "Panel Check", not all caps.
+        self.pg.evaluate("document.getElementById('restoreBtn').hidden = false")
+        r = self.pg.evaluate("""() => { const b = (id) => document.getElementById(id).getBoundingClientRect();
+            return { board: b('boardCard'), frames: b('framesCard'), panel: b('panelCard'), tools: b('moveCard'), restore: b('restoreBtn'), blank: b('addBlankFrameBtn'),
+                     label: document.querySelector('.check-label').textContent, upper: getComputedStyle(document.querySelector('.check-label')).textTransform }; }""")
+        self.assertLessEqual(r['board']['left'], r['frames']['left'] + 1); self.assertGreaterEqual(r['board']['right'], r['panel']['right'] - 1)
+        self.assertGreater(r['board']['top'], max(r['frames']['bottom'], r['panel']['bottom']) - 1, 'Board sits below both columns')
+        self.assertAlmostEqual(r['frames']['bottom'], r['panel']['bottom'], delta=1)
+        self.assertAlmostEqual(r['restore']['top'], r['blank']['top'], delta=1); self.assertGreater(r['restore']['left'], r['blank']['left'])
+        self.assertEqual((r['label'], r['upper']), ('Panel Check', 'none'))
+        self.pg.evaluate("document.getElementById('diagDetails').open = true")
+        r2 = self.pg.evaluate("""() => ({ frames: document.getElementById('framesCard').getBoundingClientRect().bottom, panel: document.getElementById('panelCard').getBoundingClientRect().bottom })""")
+        self.assertLess(r2['frames'], r2['panel'] - 50, 'with a fold open the Frames card keeps its own height')
+
     def test_help_dialog_renders(self):
         self.pg.click('#helpBtn'); self.pg.wait_for_timeout(200)
         self.assertTrue(self.pg.evaluate("document.getElementById('helpDlg').open"))
