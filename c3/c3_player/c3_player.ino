@@ -20,7 +20,7 @@
 //                                 then OK saved <name> or ERR <reason>
 //   DEL <name>                 -> OK deleted <name> or ERR <reason>
 //   SHOW <name>                -> OK showing <name> or ERR <reason>
-//   OFF / ON                   -> OK panel off / OK panel on (same as the On/off button)
+//   OFF / ON                   -> OK panel off / OK panel on (same as the On/off button; off is kept across a power cycle)
 //   INFO                       -> OK current=<name> ...
 
 #include <Adafruit_NeoPixel.h>
@@ -31,6 +31,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 48
+#define GG_FW_VERSION 3           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -49,6 +50,14 @@ bool panelOn = true;
 bool dirty = true;           // a still needs drawing
 
 String pathOf(const String& name) { return "/" + name + ".gg"; }
+const char* OFF_MARK = "/panel.off";   // exists while the panel is off, so OFF survives a power cycle (David, 2026-10-15)
+
+// Keeps the off state in flash. Written only when it changes.
+void rememberPanel() {
+  bool marked = LittleFS.exists(OFF_MARK);
+  if (panelOn && marked) LittleFS.remove(OFF_MARK);
+  else if (!panelOn && !marked) { File f = LittleFS.open(OFF_MARK, "w"); if (f) f.close(); }
+}
 
 void showEmpty() {           // nothing stored: one dim blue pixel at LED 0
   strip.clear();
@@ -113,6 +122,7 @@ bool selectIndex(int idx) {
   if (err) { Serial.printf("ERR %s: %s\n", names[idx].c_str(), err); return false; }
   cur = idx;
   panelOn = true;
+  rememberPanel();
   return true;
 }
 
@@ -164,15 +174,17 @@ bool pressed(GGButton& b) {  // true once per press
 }
 
 // Panel off (all LEDs dark, playback paused) or on (resume from frame 0). Same as the On/off button.
+// Off is remembered in flash: after a power cycle the panel stays dark until ON, SHOW, PUT or a button.
 void setPanel(bool on) {
   panelOn = on;
+  rememberPanel();
   if (on) { dirty = true; nextFrameAt = millis(); frameNo = 0; }
   else { strip.clear(); strip.show(); }
 }
 
 void handleButtons() {
   if (pressed(btnNext)) {
-    if (!panelOn) { panelOn = true; dirty = true; nextFrameAt = millis(); }
+    if (!panelOn) setPanel(true);
     else if (nSprites > 0) selectIndex((cur + 1) % nSprites);
   }
   if (pressed(btnOff)) setPanel(!panelOn);
@@ -281,8 +293,8 @@ void doCommand(char* line) {
     setPanel(true);
     Serial.println(data ? "OK panel on" : "OK panel on (nothing stored)");
   } else if (c == "INFO") {
-    Serial.printf("OK current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u\n",
-                  cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
+    Serial.printf("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u\n",
+                  GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
                   data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
                   (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
   } else {
@@ -327,9 +339,11 @@ void setup() {
     return;
   }
   scanSprites();
-  Serial.printf("Glow Grid player ready: %d sprite(s), %u bytes free\n", nSprites,
+  Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
                 (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
+  bool wasOff = LittleFS.exists(OFF_MARK);
   if (nSprites > 0) selectIndex(0); else showEmpty();
+  if (wasOff) { setPanel(false); Serial.println("panel off (as left)"); }
 }
 
 void loop() {

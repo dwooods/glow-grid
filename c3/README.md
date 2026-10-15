@@ -1,6 +1,6 @@
 # Glow Grid player for the ESP32-C3 (step 1: USB, several sprites)
 
-Stores several Glow Grid sprites in the board's flash and plays one at a time. Sprites go on and off the board over USB with a small PC tool. The Next button changes the sprite, the On/off button blanks the panel. Bluetooth is step 2 and will carry the same files.
+Stores several Glow Grid sprites in the board's flash and plays one at a time. Sprites go on and off the board over USB with a small PC tool. The Next button changes the sprite, the On/off button blanks the panel. The editor's Board card does the same jobs from Chrome or Edge over Web Serial. Wi-Fi is step 2 and Bluetooth step 3; both carry the same files and commands.
 
 **Status:** tested on a PC (the tests compile the real firmware logic against stand-ins for the Arduino core) and once on a C3 SuperMini: two sprites uploaded and played, and the player came back on its own after a power cycle. Buttons and Bluetooth are untested.
 
@@ -13,7 +13,7 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
 | `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `off`, `on`, `info` on the board over USB |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 24 tests; see below |
+| `tests/` | 25 tests; see below |
 
 ## The `.gg` sprite file
 
@@ -37,11 +37,14 @@ python3 tools/gg_tool.py list
 python3 tools/gg_tool.py show lantern
 python3 tools/gg_tool.py del lantern
 python3 tools/gg_tool.py off          # panel dark, board keeps running; `on` resumes
+python3 tools/gg_tool.py info         # fw=<n> says which firmware is on the board
 ```
+
+**Is the board current?** `info` prints `fw=<n>`; the Serial Monitor shows the same number in the boot line (`Glow Grid player fw 3 ready`). Compare it with `GG_FW_VERSION` at the top of `c3_player.ino` in your clone; smaller (or an `INFO` line without `fw=`) means re-flash. The number goes up with every firmware change pushed to the repo.
 
 Close the Arduino Serial Monitor first; only one program can use the port. `gg_tool.py` finds the C3's port by its USB id; if it cannot, add `--port COM3`.
 
-Add = `put` a new name. Replace = `put` the same name. The upload goes to a temporary file, is checked (size, CRC-32, valid header) and only then swapped in, so a cable pulled mid-upload cannot leave a broken sprite. The last uploaded sprite plays at once. Sprites survive a power cycle.
+Add = `put` a new name. Replace = `put` the same name. The upload goes to a temporary file, is checked (size, CRC-32, valid header) and only then swapped in, so a cable pulled mid-upload cannot leave a broken sprite. The last uploaded sprite plays at once. Sprites survive a power cycle, and so does `off`: a board that was off comes back dark until `on`, `show`, `put`, the Board card or a button.
 
 ## Tests
 
@@ -62,6 +65,6 @@ Two deliberate breaks (wrong wiring default; checksum not checked) each made the
 
 **Not tested:** the real esp32 core and LittleFS on real flash, NeoPixel timing with 256 LEDs, serial throughput on the real USB port, Bluetooth.
 
-## Next (step 2)
+## Next
 
-Bluetooth: the same `PUT`/`LIST`/`DEL`/`SHOW` messages over a BLE service, accepted only for a short window after a button press; the web app sends them from Chrome (Android, desktop); iPhone needs the Capacitor app.
+**Step 2, Wi-Fi:** the board joins the home network and serves the same `PUT`/`LIST`/`DEL`/`SHOW`/`OFF`/`ON` over HTTP, so the editor's Board card works from any browser on the network, including Safari on an iPhone, with no app. **Step 3, Bluetooth:** the same messages over a BLE service for the Capacitor phone app (Web Bluetooth is absent from iOS Safari, which is why Wi-Fi comes first).
