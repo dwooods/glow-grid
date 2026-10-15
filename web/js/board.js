@@ -12,7 +12,7 @@ const BOARD_BAUD = 115200;
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
 class SerialTransport {
-  constructor(port) { this.port = port; this.onLine = null; this.onClose = null; this.buf = ''; this.writer = null; this.closed = false; }
+  constructor(port) { this.port = port; this.onLine = null; this.onClose = null; this.buf = ''; this.writer = null; this.reader = null; this.closed = false; }
   async open() {
     await this.port.open({ baudRate: BOARD_BAUD });
     // The C3's native USB port only takes data while DTR is asserted; DTR on with RTS off is plain "connected", not a reset.
@@ -23,32 +23,37 @@ class SerialTransport {
   async readLoop() {
     const dec = new TextDecoder();
     try {
-      while (this.port.readable && !this.closed) {
-        const reader = this.port.readable.getReader();
-        try {
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            this.buf += dec.decode(value, { stream: true });
-            let nl;
-            while ((nl = this.buf.indexOf('\n')) >= 0) {
-              const line = this.buf.slice(0, nl).replace(/\r$/, '');
-              this.buf = this.buf.slice(nl + 1);
-              if (line && this.onLine) this.onLine(line);
-            }
-          }
-        } catch (e) { /* read error: the device was unplugged; fall through to close */ }
-        finally { reader.releaseLock(); }
-        break;
+      this.reader = this.port.readable.getReader();
+      for (;;) {
+        const { value, done } = await this.reader.read();
+        if (done) break;
+        this.buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = this.buf.indexOf('\n')) >= 0) {
+          const line = this.buf.slice(0, nl).replace(/\r$/, '');
+          this.buf = this.buf.slice(nl + 1);
+          if (line && this.onLine) this.onLine(line);
+        }
       }
-    } finally { this.close(); }
+    } catch (e) { /* read error: the device was unplugged; fall through to close */ }
+    finally {
+      try { if (this.reader) this.reader.releaseLock(); } catch (e) { /* already released */ }
+      this.reader = null;
+      this.close();
+    }
   }
   async write(bytes) { await this.writer.write(bytes); }
+  // Web Serial refuses to close a port while either stream is locked, so cancel the reader (which ends readLoop)
+  // and release the writer first. Getting this wrong leaves the COM port held until the tab is closed (2026-10-15).
   async close() {
     if (this.closed) return;
     this.closed = true;
-    try { if (this.writer) { this.writer.releaseLock(); } } catch (e) { /* already gone */ }
-    try { await this.port.close(); } catch (e) { /* already gone */ }
+    try { if (this.reader) { await this.reader.cancel(); this.reader.releaseLock(); } } catch (e) { /* already gone */ }
+    this.reader = null;
+    try { if (this.writer) { await this.writer.close(); } } catch (e) { /* already gone */ }
+    try { if (this.writer) this.writer.releaseLock(); } catch (e) { /* already released */ }
+    this.writer = null;
+    try { await this.port.close(); } catch (e) { console.warn('port.close failed', e); }
     if (this.onClose) this.onClose();
   }
 }
@@ -133,7 +138,7 @@ function boardUi(connected) {
   $('boardTools').hidden = !connected;
   $('boardAs').hidden = !connected;
   $('boardList').hidden = !connected;
-  if (!connected) { $('boardList').innerHTML = ''; boardNames = []; }
+  if (!connected) { $('boardList').innerHTML = ''; boardNames = []; $('boardFree').textContent = ''; }
   boardShowName();
 }
 function boardSendName() { return safeName().slice(0, 31); }
