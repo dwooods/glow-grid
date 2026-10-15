@@ -82,3 +82,4 @@ class LittleFSStub {
     return sum;
   }
 };
+static LittleFSStub LittleFS;
