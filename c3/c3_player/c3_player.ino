@@ -30,8 +30,8 @@
 #define DATA_PIN 6
 #define BTN_NEXT 5
 #define BTN_OFF 7
-#define MAX_SPRITES 48
-#define GG_FW_VERSION 4           // bump on every change pushed to the repo; INFO reports it
+#define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
+#define GG_FW_VERSION 5           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -210,6 +210,7 @@ void doPut(const String& name, size_t size, uint32_t crcWant) {
   if (LittleFS.exists(pathOf(name))) { File o = LittleFS.open(pathOf(name), "r"); oldSize = o.size(); o.close(); }
   size_t freeBytes = LittleFS.totalBytes() - LittleFS.usedBytes();
   if (freeBytes + oldSize < size + 8192) { Serial.println("ERR not enough space"); return; }
+  if (oldSize == 0 && nSprites >= MAX_SPRITES) { Serial.printf("ERR board holds %d sprites; delete one first\n", MAX_SPRITES); return; }
   File f = LittleFS.open(TMP_PATH, "w");
   if (!f) { Serial.println("ERR cannot create file"); return; }
   Serial.println("READY");

@@ -19,7 +19,7 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 
 12-byte header (`GG`, version, flags, cols, rows, frames, fps×10, brightness %, gamma×10), then the frames as raw RGB, 768 bytes each, row by row from the top-left, exactly as drawn. The file carries **no wiring order and no gamma correction**: the board applies its own wiring setting (`GG_COLUMN_MAJOR` etc. in `c3_player/gg_core.h`, same meaning as `local_config.py`) and the brightness table, and caps brightness at 0.4 (`GG_MAX_BRIGHT_PCT`). So a sprite file works on any panel, and a buggy app cannot overload the LEDs.
 
-A 4-frame sprite is 3,084 bytes. The default partition leaves about 1.5 MB for sprites, so roughly 400 of them; `MAX_SPRITES` (48) is the list limit in RAM and is easy to raise.
+A 4-frame sprite is 3,084 bytes. The default partition leaves about 1.5 MB for sprites, so roughly 400 of them; `MAX_SPRITES` (64) is the list limit in RAM; a 65th new name is refused with a message (replacing one of the 64 is fine).
 
 ## Install on the board
 
