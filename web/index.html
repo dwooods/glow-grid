@@ -176,6 +176,19 @@
           <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
           <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
           <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
+          <label class="field-inline" title="The board moves to the next stored sprite on its own, in list order. Kept across a power cycle.">Rotate
+            <select id="boardRotate">
+              <option value="0">off</option>
+              <option value="10">every 10 s</option>
+              <option value="30">every 30 s</option>
+              <option value="60">every minute</option>
+              <option value="300">every 5 min</option>
+              <option value="900">every 15 min</option>
+              <option value="3600">every hour</option>
+              <option value="21600">every 6 hours</option>
+              <option value="86400">every day</option>
+            </select>
+          </label>
         </div>
         <p class="hint board-as" id="boardAs" hidden></p>
         <ul class="board-list" id="boardList" hidden></ul>
