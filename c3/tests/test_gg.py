@@ -599,6 +599,20 @@ class Board(unittest.TestCase):
         self.addCleanup(os.close, master)
         return gg_tool.Board(ser=FakePort(master))
 
+    def test_power_loss_mid_upload_leaves_no_temp_file(self):
+        self.start()
+        self.board.put(self.write_gg("keep", sample_frames(23, 1)))
+        good = gg.pack(sample_frames(24, 2), 8, 0.3, 2.2)
+        self.board.send(f"PUT half {len(good)} {zlib.crc32(good) & 0xFFFFFFFF:08x}")
+        self.board.expect(["READY"])
+        self.board.ser.write(good[:900])                      # power goes while the rest is in flight
+        time.sleep(0.3)
+        self.assertTrue(os.path.exists(os.path.join(self.fs, "upload.tmp")), "the partial file exists at the moment of the cut")
+        board = self.restart()
+        self.assertFalse(os.path.exists(os.path.join(self.fs, "upload.tmp")), "boot clears a leftover temp file")
+        self.assertEqual([f[0] for f in board.list()[0]], ["keep"])
+        self.assertIn("panel=on", board.simple("INFO"))
+
     def test_off_survives_a_power_cycle(self):
         # Decided 2026-10-15: an unplugged-and-replugged board that was off comes back dark.
         self.start()
