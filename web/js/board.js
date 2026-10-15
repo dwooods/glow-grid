@@ -121,6 +121,7 @@ class GgBoard {
 /* ---------- the card ---------- */
 let board = null;
 let boardFw = '';                  // from INFO fw=; '' means a build older than the version field
+let boardNames = [];               // what the board listed last, so Send can warn before replacing one
 const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);
 
 function boardSay(msg, kind) {
@@ -130,8 +131,16 @@ function boardUi(connected) {
   $('boardConnectBtn').hidden = connected;
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
+  $('boardAs').hidden = !connected;
   $('boardList').hidden = !connected;
-  if (!connected) { $('boardList').innerHTML = ''; }
+  if (!connected) { $('boardList').innerHTML = ''; boardNames = []; }
+  boardShowName();
+}
+function boardSendName() { return safeName().slice(0, 31); }
+function boardShowName() {
+  if (!board) return;
+  const name = boardSendName();
+  $('boardAs').textContent = `Send stores the drawing as “${name}”` + (boardNames.includes(name) ? ' and replaces the one on the board.' : '.') + ' Change the name under File ▸ Export.';
 }
 async function boardRefresh() {
   if (!board) return;
@@ -153,9 +162,11 @@ async function boardRefresh() {
     ul.appendChild(li);
   }
   $('boardFree').textContent = free == null ? '' : `${(free / 1024).toFixed(0)} KB free`;
-  $('boardPanelBtn').textContent = info.panel === 'off' ? 'Panel on' : 'Panel off';
-  $('boardPanelBtn').dataset.panel = info.panel || 'on';
+  $('boardOnBtn').disabled = info.panel !== 'off';
+  $('boardOffBtn').disabled = info.panel === 'off';
   boardFw = info.fw || '';
+  boardNames = files.map((f) => f.name);
+  boardShowName();
 }
 async function boardAct(fn, doneMsg) {
   if (!board) return;
@@ -189,10 +200,13 @@ async function boardSend() {
   const n = state.frames.length;
   if (state.cols !== 16 || state.rows !== 16) { boardSay(`The C3 player is 16×16; this picture is ${state.cols}×${state.rows}.`, 'err'); return; }
   if (n > GG_MAX_FRAMES) { boardSay(`The C3 player takes up to ${GG_MAX_FRAMES} frames; this has ${n}.`, 'err'); return; }
+  const flat = state.frames.map(flatten);
+  if (flat.every((f) => f.every((h) => h === '#000000'))) { boardSay('The drawing is blank; nothing sent. Draw something or File ▸ Import image first.', 'err'); return; }
   let bytes;
-  try { bytes = ggBytes(state.frames.map(flatten), state.cols, state.rows, state.fps, sim.brightness, sim.gamma); }
+  try { bytes = ggBytes(flat, state.cols, state.rows, state.fps, sim.brightness, sim.gamma); }
   catch (err) { boardSay(`Can’t send: ${err.message}.`, 'err'); return; }
-  const name = safeName().slice(0, 31);
+  const name = boardSendName();
+  if (boardNames.includes(name) && !confirm(`Replace “${name}” on the board? The old sprite is lost.`)) { boardSay('Not sent.', ''); return; }
   const btn = $('boardSendBtn'); btn.disabled = true;
   try {
     boardSay(`Sending ${name}…`, '');
@@ -205,10 +219,9 @@ async function boardSend() {
 $('boardConnectBtn').addEventListener('click', boardConnect);
 $('boardDisconnectBtn').addEventListener('click', async () => { if (board) await board.close(); });
 $('boardSendBtn').addEventListener('click', boardSend);
-$('boardPanelBtn').addEventListener('click', () => {
-  const off = $('boardPanelBtn').dataset.panel === 'off';
-  boardAct(() => (off ? board.on() : board.off()), off ? 'Panel on.' : 'Panel off.');
-});
+$('boardOnBtn').addEventListener('click', () => boardAct(() => board.on(), 'Lights on.'));
+$('boardOffBtn').addEventListener('click', () => boardAct(() => board.off(), 'Lights off. The panel stays dark until Lights on, even after a power cycle.'));
+$('nameInput').addEventListener('input', boardShowName);
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);
 if (!boardSupported()) $('boardUnsupported').hidden = false;
