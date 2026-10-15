@@ -3,12 +3,15 @@
 // Two layers, so a second transport (Wi-Fi) can reuse everything above the wire:
 //   * a transport: writes bytes, delivers the board's text lines, can close.
 //       SerialTransport uses Web Serial (Chrome and Edge on a computer). Tests pass a fake one.
-//   * GgBoard: the line protocol c3/c3_player.ino speaks (PING, LIST, PUT, DEL, SHOW, OFF, ON, ROTATE, INFO),
+//   * GgBoard: the line protocol c3/c3_player.ino speaks (PING, LIST, PUT, DEL, SHOW, OFF, ON, ROTATE, INFO, CRC),
 //       the same one c3/tools/gg_tool.py uses.
 // The card lists what is on the board, sends the current drawing as a .gg sprite (the bytes ggBytes() makes,
 // same as Export for ESP32-C3), plays or deletes a stored sprite, and turns the panel off and on.
 
 const BOARD_BAUD = 115200;
+const BOARD_PAGE = 5;                // rows per page in the list
+const BOARD_MAX_SPRITES = 64;        // the firmware's MAX_SPRITES
+const BOARD_CRC_FW = 7;              // the first firmware with the CRC command (Remove examples needs it)
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
 class SerialTransport {
@@ -121,13 +124,30 @@ class GgBoard {
   async off() { return this.cmd('OFF', ['OK']); }
   async on() { return this.cmd('ON', ['OK']); }
   async rotate(sec) { return this.cmd(`ROTATE ${sec}`, ['OK']); }
+  async crc(name) {                   // checksum and size of the file stored under `name` (firmware 7 and later)
+    const line = await this.cmd(`CRC ${name}`, ['OK']);
+    const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
+    if (!m) throw new Error(`unexpected reply: ${line}`);
+    return { crc: m[1], size: Number(m[2]) };
+  }
   async close() { await this.t.close(); }
 }
+
+/* ---------- the shipped example sprites (web/js/examples_data.js, generated from examples/sprites.py) ---------- */
+function ggExampleBytes(ex) {         // exactly the bytes File ▸ Export for ESP32-C3 would write for this drawing
+  const frames = ex.frames.map((f) => Array.from(f, (ch) => ex.palette[ch]));
+  return ggBytes(frames, 16, 16, ex.fps, GG_EXAMPLE_BRIGHTNESS, GG_EXAMPLE_GAMMA);
+}
+const ggExampleCrc = (ex) => crc32(ggExampleBytes(ex)).toString(16).padStart(8, '0');
+
 
 /* ---------- the card ---------- */
 let board = null;
 let boardFw = '';                  // from INFO fw=; '' means a build older than the version field
 let boardNames = [];               // what the board listed last, so Send can warn before replacing one
+let boardFiles = [];               // the last LIST, in the board's order; the pager slices this
+let boardPage = 0;                 // 0-based page of the list
+let boardCurrent = '';             // the sprite playing, from INFO
 const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);
 
 function boardSay(msg, kind) {
@@ -137,10 +157,9 @@ function boardUi(connected) {
   $('boardConnectBtn').hidden = connected;
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
-  $('boardAs').hidden = !connected;
+  $('boardExamples').hidden = !connected;
   $('boardList').hidden = !connected;
-  if (!connected) { $('boardList').innerHTML = ''; boardNames = []; $('boardFree').textContent = ''; }
-  boardShowName();
+  if (!connected) { $('boardList').innerHTML = ''; boardNames = []; boardFiles = []; boardPage = 0; $('boardPager').hidden = true; $('boardFree').textContent = ''; }
 }
 function boardSendName() { return safeName().slice(0, 31); }
 function boardShowRotate(sec) {       // the select shows the board's own setting; an unlisted value gets its own entry
@@ -150,19 +169,28 @@ function boardShowRotate(sec) {       // the select shows the board's own settin
   sel.value = v;
   sel.disabled = false;
 }
-function boardShowName() {
-  if (!board) return;
-  const name = boardSendName();
-  $('boardAs').textContent = `Send stores the drawing as “${name}”` + (boardNames.includes(name) ? ' and replaces the one on the board.' : '.') + ' Change the name under File ▸ Export.';
-}
-async function boardRefresh() {
+async function boardRefresh(showName) {            // showName: jump to the page holding this sprite (after a Send)
   if (!board) return;
   const [{ files, free }, info] = [await board.list(), await board.info()];
+  boardFiles = files; boardCurrent = info.current || '';
+  boardNames = files.map((f) => f.name);
+  if (showName && boardNames.includes(showName)) boardPage = Math.floor(boardNames.indexOf(showName) / BOARD_PAGE);
+  boardRenderList();
+  $('boardFree').textContent = free == null ? '' : `${(free / 1024).toFixed(0)} KB free`;
+  $('boardOnBtn').disabled = info.panel !== 'off';
+  $('boardOffBtn').disabled = info.panel === 'off';
+  boardShowRotate(info.rotate);
+  boardFw = info.fw || '';
+}
+function boardRenderList() {
+  const files = boardFiles;
+  const pages = Math.max(1, Math.ceil(files.length / BOARD_PAGE));
+  boardPage = Math.min(Math.max(boardPage, 0), pages - 1);     // a delete can leave the last page empty
   const ul = $('boardList'); ul.innerHTML = '';
-  if (!files.length) { const li = document.createElement('li'); li.className = 'hint'; li.textContent = 'Nothing stored yet. Draw something and press Send to board.'; ul.appendChild(li); }
-  for (const f of files) {
+  if (!files.length) { const li = document.createElement('li'); li.className = 'hint'; li.textContent = 'Nothing stored yet. Draw something and press Send to board, or Add examples.'; ul.appendChild(li); }
+  for (const f of files.slice(boardPage * BOARD_PAGE, (boardPage + 1) * BOARD_PAGE)) {
     const li = document.createElement('li');
-    const playing = info.current === f.name;
+    const playing = boardCurrent === f.name;
     li.className = 'board-row' + (playing ? ' playing' : '');
     const nm = document.createElement('span'); nm.className = 'board-name'; nm.textContent = f.name;
     const sz = document.createElement('small'); sz.textContent = `${(f.size / 1024).toFixed(1)} KB` + (playing ? ' · playing' : '');
@@ -174,13 +202,10 @@ async function boardRefresh() {
     li.append(nm, sz, play, del);
     ul.appendChild(li);
   }
-  $('boardFree').textContent = free == null ? '' : `${(free / 1024).toFixed(0)} KB free`;
-  $('boardOnBtn').disabled = info.panel !== 'off';
-  $('boardOffBtn').disabled = info.panel === 'off';
-  boardShowRotate(info.rotate);
-  boardFw = info.fw || '';
-  boardNames = files.map((f) => f.name);
-  boardShowName();
+  $('boardPager').hidden = files.length <= BOARD_PAGE;
+  $('boardPageInfo').textContent = `${boardPage * BOARD_PAGE + 1}–${Math.min((boardPage + 1) * BOARD_PAGE, files.length)} of ${files.length}`;
+  $('boardPrevBtn').disabled = boardPage <= 0;
+  $('boardNextBtn').disabled = boardPage >= pages - 1;
 }
 async function boardAct(fn, doneMsg) {
   if (!board) return;
@@ -226,16 +251,70 @@ async function boardSend() {
     boardSay(`Sending ${name}…`, '');
     await board.put(name, bytes, (done, total) => boardSay(`Sending ${name}… ${Math.round(100 * done / total)}%`, ''));
     boardSay(`Sent ${name} (${n} frame${n === 1 ? '' : 's'}, ${bytes.length.toLocaleString()} bytes). It is playing now.`, 'ok');
-    await boardRefresh();
+    await boardRefresh(name);
   } catch (err) { if (board) boardSay(`Board said: ${err.message}`, 'err'); }   // after an unplug the card already says so
   finally { btn.disabled = false; }
 }
+// Add examples: store every shipped example the board does not already have. Never replaces anything, so a sprite of
+// yours that happens to share an example's name is left alone. Remove examples: delete only the examples that are
+// still byte-for-byte what we shipped (checked with the board's CRC command); anything changed is kept and reported.
+async function boardAddExamples() {
+  if (!board) return;
+  const have = new Set(boardNames);
+  const todo = GG_EXAMPLES.filter((e) => !have.has(e.name));
+  const there = GG_EXAMPLES.length - todo.length;
+  if (!todo.length) { boardSay(`All ${GG_EXAMPLES.length} examples are already on the board.`, 'ok'); return; }
+  if (boardNames.length + todo.length > BOARD_MAX_SPRITES) {
+    boardSay(`The board holds ${BOARD_MAX_SPRITES} sprites and has ${boardNames.length}; adding ${todo.length} examples would not fit. Delete some first. Nothing was sent.`, 'err'); return;
+  }
+  boardBusy(true);
+  let sent = 0, before = '';
+  try {
+    before = (await board.info()).current || '';       // ask now: the board's own button may have changed it since the last refresh
+    for (const e of todo) {
+      const bytes = ggExampleBytes(e);
+      boardSay(`Adding examples… ${sent + 1} of ${todo.length} (${e.name})`, '');
+      await board.put(e.name, bytes);
+      sent++;
+    }
+    if (before && before !== '-') { try { await board.show(before); } catch (err) { /* the old sprite is gone: leave the last example playing */ } }
+    boardSay(`Added ${sent} example${sent === 1 ? '' : 's'}` + (there ? `; ${there} already on the board were left alone` : '') + '.', 'ok');
+    await boardRefresh();
+  } catch (err) {
+    if (board) { boardSay(`Board said: ${err.message}. Added ${sent} of ${todo.length}.`, 'err'); try { await boardRefresh(); } catch (e2) { /* link is gone */ } }
+  } finally { boardBusy(false); }
+}
+async function boardRemoveExamples() {
+  if (!board) return;
+  const mine = GG_EXAMPLES.filter((e) => boardNames.includes(e.name));
+  if (!mine.length) { boardSay('No examples are on the board.', 'ok'); return; }
+  if (!(Number(boardFw) >= BOARD_CRC_FW)) { boardSay(`Remove examples needs firmware ${BOARD_CRC_FW} or later (this board has ${boardFw || 'an older one'}), so it can tell your own sprites from the examples. Re-flash c3_player.ino from the repo.`, 'err'); return; }
+  if (!confirm(`Remove ${mine.length} example sprite${mine.length === 1 ? '' : 's'} from the board? Any you changed are kept.`)) { boardSay('Nothing removed.', ''); return; }
+  boardBusy(true);
+  const removed = [], kept = [];
+  try {
+    for (const e of mine) {
+      boardSay(`Removing examples… ${removed.length + kept.length + 1} of ${mine.length}`, '');
+      const got = await board.crc(e.name);
+      if (got.crc === ggExampleCrc(e) && got.size === ggExampleBytes(e).length) { await board.del(e.name); removed.push(e.name); }
+      else kept.push(e.name);
+    }
+    boardSay(`Removed ${removed.length} example${removed.length === 1 ? '' : 's'}.` + (kept.length ? ` Kept ${kept.length} you changed: ${kept.join(', ')}.` : ''), 'ok');
+    await boardRefresh();
+  } catch (err) {
+    if (board) { boardSay(`Board said: ${err.message}. Removed ${removed.length} of ${mine.length}.`, 'err'); try { await boardRefresh(); } catch (e2) { /* link is gone */ } }
+  } finally { boardBusy(false); }
+}
+function boardBusy(on) { for (const id of ['boardAddExBtn', 'boardRemoveExBtn', 'boardSendBtn']) $(id).disabled = on; }
+$('boardAddExBtn').addEventListener('click', boardAddExamples);
+$('boardRemoveExBtn').addEventListener('click', boardRemoveExamples);
+$('boardPrevBtn').addEventListener('click', () => { boardPage--; boardRenderList(); });
+$('boardNextBtn').addEventListener('click', () => { boardPage++; boardRenderList(); });
 $('boardConnectBtn').addEventListener('click', boardConnect);
 $('boardDisconnectBtn').addEventListener('click', async () => { if (board) await board.close(); });
 $('boardSendBtn').addEventListener('click', boardSend);
 $('boardOnBtn').addEventListener('click', () => boardAct(() => board.on(), 'Lights on.'));
 $('boardOffBtn').addEventListener('click', () => boardAct(() => board.off(), 'Lights off. The panel stays dark until Lights on, even after a power cycle.'));
-$('nameInput').addEventListener('input', boardShowName);
 $('boardRotate').addEventListener('change', () => {
   const sec = Number($('boardRotate').value);
   const label = $('boardRotate').selectedOptions[0].textContent;
@@ -243,5 +322,10 @@ $('boardRotate').addEventListener('change', () => {
 });
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);
-if (!boardSupported()) $('boardUnsupported').hidden = false;
+if (!boardSupported()) {            // Firefox, Safari, iPhone: no Web Serial. Show the card greyed out with the reason, not hidden.
+  $('boardCard').classList.add('unsupported');
+  $('boardUnsupported').hidden = false;
+  $('boardConnectBtn').disabled = true;
+  $('boardConnectBtn').title = 'Not supported in this browser';
+}
 if (navigator.serial) navigator.serial.addEventListener('disconnect', () => { if (board) board.close(); });
