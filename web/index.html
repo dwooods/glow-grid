@@ -166,7 +166,8 @@
       </section>
       <section class="card" id="boardCard">
         <h2>Board <small class="board-free" id="boardFree"></small></h2>
-        <p class="hint" id="boardUnsupported" hidden>Connecting a board over USB needs Chrome or Edge on a computer. From here, use <em>Export for: ESP32-C3</em> and put the file on the board from a computer.</p>
+        <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
+        <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>Not supported in this browser.</strong> The Board card needs Chrome or Edge on a computer; Help ▸ Board card lists where it works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
         <div class="btn-row">
           <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect board</button>
           <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
@@ -190,8 +191,16 @@
             </select>
           </label>
         </div>
-        <p class="hint board-as" id="boardAs" hidden></p>
+        <div class="btn-row" id="boardExamples" hidden>
+          <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the original example sprites from the repo on the board. Never replaces a sprite that is already there.">Add examples</button>
+          <button id="boardRemoveExBtn" class="btn btn-quiet" type="button" title="Delete the example sprites from the board. Keeps any you changed or replaced.">Remove examples</button>
+        </div>
         <ul class="board-list" id="boardList" hidden></ul>
+        <div class="board-pager" id="boardPager" hidden>
+          <button id="boardPrevBtn" class="btn btn-quiet" type="button" aria-label="Previous page">‹ Prev</button>
+          <span id="boardPageInfo" role="status"></span>
+          <button id="boardNextBtn" class="btn btn-quiet" type="button" aria-label="Next page">Next ›</button>
+        </div>
         <p class="hint board-status" id="boardStatus" role="status"></p>
       </section>
     </aside>
@@ -318,6 +327,7 @@
 <script src="js/loupe.js"></script>
 <script src="js/import.js"></script>
 <script src="js/export.js"></script>
+<script src="js/examples_data.js"></script>
 <script src="js/board.js"></script>
 <script src="js/help.js"></script>
 <script src="js/tools.js"></script>
