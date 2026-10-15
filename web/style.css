@@ -64,7 +64,7 @@ body {
 h1 { font-family: var(--font-display); font-size: clamp(1.4rem, 2.4vw, 1.9rem); font-weight: 600; margin: 0; letter-spacing: -0.02em; }
 .tagline { color: var(--text-dim); margin: var(--s-2) 0 0; font-size: var(--fs-md); max-width: 62ch; line-height: 1.55; }
 
-.layout { display: flex; gap: var(--s-5); align-items: flex-start; flex-wrap: wrap; }
+.layout { display: flex; gap: var(--s-5); align-items: stretch; flex-wrap: wrap; }
 .device-col { flex: 1 1 420px; display: flex; flex-direction: column; gap: var(--s-4); align-items: stretch; max-width: 460px; margin-inline: auto; }
 .panel-col { flex: 1 1 320px; display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 
@@ -359,9 +359,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .export-body label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-sm); color: var(--text-dim); }
 @media (max-width: 600px) { .photo-dlg.export-dlg { height: fit-content; width: 100vw; max-height: 100dvh; margin: auto 0 0; border-radius: var(--r-md) var(--r-md) 0 0; } .export-dlg .photo-wrap { height: auto; } }
 
-/* blank-state hint: the restore action reads as a link; the line disappears when nothing in it is visible */
-.strip-meta .btn { display: inline; min-height: 0; padding: 0; font-size: inherit; background: none; box-shadow: none; color: var(--accent); text-decoration: underline; border-radius: 4px; }
-.strip-meta .btn:hover, .strip-meta .btn:active { background: none; box-shadow: none; transform: none; }
+/* blank-state hint: the line disappears when nothing in it is visible */
 .strip-meta:not(:has(> :not([hidden]))) { display: none; }
 /* Move and layers is its own card on desktop; on phones the block moves into the sheet and the empty card is hidden */
 #moveCard .move-block > .sub-rule { display: none; }
@@ -380,3 +378,15 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 #boardCard.unsupported .board-unsupported { color: var(--text); }
 .board-status[data-kind="err"] { color: #f08c7a; }
 .board-status[data-kind="ok"] { color: var(--text); }
+
+/* Board card runs the full width under both columns. */
+#boardCard { flex: 1 1 100%; box-sizing: border-box; }
+.phone-dock #boardCard { margin-top: var(--s-2); }
+/* Frames card grows to end level with Panel settings, but only while both of its folds (What these settings mean, Panel Check) are closed;
+   open, the right column is longer and a stretched Frames card would just be empty. */
+.device-col, .panel-col { align-self: flex-start; }
+.layout:not(:has(#panelCard details[open])) .device-col, .layout:not(:has(#panelCard details[open])) .panel-col { align-self: stretch; }
+.layout:not(:has(#panelCard details[open])) #framesCard { flex-grow: 1; }
+#framesCard > .sub-rule { margin-top: auto; }
+/* "Panel Check": capital P and C only, not the all-caps of the other small headings. */
+.check-label { text-transform: none; letter-spacing: 0; }
