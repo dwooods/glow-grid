@@ -25,7 +25,7 @@ STUB = """() => { window.__w = []; window.__calls = 0;
 # A fake ESP32-C3 behind the Board card's transport interface: the same line protocol c3/c3_player.ino speaks,
 # with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
 FAKE_BOARD = """() => {
-  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = [];
+  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0;
   window.__fakeChunks = []; window.__fakeBreak = null;     // 'full': PUT refused after READY; 'mute': no replies at all
   window.__ggFakeSerial = () => {
     const t = { onLine: null, onClose: null, closed: false, pending: null };
@@ -52,7 +52,8 @@ FAKE_BOARD = """() => {
       switch (cmd) {
         case 'PING': return say('PONG');
         case 'LIST': for (const n of names()) say('FILE ' + n + ' ' + window.__fakeStore.get(n).length); return say('OK ' + names().length + ' files, 1400000 bytes free');
-        case 'INFO': return say('OK fw=3 current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel);
+        case 'INFO': return say('OK fw=3 current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate);
+        case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
           t.pending = { name: a1, size: Number(a2), crc: parseInt(a3, 16), buf: new Uint8Array(Number(a2)), got: 0, acked: 0 }; return say('READY');
         case 'SHOW': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeCurrent = a1; window.__fakePanel = 'on'; return say('OK showing ' + a1);
@@ -275,6 +276,16 @@ class Smoke(unittest.TestCase):
         self.assertFalse(self.pg.evaluate("document.getElementById('boardOnBtn').disabled"))
         self.pg.click('#boardOnBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakePanel'), 'on')
+        # rotate: the select sends ROTATE and then shows what the board reports; an unlisted board value gets its own entry
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), '0')
+        self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeRotate'), 300)
+        self.assertIn('Rotating every 5 min', status())
+        self.pg.evaluate('window.__fakeRotate = 45'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), '45')
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').selectedOptions[0].textContent"), 'every 45 s')
+        self.pg.select_option('#boardRotate', '0'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeRotate'), 0); self.assertIn('Rotation off', status())
         self.pg.on('dialog', lambda d: d.accept())
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
         self.assertEqual(rows(), ['flower'])
