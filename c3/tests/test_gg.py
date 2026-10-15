@@ -15,6 +15,7 @@ It does NOT test the real esp32 core, LittleFS on real flash, the real USB port 
 """
 import itertools
 import os
+import re
 import pty
 import select
 import tty
@@ -413,7 +414,12 @@ class Board(unittest.TestCase):
         self.board.simple("DEL alpha")
         files, _ = self.board.list()
         self.assertEqual([f[0] for f in files], ["beta"])
-        self.assertIn("current=beta", self.board.simple("INFO"))
+        info = self.board.simple("INFO")
+        self.assertIn("current=beta", info)
+        # INFO carries the firmware version #defined in the sketch, so a board can be checked against the repo
+        with open(os.path.join(SKETCH, "c3_player.ino")) as fh:
+            fw = re.search(r"#define GG_FW_VERSION (\d+)", fh.read()).group(1)
+        self.assertIn(f"OK fw={fw} ", info)
         self.assertFalse(os.path.exists(os.path.join(self.fs, "upload.tmp")))
 
     def test_errors_leave_storage_clean(self):
@@ -575,6 +581,13 @@ class Board(unittest.TestCase):
         self.assertEqual(self.last_frames(1)[0], "00000c" + "000000" * 255)
         self.board.put(self.write_gg("keep", sample_frames(4, 2)))
         # restart the program on the same flash: it must find and play the stored sprite
+        board = self.restart()
+        files, _ = board.list()
+        self.assertEqual([f[0] for f in files], ["keep"])
+        self.assertTrue(self.last_frames(2))
+
+    def restart(self):
+        """Power cycle: the program starts again on the same flash. Returns a fresh Board."""
         self.proc.kill()
         self.proc.wait()
         write_text(self.led, "")
@@ -584,10 +597,35 @@ class Board(unittest.TestCase):
         self.proc = subprocess.Popen([SIM], stdin=slave, stdout=slave, env=env)
         os.close(slave)
         self.addCleanup(os.close, master)
-        board = gg_tool.Board(ser=FakePort(master))
-        files, _ = board.list()
-        self.assertEqual([f[0] for f in files], ["keep"])
-        self.assertTrue(self.last_frames(2))
+        return gg_tool.Board(ser=FakePort(master))
+
+    def test_off_survives_a_power_cycle(self):
+        # Decided 2026-10-15: an unplugged-and-replugged board that was off comes back dark.
+        self.start()
+        a = sample_frames(21, 1)
+        self.board.put(self.write_gg("alpha", a))
+        self.assertEqual(self.board.simple("OFF"), "OK panel off")
+        board = self.restart()
+        self.assertIn("panel=off", board.simple("INFO"))
+        self.assertTrue(all(f == "000000" * 256 for f in self.last_frames(5)), "nothing lit after the restart")
+        self.assertEqual([f[0] for f in board.list()[0]], ["alpha"], "the marker is not a sprite")
+        board.simple("ON")
+        self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
+        board = self.restart()                                 # and ON is remembered too
+        self.assertIn("panel=on", board.simple("INFO"))
+        self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
+        # SHOW, PUT and the Next button while off also clear the remembered off
+        board.simple("OFF"); board.simple("SHOW alpha")
+        board = self.restart()
+        self.assertIn("panel=on", board.simple("INFO"))
+        board.simple("OFF")
+        self.press(5); time.sleep(0.3); self.press(None)
+        board = self.restart()
+        self.assertIn("panel=on", board.simple("INFO"))
+        board.simple("OFF")
+        board.put(self.write_gg("beta", sample_frames(22, 1)))
+        board = self.restart()
+        self.assertIn("panel=on", board.simple("INFO"))
 
 
 if __name__ == "__main__":
