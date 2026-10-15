@@ -5,7 +5,7 @@
 //   Panel data: GPIO6 to DIN.
 //
 // Put sprites on the board over USB with ../tools/gg_tool.py (close the Serial Monitor first).
-// Bluetooth comes later and will carry the same files.
+// Wi-Fi comes next and Bluetooth later; both carry the same files and commands.
 //
 // Arduino IDE setup (open c3/c3_player/c3_player.ino straight from the repo):
 //   Board: ESP32C3 Dev Module, USB CDC On Boot: Enabled,
@@ -31,7 +31,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 48
-#define GG_FW_VERSION 3           // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 4           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -338,6 +338,7 @@ void setup() {
     Serial.println("ERR flash storage failed to start");
     return;
   }
+  LittleFS.remove(TMP_PATH);         // an upload cut off by a power loss leaves this behind
   scanSprites();
   Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
                 (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));

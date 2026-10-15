@@ -13,7 +13,7 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
 | `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `off`, `on`, `info` on the board over USB |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 25 tests; see below |
+| `tests/` | 26 tests; see below |
 
 ## The `.gg` sprite file
 
@@ -44,7 +44,7 @@ python3 tools/gg_tool.py info         # fw=<n> says which firmware is on the boa
 
 Close the Arduino Serial Monitor first; only one program can use the port. `gg_tool.py` finds the C3's port by its USB id; if it cannot, add `--port COM3`.
 
-Add = `put` a new name. Replace = `put` the same name. The upload goes to a temporary file, is checked (size, CRC-32, valid header) and only then swapped in, so a cable pulled mid-upload cannot leave a broken sprite. The last uploaded sprite plays at once. Sprites survive a power cycle, and so does `off`: a board that was off comes back dark until `on`, `show`, `put`, the Board card or a button.
+Add = `put` a new name. Replace = `put` the same name. The upload goes to a temporary file, is checked (size, CRC-32, valid header) and only then swapped in, so a cable pulled mid-upload cannot leave a broken sprite; a power loss mid-upload leaves a temp file that the next boot removes. The last uploaded sprite plays at once. Sprites survive a power cycle, and so does `off`: a board that was off comes back dark until `on`, `show`, `put`, the Board card or a button.
 
 ## Tests
 

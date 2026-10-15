@@ -59,6 +59,12 @@ class GgBoard {
     this.waiters = [];                 // {prefixes, resolve, reject, timer}
     this.log = [];
     transport.onLine = (line) => this.gotLine(line);
+    const prevClose = transport.onClose;
+    transport.onClose = () => { this.dropAll('Board disconnected'); if (prevClose) prevClose(); };
+  }
+  dropAll(why) {                      // the link is gone: every waiting command fails now, not at its timeout
+    const ws = this.waiters; this.waiters = [];
+    for (const w of ws) { clearTimeout(w.timer); w.reject(new Error(why)); }
   }
   gotLine(line) {
     this.log.push(line); if (this.log.length > 50) this.log.shift();
@@ -154,7 +160,7 @@ async function boardRefresh() {
 async function boardAct(fn, doneMsg) {
   if (!board) return;
   try { await fn(); boardSay(doneMsg, 'ok'); await boardRefresh(); }
-  catch (err) { boardSay(`Board said: ${err.message}`, 'err'); }
+  catch (err) { if (board) boardSay(`Board said: ${err.message}`, 'err'); }
 }
 async function boardConnect() {
   if (!boardSupported()) { boardSay('Connecting a board needs Chrome or Edge on a computer. From a phone, export a .gg file instead.', 'err'); return; }
@@ -193,7 +199,7 @@ async function boardSend() {
     await board.put(name, bytes, (done, total) => boardSay(`Sending ${name}… ${Math.round(100 * done / total)}%`, ''));
     boardSay(`Sent ${name} (${n} frame${n === 1 ? '' : 's'}, ${bytes.length.toLocaleString()} bytes). It is playing now.`, 'ok');
     await boardRefresh();
-  } catch (err) { boardSay(`Board said: ${err.message}`, 'err'); }
+  } catch (err) { if (board) boardSay(`Board said: ${err.message}`, 'err'); }   // after an unplug the card already says so
   finally { btn.disabled = false; }
 }
 $('boardConnectBtn').addEventListener('click', boardConnect);
