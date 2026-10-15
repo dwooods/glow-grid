@@ -13,7 +13,7 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
 | `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `off`, `on`, `info` on the board over USB |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 13 tests; see below |
+| `tests/` | 24 tests; see below |
 
 ## The `.gg` sprite file
 
@@ -54,8 +54,11 @@ Set `GLOWGRID_REPO=/path/to/glow-grid` if this folder is not inside the repo (th
 - **Parity:** `gg_core.h`, compiled on the PC, places and corrects every pixel exactly as `grid_common.py` does, for all 16 wiring combinations and nine brightness/gamma settings, including the 0.4 cap.
 - **Board:** `c3_player.ino` itself, compiled against small stand-ins for the Arduino core (`tests/arduino_stub/`), driven by the real `gg_tool.py` through a pseudo-terminal: add, list, replace, delete, show, a wrong checksum, an invalid file, a bad name, a stalled upload, both buttons, `OFF`/`ON` over serial, and a restart that finds the stored sprite.
 - **Format:** round trip and rejection of bad files, in both the Python and the C check. The repo's own `tests/test_gg_export.py` adds that the editor writes byte-identical files.
+- **Playback and edges:** frames advance at the stored fps and wrap, a still renders once; replacing the sprite that is playing; Next while the panel is off; over-long and malformed serial lines; a 31-character name; the `MAX_SPRITES` limit.
+- **Converter and tool:** `png_to_gg.py` writes the same bytes as `gg_format.pack` (metadata, defaults, overrides, transparency, wrong sizes refused); `gg_tool.py` turns a dead or silent port into a plain message and picks the Espressif device among several ports.
+- **IDE build:** the sketch is compiled with the function prototypes the Arduino IDE generates, so a definition order the IDE rejects fails here too.
 
-Two deliberate breaks (wrong wiring default; checksum not checked) each made the suite fail. The first real IDE compile failed on an Arduino quirk the PC build cannot see (auto-generated prototypes above a struct); fixed by moving the struct into `gg_core.h`.
+Two deliberate breaks (wrong wiring default; checksum not checked) each made the suite fail. The first real IDE compile failed on an Arduino quirk the PC build could not see then (auto-generated prototypes above a struct); fixed by moving the struct into `gg_core.h`, and the IDE build test now covers it. The serial-line test found that an over-long line used to run its tail as a command; fixed.
 
 **Not tested:** the real esp32 core and LittleFS on real flash, NeoPixel timing with 256 LEDs, serial throughput on the real USB port, Bluetooth.
 

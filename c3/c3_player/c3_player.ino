@@ -293,17 +293,21 @@ void doCommand(char* line) {
 void handleSerial() {
   static char line[96];
   static size_t len = 0;
+  static bool tooLong = false;       // a line that overflowed is ignored up to its newline, tail included
   while (Serial.available()) {
     char ch = (char)Serial.read();
     if (ch == '\r') continue;
     if (ch == '\n') {
       line[len] = 0;
+      if (!tooLong) doCommand(line);
       len = 0;
-      doCommand(line);
+      tooLong = false;
+    } else if (tooLong) {
+      continue;
     } else if (len < sizeof(line) - 1) {
       line[len++] = ch;
     } else {
-      len = 0;                       // line too long: drop it
+      tooLong = true;
     }
   }
 }

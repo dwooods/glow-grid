@@ -1,5 +1,5 @@
 """Browser smoke test for the Glow Grid editor (web/). Covers regressions we have already hit:
- import naming (_sprite), the Save button with a stubbed picker, the ESP32-C3 .gg export, the Help dialog, and a saved sheet restoring its frames.
+ import naming (_sprite), the Save button with a stubbed picker, the ESP32-C3 .gg export (plain frames and with a still part), the Help dialog, and a saved sheet restoring its frames.
 
 Run by hand before pushing a web/ change (not in CI):
     pip install playwright pillow && playwright install chromium
@@ -129,6 +129,27 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate("() => { state.cols = 8; state.rows = 32; afterFrameChange(); }")  # wrong size is refused, nothing saved
         self.pg.evaluate("window.__w = []"); self.pg.evaluate(STUB); self.click_save(); self.pg.wait_for_timeout(300)
         self.assertIn('16×16', self.status()); self.assertEqual(self.pg.evaluate('window.__w.length'), 0)
+        self.set_target('pi')
+
+    def test_c3_export_combines_the_still_part(self):
+        # Two frames that share a body and differ in one pixel; "Animate one part only" moves the body into the
+        # still part and leaves the frames mostly black. The .gg must still carry the combined picture, like the PNG.
+        self.pg.evaluate(STUB); self.set_name('parts')
+        self.pg.evaluate("""() => { const n = state.cols * state.rows;
+            const f0 = new Array(n).fill('#336699'), f1 = new Array(n).fill('#336699');
+            f0[5] = '#ff0000'; f1[5] = '#00ff00';
+            state.frames = [f0, f1]; state.currentFrame = 0; state.fps = 4; afterFrameChange(); }""")
+        self.assertTrue(self.pg.evaluate('separateStill()'))
+        self.assertEqual(self.pg.evaluate("state.frames[0].filter((h) => h !== '#000000').length"), 1, 'frame holds only the moving pixel')
+        self.set_target('c3')
+        self.pg.evaluate("window.__mode = 'ok'"); self.click_save(); self.pg.wait_for_timeout(500)
+        px = self.pg.evaluate("(async () => Array.from(new Uint8Array(await window.__w[0].arrayBuffer()).slice(12)))()")
+        self.assertEqual(len(px), 2 * 768)
+        self.assertEqual(px[0:3], [0x33, 0x66, 0x99], 'body pixel comes from the still part')
+        self.assertEqual(px[15:18], [0xff, 0, 0], 'frame 1 moving pixel')
+        self.assertEqual(px[768 + 15:768 + 18], [0, 0xff, 0], 'frame 2 moving pixel')
+        blacks = sum(1 for i in range(0, len(px), 3) if px[i:i + 3] == [0, 0, 0])
+        self.assertEqual(blacks, 0, 'no black pixel anywhere: every pixel is body or the moving one')
         self.set_target('pi')
 
     def test_saved_sheet_restores_frames_under_another_name(self):

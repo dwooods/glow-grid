@@ -9,7 +9,9 @@ What it proves:
     for all 16 wiring combinations and several brightness/gamma settings, including the 0.4 cap;
   * c3_player/c3_player.ino itself (compiled against small Arduino stand-ins) handles PUT, LIST, DEL, SHOW,
     bad input, a wrong checksum, a timeout and both buttons, driven by the real tools/gg_tool.py.
-It does NOT test the real esp32 core, LittleFS on real flash, the NeoPixel timing or Bluetooth.
+  * tools/png_to_gg.py converts a PNG into the same bytes gg_format.pack makes; gg_tool.py turns port failures into
+    plain messages and picks the right COM port; the sketch compiles with the prototypes the Arduino IDE generates.
+It does NOT test the real esp32 core, LittleFS on real flash, the real USB port (DTR), the NeoPixel timing or Bluetooth.
 """
 import itertools
 import os
@@ -180,6 +182,137 @@ class Parity(unittest.TestCase):
             write_bytes(p, gg.pack(frames, 6, b, g))
             got = host("frames", p).split()
             self.assertEqual(got, expected_led_frames(frames, min(b, 0.4), g, (1, 1, 0, 0)), f"{b} {g}")
+
+
+class IdeBuild(unittest.TestCase):
+    """The Arduino IDE rewrites a sketch before compiling: it generates a prototype for every function and inserts
+    them after the includes. A struct or typedef used in a parameter list must therefore come from a header, and
+    a function may not be defined after its first use only by luck of the IDE. Mimic that rewrite and compile."""
+
+    def test_compiles_with_generated_prototypes(self):
+        src = open(os.path.join(SKETCH, "c3_player.ino")).read()
+        import re
+        protos = [m.group(1) + ";" for m in re.finditer(r"^((?:const char\*|void|bool|String|int)\s+\w+\([^)]*\))\s*\{", src, re.M)]
+        self.assertGreater(len(protos), 10)
+        cut = src.index("\n", src.rfind("#include")) + 1
+        d = tempfile.mkdtemp()
+        p = os.path.join(d, "ide_like.cpp")
+        write_text(p, src[:cut] + "\n".join(protos) + "\n" + src[cut:])
+        r = subprocess.run(["g++", "-std=c++17", "-fsyntax-only", f"-I{os.path.join(HERE, 'arduino_stub')}", f"-I{SKETCH}", "-x", "c++", p],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+
+class PngToGg(unittest.TestCase):
+    """tools/png_to_gg.py: the converter cloners use for existing Glow Grid PNGs."""
+
+    def setUp(self):
+        try:
+            from PIL import Image
+            from PIL.PngImagePlugin import PngInfo
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        self.Image, self.PngInfo = Image, PngInfo
+        sys.path.insert(0, os.path.join(ROOT, "tools"))
+        import png_to_gg
+        self.conv = png_to_gg
+        self.d = tempfile.mkdtemp()
+
+    def png(self, frames, meta=None, name="t_sprite.png"):
+        img = self.Image.new("RGB", (16 * len(frames), 16))
+        for k, fr in enumerate(frames):
+            for i, px in enumerate(fr):
+                img.putpixel((k * 16 + i % 16, i // 16), px)
+        p = os.path.join(self.d, name)
+        info = self.PngInfo()
+        if meta is not None:
+            import json
+            info.add_text("glow-grid", json.dumps(meta, separators=(",", ":")))
+        img.save(p, pnginfo=info)
+        return p
+
+    def test_round_trip_with_metadata(self):
+        fr = sample_frames(21, 3)
+        p = self.png(fr, {"brightness": 0.35, "gamma": 2.0, "cols": 16, "rows": 16, "frames": 3, "fps": 5})
+        out = self.conv.convert(p)
+        self.assertEqual(os.path.basename(out), "t.gg")          # _sprite dropped, like a board name
+        with open(out, "rb") as fh:
+            self.assertEqual(fh.read(), gg.pack(fr, 5, 0.35, 2.0))
+
+    def test_defaults_without_metadata_and_overrides(self):
+        fr = sample_frames(22, 2)
+        p = self.png(fr, None, "plain.png")
+        out = self.conv.convert(p)
+        with open(out, "rb") as fh:
+            self.assertEqual(fh.read(), gg.pack(fr, 6, 0.3, 2.2))
+        out = self.conv.convert(p, fps=8, brightness=0.1)
+        with open(out, "rb") as fh:
+            self.assertEqual(fh.read(), gg.pack(fr, 8, 0.1, 2.2))
+
+    def test_transparent_becomes_black_and_wrong_size_refused(self):
+        img = self.Image.new("RGBA", (16, 16), (200, 100, 50, 0))
+        img.putpixel((3, 3), (10, 20, 30, 255))
+        p = os.path.join(self.d, "alpha.png")
+        img.save(p)
+        out = self.conv.convert(p)
+        frames, fps, b, g = gg.unpack(open(out, "rb").read())
+        self.assertEqual(frames[0][3 * 16 + 3], (10, 20, 30))
+        self.assertEqual(frames[0][0], (0, 0, 0))
+        self.assertEqual(sum(1 for px in frames[0] if px != (0, 0, 0)), 1)
+        bad = os.path.join(self.d, "bad.png")
+        self.Image.new("RGB", (20, 16)).save(bad)
+        with self.assertRaises(SystemExit):
+            self.conv.convert(bad)
+        tall = os.path.join(self.d, "tall.png")
+        self.Image.new("RGB", (16, 32)).save(tall)
+        with self.assertRaises(SystemExit):
+            self.conv.convert(tall)
+
+
+class ToolErrors(unittest.TestCase):
+    """gg_tool.py's handling around the real serial port, with the port faked (the real DTR behaviour is hardware-only)."""
+
+    def test_write_timeout_becomes_a_plain_message(self):
+        import serial as pyserial
+
+        class DeadPort:
+            timeout = 0.2
+            def write(self, b): raise pyserial.SerialTimeoutException("Write timeout")
+            def read(self, n=1): return b""
+            def reset_input_buffer(self): pass
+            def close(self): pass
+        with self.assertRaisesRegex(TimeoutError, "not taking data"):
+            gg_tool.Board(ser=DeadPort())
+
+    def test_silent_board_times_out_with_a_hint(self):
+        class SilentPort:
+            timeout = 0.2
+            def write(self, b): pass
+            def read(self, n=1): time.sleep(0.01); return b""
+            def reset_input_buffer(self): pass
+            def close(self): pass
+        with self.assertRaisesRegex(TimeoutError, "did not answer PING"):
+            gg_tool.Board(ser=SilentPort())
+
+    def test_find_port_prefers_the_espressif_device(self):
+        import serial.tools.list_ports as lp
+
+        class P:
+            def __init__(self, device, vid): self.device, self.vid = device, vid
+        orig = lp.comports
+        try:
+            lp.comports = lambda: [P("COM1", 0x1234), P("COM3", 0x303A)]
+            self.assertEqual(gg_tool.find_port(), "COM3")
+            lp.comports = lambda: [P("COM7", None)]            # only one port: take it
+            self.assertEqual(gg_tool.find_port(), "COM7")
+            lp.comports = lambda: [P("COM1", 0x1234), P("COM2", 0x5678)]   # ambiguous: refuse, name them
+            with self.assertRaisesRegex(SystemExit, "COM1, COM2"):
+                gg_tool.find_port()
+            lp.comports = lambda: [P("COM3", 0x303A), P("COM4", 0x303A)]   # two boards: refuse
+            with self.assertRaises(SystemExit):
+                gg_tool.find_port()
+        finally:
+            lp.comports = orig
 
 
 class FakePort:
@@ -366,6 +499,76 @@ class Board(unittest.TestCase):
         self.board.put(self.write_gg("beta", b))
         self.assertEqual(self.last_frames(1)[0], self.led_of(b)[0])
         self.assertIn("panel=on", self.board.simple("INFO"))
+
+    def test_playback_speed_and_wrap(self):
+        self.start()
+        fr = sample_frames(31, 3)
+        self.board.put(self.write_gg("anim", fr, fps=10))     # 100 ms per frame
+        expected = self.led_of(fr)
+        write_text(self.led, "")
+        time.sleep(1.05)
+        with open(self.led) as fh:
+            shown = [l for l in fh.read().split("\n") if l]
+        self.assertTrue(8 <= len(shown) <= 12, f"{len(shown)} frames in 1 s at 10 fps")
+        for k in range(len(shown) - 1):                       # 0,1,2,0,1,2: each frame is the next one
+            self.assertEqual(expected.index(shown[k + 1]), (expected.index(shown[k]) + 1) % 3)
+        # a still renders once, then nothing more
+        still = sample_frames(32, 1)
+        self.board.put(self.write_gg("still", still))
+        time.sleep(0.5)
+        write_text(self.led, "")
+        time.sleep(0.6)
+        with open(self.led) as fh:
+            self.assertEqual(fh.read(), "")
+
+    def test_replace_the_playing_sprite_and_next_while_off(self):
+        self.start()
+        a, b = sample_frames(41, 1), sample_frames(42, 1)
+        self.board.put(self.write_gg("alpha", a))
+        self.board.put(self.write_gg("beta", b))
+        self.board.simple("SHOW beta")
+        b2 = sample_frames(43, 1)
+        self.board.put(self.write_gg("beta", b2))             # replace what is on screen right now
+        self.assertEqual(self.last_frames(1)[0], self.led_of(b2)[0])
+        self.assertIn("current=beta", self.board.simple("INFO"))
+        self.board.simple("OFF")
+        self.press(5)                                         # Next while off: back on, same sprite
+        time.sleep(0.3)
+        self.press(None)
+        self.assertEqual(self.last_frames(1)[0], self.led_of(b2)[0])
+        self.assertIn("current=beta", self.board.simple("INFO"))
+
+    def test_odd_input_on_the_serial_line(self):
+        self.start()
+        self.board.send("WHATEVER")
+        with self.assertRaisesRegex(RuntimeError, "unknown command"):
+            self.board.expect(["OK"])
+        self.board.ser.write(b"X" * 300 + b"\n")              # too long: dropped, not executed, board still answers
+        self.board.send("PING")
+        self.assertEqual(self.board.expect(["PONG"]), "PONG")
+        self.board.send("put")                                # lower case and missing arguments
+        with self.assertRaisesRegex(RuntimeError, "usage"):
+            self.board.expect(["OK"])
+        self.board.send("show")
+        with self.assertRaisesRegex(RuntimeError, "no such sprite"):
+            self.board.expect(["OK"])
+        long_name = "n" * 31
+        self.board.put(self.write_gg(long_name, sample_frames(44, 1)))
+        files, _ = self.board.list()
+        self.assertEqual([f[0] for f in files], [long_name])
+        self.board.send(f"PUT {'n' * 32} 780 00000000")
+        with self.assertRaisesRegex(RuntimeError, "bad name"):
+            self.board.expect(["READY"])
+
+    def test_sprite_list_limit(self):
+        self.start()
+        fr = sample_frames(51, 1)
+        for i in range(50):                                   # MAX_SPRITES is 48
+            self.board.put(self.write_gg(f"s{i:02d}", fr))
+        files, summary = self.board.list()
+        self.assertEqual(len(files), 48, "the list stops at MAX_SPRITES")
+        self.assertEqual(len(os.listdir(self.fs)), 50, "the files are all stored")
+        self.assertIn("48 files", summary)
 
     def test_empty_board_shows_dim_marker_and_survives_restart(self):
         self.start()
