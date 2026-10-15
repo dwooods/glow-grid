@@ -366,3 +366,13 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 /* Move and layers is its own card on desktop; on phones the block moves into the sheet and the empty card is hidden */
 #moveCard .move-block > .sub-rule { display: none; }
 .phone-dock #moveCard { display: none; }
+
+/* Board card (the ESP32-C3 player over USB) */
+.board-free { font-weight: 400; text-transform: none; letter-spacing: 0; margin-left: var(--s-2); }
+.board-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.board-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--s-2); align-items: center; padding: 4px 0; border-top: 1px solid var(--border); font-size: var(--fs-sm); }
+.board-row:first-child { border-top: 0; }
+.board-row.playing .board-name { color: var(--accent, #4fd1c5); font-weight: 600; }
+.board-row small { color: var(--text-dim); }
+.board-status[data-kind="err"] { color: #f08c7a; }
+.board-status[data-kind="ok"] { color: var(--text); }
