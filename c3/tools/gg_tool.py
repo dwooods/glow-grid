@@ -31,12 +31,15 @@ class Board:
         if ser is not None:             # a ready-made port object (the tests pass a fake board)
             self.ser = ser
         else:
-            # Set the control lines before opening: the C3's USB port can reset the chip on some toggles.
+            # Control lines, set before opening so they do not toggle: the C3's native USB port only
+            # accepts data while DTR is asserted (otherwise every write blocks for good), and
+            # DTR high with RTS low is the ordinary "terminal connected" state, not a reset.
             self.ser = serial.Serial()
             self.ser.port = port
             self.ser.baudrate = baud
             self.ser.timeout = 0.2
-            self.ser.dtr = False
+            self.ser.write_timeout = 2.0
+            self.ser.dtr = True
             self.ser.rts = False
             self.ser.open()
         self.timeout = timeout
@@ -46,7 +49,10 @@ class Board:
         self.ser.close()
 
     def send(self, text):
-        self.ser.write(text.encode() + b"\n")
+        try:
+            self.ser.write(text.encode() + b"\n")
+        except serial.SerialTimeoutException:
+            raise TimeoutError("the board is not taking data on this port. Unplug it, plug it back in, and try again.")
 
     def readline(self, timeout):
         end = time.time() + timeout
