@@ -41,6 +41,10 @@ class File {
     return st && stat(st->path.c_str(), &sb) == 0 ? (size_t)sb.st_size : 0;
   }
   const char* name() { return st ? st->name.c_str() : ""; }
+  // the Stream bits the sketch uses on a File (real Arduino File derives from Stream)
+  size_t print(unsigned long v) { if (!st || !st->fp) return 0; return fprintf(st->fp, "%lu", v); }
+  size_t print(uint32_t v) { return print((unsigned long)v); }
+  long parseInt() { long v = 0; if (st && st->fp && fscanf(st->fp, "%ld", &v) == 1) return v; return 0; }
   bool isDirectory() { return st && st->isDir; }
   File openNextFile() {
     if (!st || !st->dir) return File();
@@ -78,4 +82,3 @@ class LittleFSStub {
     return sum;
   }
 };
-static LittleFSStub LittleFS;

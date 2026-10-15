@@ -7,6 +7,7 @@
     python3 gg_tool.py del lantern
     python3 gg_tool.py off                                # panel dark, board keeps running
     python3 gg_tool.py on
+    python3 gg_tool.py rotate 300                       # next sprite every 5 minutes; 0 = stay on one
     python3 gg_tool.py info
     python3 gg_tool.py --port COM3 list                   # name the port if it is not found automatically
 
@@ -149,6 +150,8 @@ def main():
     sub.add_parser("info")
     sub.add_parser("off")
     sub.add_parser("on")
+    r = sub.add_parser("rotate")
+    r.add_argument("seconds", type=int)
     p = sub.add_parser("put")
     p.add_argument("files", nargs="+")
     for c in ("show", "del"):
@@ -175,6 +178,8 @@ def main():
             print(board.simple("INFO"))
         elif a.cmd in ("off", "on"):
             print(board.simple(a.cmd.upper()))
+        elif a.cmd == "rotate":
+            print(board.simple(f"ROTATE {a.seconds}"))
     except (RuntimeError, TimeoutError, ValueError) as e:
         raise SystemExit(f"error: {e}")
     finally:

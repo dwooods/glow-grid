@@ -21,7 +21,9 @@
 //   DEL <name>                 -> OK deleted <name> or ERR <reason>
 //   SHOW <name>                -> OK showing <name> or ERR <reason>
 //   OFF / ON                   -> OK panel off / OK panel on (same as the On/off button; off is kept across a power cycle)
-//   INFO                       -> OK current=<name> ...
+//   ROTATE <seconds>           -> OK rotate <seconds>; 0 = off. Cycles the stored sprites in list order, kept across
+//                                 a power cycle; each sprite keeps animating for the whole interval (David, 2026-10-15)
+//   INFO                       -> OK current=<name> ... rotate=<seconds>
 
 #include <Adafruit_NeoPixel.h>
 #include <LittleFS.h>
@@ -31,7 +33,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 5           // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 6           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -48,9 +50,29 @@ int frameNo = 0;
 uint32_t nextFrameAt = 0;
 bool panelOn = true;
 bool dirty = true;           // a still needs drawing
+uint32_t rotateSec = 0;      // 0 = stay on one sprite; else move to the next one every rotateSec seconds
+uint32_t rotateAt = 0;       // millis() at which the next sprite is due
+#define ROTATE_MAX 86400UL
 
 String pathOf(const String& name) { return "/" + name + ".gg"; }
 const char* OFF_MARK = "/panel.off";   // exists while the panel is off, so OFF survives a power cycle (David, 2026-10-15)
+const char* ROTATE_PATH = "/rotate.txt"; // the rotate interval in seconds, absent or 0 = off
+
+void rotateReset() { rotateAt = millis() + rotateSec * 1000UL; }
+void saveRotate() {
+  if (rotateSec == 0) { LittleFS.remove(ROTATE_PATH); return; }
+  File f = LittleFS.open(ROTATE_PATH, "w");
+  if (f) { f.print(rotateSec); f.close(); }
+}
+void loadRotate() {
+  rotateSec = 0;
+  File f = LittleFS.open(ROTATE_PATH, "r");
+  if (!f) return;
+  rotateSec = (uint32_t)f.parseInt();
+  f.close();
+  if (rotateSec > ROTATE_MAX) rotateSec = 0;
+  rotateReset();
+}
 
 // Keeps the off state in flash. Written only when it changes.
 void rememberPanel() {
@@ -123,6 +145,7 @@ bool selectIndex(int idx) {
   cur = idx;
   panelOn = true;
   rememberPanel();
+  rotateReset();                     // a new sprite gets a full interval
   return true;
 }
 
@@ -141,6 +164,11 @@ void render(int frame) {
     }
   }
   strip.show();
+}
+
+void rotateTick() {
+  if (!rotateSec || !panelOn || nSprites < 2) return;
+  if ((int32_t)(millis() - rotateAt) >= 0) selectIndex((cur + 1) % nSprites);
 }
 
 void playTick() {
@@ -178,7 +206,7 @@ bool pressed(GGButton& b) {  // true once per press
 void setPanel(bool on) {
   panelOn = on;
   rememberPanel();
-  if (on) { dirty = true; nextFrameAt = millis(); frameNo = 0; }
+  if (on) { dirty = true; nextFrameAt = millis(); frameNo = 0; rotateReset(); }
   else { strip.clear(); strip.show(); }
 }
 
@@ -293,11 +321,19 @@ void doCommand(char* line) {
   } else if (c == "ON") {
     setPanel(true);
     Serial.println(data ? "OK panel on" : "OK panel on (nothing stored)");
+  } else if (c == "ROTATE") {
+    char* end = NULL;
+    long v = (n >= 2) ? strtol(a1, &end, 10) : -1;
+    if (n < 2 || *a1 == 0 || *end != 0 || v < 0 || v > (long)ROTATE_MAX) { Serial.printf("ERR usage: ROTATE <seconds 0..%lu> (0 = off)\n", ROTATE_MAX); return; }
+    rotateSec = (uint32_t)v;
+    saveRotate();
+    rotateReset();
+    Serial.printf("OK rotate %lu\n", (unsigned long)rotateSec);
   } else if (c == "INFO") {
-    Serial.printf("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u\n",
+    Serial.printf("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu\n",
                   GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
                   data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
-                  (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
+                  (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()), (unsigned long)rotateSec);
   } else {
     Serial.println("ERR unknown command");
   }
@@ -340,6 +376,7 @@ void setup() {
     return;
   }
   LittleFS.remove(TMP_PATH);         // an upload cut off by a power loss leaves this behind
+  loadRotate();
   scanSprites();
   Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
                 (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
@@ -351,5 +388,6 @@ void setup() {
 void loop() {
   handleSerial();
   handleButtons();
+  rotateTick();
   playTick();
 }
