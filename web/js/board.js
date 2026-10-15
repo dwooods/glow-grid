@@ -3,7 +3,7 @@
 // Two layers, so a second transport (Wi-Fi) can reuse everything above the wire:
 //   * a transport: writes bytes, delivers the board's text lines, can close.
 //       SerialTransport uses Web Serial (Chrome and Edge on a computer). Tests pass a fake one.
-//   * GgBoard: the line protocol c3/c3_player.ino speaks (PING, LIST, PUT, DEL, SHOW, OFF, ON, INFO),
+//   * GgBoard: the line protocol c3/c3_player.ino speaks (PING, LIST, PUT, DEL, SHOW, OFF, ON, ROTATE, INFO),
 //       the same one c3/tools/gg_tool.py uses.
 // The card lists what is on the board, sends the current drawing as a .gg sprite (the bytes ggBytes() makes,
 // same as Export for ESP32-C3), plays or deletes a stored sprite, and turns the panel off and on.
@@ -120,6 +120,7 @@ class GgBoard {
   async del(name) { return this.cmd(`DEL ${name}`, ['OK']); }
   async off() { return this.cmd('OFF', ['OK']); }
   async on() { return this.cmd('ON', ['OK']); }
+  async rotate(sec) { return this.cmd(`ROTATE ${sec}`, ['OK']); }
   async close() { await this.t.close(); }
 }
 
@@ -142,6 +143,13 @@ function boardUi(connected) {
   boardShowName();
 }
 function boardSendName() { return safeName().slice(0, 31); }
+function boardShowRotate(sec) {       // the select shows the board's own setting; an unlisted value gets its own entry
+  const sel = $('boardRotate');
+  const v = String(parseInt(sec, 10) || 0);
+  if (!Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `every ${v} s`; sel.appendChild(o); }
+  sel.value = v;
+  sel.disabled = false;
+}
 function boardShowName() {
   if (!board) return;
   const name = boardSendName();
@@ -169,6 +177,7 @@ async function boardRefresh() {
   $('boardFree').textContent = free == null ? '' : `${(free / 1024).toFixed(0)} KB free`;
   $('boardOnBtn').disabled = info.panel !== 'off';
   $('boardOffBtn').disabled = info.panel === 'off';
+  boardShowRotate(info.rotate);
   boardFw = info.fw || '';
   boardNames = files.map((f) => f.name);
   boardShowName();
@@ -227,6 +236,11 @@ $('boardSendBtn').addEventListener('click', boardSend);
 $('boardOnBtn').addEventListener('click', () => boardAct(() => board.on(), 'Lights on.'));
 $('boardOffBtn').addEventListener('click', () => boardAct(() => board.off(), 'Lights off. The panel stays dark until Lights on, even after a power cycle.'));
 $('nameInput').addEventListener('input', boardShowName);
+$('boardRotate').addEventListener('change', () => {
+  const sec = Number($('boardRotate').value);
+  const label = $('boardRotate').selectedOptions[0].textContent;
+  boardAct(() => board.rotate(sec), sec ? `Rotating ${label}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
+});
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);
 if (!boardSupported()) $('boardUnsupported').hidden = false;
