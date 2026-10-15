@@ -26,13 +26,14 @@ The simulator never talks to the panel. It's a preview tool; the Pi's Python pro
 | `js/phone.js` | phone layout (portrait): moves the tools into a bottom dock and the frame extras below the strip (More jumps to them), and puts everything back on rotate or resize |
 | `js/import.js` | import, photo-to-grid (crop, background-off, dither), resize |
 | `js/export.js` | the PNG text chunk (`glow-grid` metadata), the `.gg` sprite file for the C3, the Export dialog (Pi, view/share, C3), the Save-as picker and the status toast |
+| `js/board.js` | the Board card: talks to the ESP32-C3 player over Web Serial (Chrome and Edge on a computer): list, send the drawing, play, delete, panel off/on. The protocol layer is transport-independent so Wi-Fi can reuse it |
 | `js/help.js` | the Help dialog text (kept out of `index.html` so page edits stay small) |
 | `js/tools.js` | move, "animate one part only", playback |
 | `js/main.js` | app install, service worker, File menu, boot |
 
-**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, that a PNG saved by the simulator is read back correctly by the Pi code, that the example generator writes the same metadata, that the editor's `.gg` export is byte-identical to `c3/tools/gg_format.py` and accepted by the board's own check, and the menu's delete helpers. Run it before pushing a change to `led.js`, `export.js` or `grid_common.py`.
+**Tests:** `python3 -m unittest discover -s tests -v` (needs Node and Pillow; the Pi driver is stubbed, so it runs anywhere Linux/macOS/WSL). It checks that the simulator's gamma/brightness table equals `grid_common.py`'s, that a PNG saved by the simulator is read back correctly by the Pi code, that the example generator writes the same metadata, that the editor's `.gg` export is byte-identical to `c3/tools/gg_format.py` and accepted by the board's own check, that the service worker caches every file the page loads, and the menu's delete helpers. Run it before pushing a change to `led.js`, `export.js`, `grid_common.py`, `index.html` or `sw.js`.
 
-`tests/test_smoke.py` is a browser smoke test (import naming, Save with a stubbed picker, the ESP32-C3 `.gg` export, a saved sheet restoring its frames, the Help dialog). Run it by hand before pushing a change under `web/`: `pip install playwright pillow && playwright install chromium`, then `python3 -m unittest tests.test_smoke -v` from the repo root. It skips itself if Playwright is missing.
+`tests/test_smoke.py` is a browser smoke test (import naming, Save with a stubbed picker, the ESP32-C3 `.gg` export, the Board card against a fake board that speaks the firmware's protocol, a saved sheet restoring its frames, the Help dialog). Run it by hand before pushing a change under `web/`: `pip install playwright pillow && playwright install chromium`, then `python3 -m unittest tests.test_smoke -v` from the repo root. It skips itself if Playwright is missing.
 
 New targets (BLE upload) go in `export.js`; new drawing tools go in `tools.js`. `index.html` should stay markup only; Help text lives in `help.js`.
 
@@ -119,7 +120,7 @@ The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Exp
 
 - **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. Copy it to the Pi with `scp` (the command is in Help and below).
 - **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
-- **ESP32-C3:** a small `.gg` sprite file for the C3 player in [`c3/`](c3/) (16×16 only, up to 64 frames). The pixels stay as drawn; the board applies the wiring order, gamma and the 0.4 brightness cap itself. Put it on the board with `python c3/tools/gg_tool.py put sprite.gg`; the same name replaces the old sprite.
+- **ESP32-C3:** a small `.gg` sprite file for the C3 player in [`c3/`](c3/) (16×16 only, up to 64 frames). The pixels stay as drawn; the board applies the wiring order, gamma and the 0.4 brightness cap itself. Put it on the board with `python c3/tools/gg_tool.py put sprite.gg`; the same name replaces the old sprite. With the board on USB and Chrome or Edge on a computer, the **Board** card does this without a file: *Connect board*, then *Send to board*.
 
 ## Hardware and software (the tested build)
 
@@ -376,12 +377,13 @@ Things that look fine on a monitor but fail on the panel (the simulator's Panel 
 
 ## ESP32-C3 player
 
-[`c3/`](c3/) is a standalone player for the same panel on an ESP32-C3 SuperMini: it keeps several sprites in the board's flash, plays one at a time, and takes new ones over USB. No Pi, no PC once the sprites are on it. It is the first stage of the phone-app path (Bluetooth comes next and will carry the same files).
+[`c3/`](c3/) is a standalone player for the same panel on an ESP32-C3 SuperMini: it keeps several sprites in the board's flash, plays one at a time, and takes new ones over USB. No Pi, no PC once the sprites are on it. It is the first stage of the phone-app path: Wi-Fi comes next (any browser on the network, including an iPhone), Bluetooth with the native app later; both carry the same files.
 
 - **Sprites are `.gg` files** (12-byte header plus raw RGB as drawn, 3 KB for 4 frames). The editor's *Export for: ESP32-C3* writes one; `c3/tools/png_to_gg.py` converts an existing Glow Grid PNG. The file has no wiring order and no gamma correction: the board applies both (`gg_core.h`, same maths as `grid_common.py`, checked by tests) and caps brightness at 0.4, so a file works on any panel and nothing on the phone side can overload the LEDs.
-- **On and off the board:** `python c3/tools/gg_tool.py put a.gg b.gg`, `list`, `show a`, `del a`. Add is a new name, replace is the same name. An upload lands in a temporary file and is swapped in only after the size, CRC-32 and header check out.
+- **On and off the board:** the editor's **Board** card (Chrome or Edge on a computer, Web Serial): connect, send the current drawing, play, delete, panel off/on. Or from the command line: `python c3/tools/gg_tool.py put a.gg b.gg`, `list`, `show a`, `del a`, `off`, `on`. Add is a new name, replace is the same name. An upload lands in a temporary file and is swapped in only after the size, CRC-32 and header check out. Phones cannot open a USB port; Wi-Fi on the board is the next step for them.
 - **Buttons:** Next (GPIO5 to GND) cycles sprites, On/off (GPIO7) blanks the panel. Data on GPIO6. Wiring and the build checklist are in [`enclosure/c3-wiring.svg`](enclosure/c3-wiring.svg).
-- **Tested:** 12 tests in `c3/tests` (`cd c3 && python3 -m unittest discover -s tests -v`; needs g++) compile the real firmware logic on a PC and drive the real sketch through the real upload tool. On the board: two sprites stored and played, and the player came back on its own after a power cycle. Buttons and Bluetooth: not yet. Setup is in [`c3/README.md`](c3/README.md).
+- **Is the board current?** `gg_tool.py info` prints `fw=<n>` (the Board card shows it on connect); compare with `GG_FW_VERSION` in `c3_player.ino` and re-flash if it is behind.
+- **Tested:** 25 tests in `c3/tests` (`cd c3 && python3 -m unittest discover -s tests -v`; needs g++) compile the real firmware logic on a PC and drive the real sketch through the real upload tool. On the board: sprites stored, played, replaced and deleted over USB, and the player came back on its own after a power cycle. Buttons, the Board card in a real browser, Wi-Fi: not yet. Setup is in [`c3/README.md`](c3/README.md).
 
 ## License
 
