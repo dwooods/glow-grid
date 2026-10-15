@@ -441,6 +441,42 @@ class Board(unittest.TestCase):
         files, _ = self.board.list()
         self.assertEqual([f[0] for f in files], ["alpha"])
 
+    def test_get_returns_the_stored_file_byte_for_byte(self):
+        self.start()
+        a = sample_frames(51, 5)
+        path = self.write_gg("alpha", a, fps=12, b=0.45, g=2.6)
+        self.board.put(path)
+        with open(path, "rb") as fh:
+            blob = fh.read()
+        self.assertEqual(self.board.get("alpha"), blob)
+        # the header (fps, brightness, gamma) comes back as stored, and the panel and list are untouched
+        self.assertEqual(self.board.get("alpha")[8:12], blob[8:12])
+        files, _ = self.board.list()
+        self.assertEqual([f[0] for f in files], ["alpha"])
+        for bad in ("nope", "../alpha", ""):
+            with self.assertRaises(RuntimeError, msg=bad):
+                self.board.get(bad)
+
+    def test_real_editor_code_against_real_firmware(self):
+        """web/js/board.js (SerialTransport + GgBoard) and export.js (ggBytes, ggDecode) driven through Node against the
+        compiled firmware: Send, List, CRC, Load (GET) of a 2-frame and a 64-frame sprite, Delete. Catches the two sides drifting apart."""
+        fs = tempfile.mkdtemp(prefix="gg_fs_")
+        r = subprocess.run(["node", os.path.join(HERE, "board_e2e.js"), SIM, fs], capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        import json
+        o = json.loads(r.stdout.strip().splitlines()[-1])
+        with open(os.path.join(SKETCH, "c3_player.ino")) as fh:
+            fw = int(re.search(r"#define GG_FW_VERSION (\d+)", fh.read()).group(1))
+        self.assertEqual(o["fw"], fw)
+        self.assertEqual(o["listed"], ["big:49164", "small:1548"])
+        self.assertTrue(o["smallBack"] and o["bigBack"], "GET must return exactly the bytes PUT stored")
+        self.assertEqual(o["bigBytes"], 12 + 64 * 768, "the largest sprite the format allows")
+        self.assertLess(o["bigMs"], 15000, "the editor gives up after 20 s")
+        self.assertTrue(o["crcMatches"])
+        self.assertEqual(o["decoded"], {"fps": 7, "brightness": 0.45, "gamma": 2.6, "frames": 2, "first": True})
+        self.assertEqual((o["missing"], o["afterDelete"]), ("no such sprite", "no such sprite"))
+        self.assertTrue(o["stillPlaysAfterGet"])
+
     def test_errors_leave_storage_clean(self):
         self.start()
         good = gg.pack(sample_frames(1, 1), 8, 0.3, 2.2)
