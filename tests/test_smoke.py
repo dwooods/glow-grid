@@ -67,6 +67,33 @@ FAKE_BOARD = """() => {
   };
 }"""
 
+# A fake Web Serial port built on real browser streams, so SerialTransport's open/read/write/close order is exercised
+# for real: like Chrome, close() refuses while a stream is locked. Installed by overriding navigator.serial.requestPort.
+FAKE_PORT = """() => {
+  window.__port = null;
+  const mk = () => {
+    let ctrl = null; const enc = new TextEncoder(), dec = new TextDecoder();
+    const say = (l) => { try { ctrl.enqueue(enc.encode(l + '\\n')); } catch (e) {} };
+    const p = { opened: false, closed: false, signals: null, writes: [] };
+    p.readable = new ReadableStream({ start(c) { ctrl = c; }, cancel() { p.readCancelled = true; } });
+    p.writable = new WritableStream({ write(chunk) {
+      const line = dec.decode(chunk).trim(); p.writes.push(line);
+      if (line === 'PING') say('PONG');
+      else if (line === 'LIST') say('OK 0 files, 1400000 bytes free');
+      else if (line === 'INFO') say('OK fw=3 current=- sprites=0 panel=on');
+      else say('ERR unknown command');
+    } });
+    p.open = async () => { p.opened = true; };
+    p.setSignals = async (s) => { p.signals = s; };
+    p.close = async () => {
+      if (p.readable.locked || p.writable.locked) throw new TypeError('Cannot close a port with a locked stream');
+      p.closed = true;
+    };
+    return p;
+  };
+  navigator.serial.requestPort = async () => { window.__port = mk(); return window.__port; };
+}"""
+
 SET_NAME = "v => { const e = document.getElementById('nameInput'); e.value = v; e.dispatchEvent(new Event('input', {bubbles: true})); }"
 
 
@@ -317,6 +344,21 @@ class Smoke(unittest.TestCase):
         self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
         self.pg.wait_for_timeout(4500)
         self.assertEqual(status(), 'Board disconnected.', 'the 4 s command timeout must not fire after a disconnect')
+        self.assertEqual(self.errors, [])
+
+    def test_serial_transport_releases_the_port_on_disconnect(self):
+        # 2026-10-15: Disconnect left COM3 held until the tab was closed, so the Arduino IDE could not flash.
+        self.fresh_page(FAKE_PORT.replace('() => {', '(() => {', 1) + ')()')
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardStatus').textContent"), 'Connected. Firmware 3.')
+        self.assertEqual(self.pg.evaluate('window.__port.signals'), {'dataTerminalReady': True, 'requestToSend': False})
+        self.assertEqual(self.pg.evaluate('window.__port.writes.slice(0, 3)'), ['PING', 'LIST', 'INFO'])
+        self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(500)
+        self.assertTrue(self.pg.evaluate('window.__port.closed'), 'port.close() must succeed: both streams unlocked first')
+        self.assertFalse(self.pg.evaluate('window.__port.readable.locked'))
+        self.assertFalse(self.pg.evaluate('window.__port.writable.locked'))
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardStatus').textContent"), 'Board disconnected.')
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardFree').textContent"), '')
         self.assertEqual(self.errors, [])
 
     def test_board_card_without_web_serial(self):
