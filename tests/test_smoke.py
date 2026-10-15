@@ -54,6 +54,10 @@ FAKE_BOARD = """() => {
         case 'LIST': for (const n of names()) say('FILE ' + n + ' ' + window.__fakeStore.get(n).length); return say('OK ' + names().length + ' files, 1400000 bytes free');
         case 'CRC': if (window.__fakeFw < 7) return say('ERR unknown command'); if (!window.__fakeStore.has(a1)) return say('ERR no such sprite');
           return say('OK crc=' + crc32(window.__fakeStore.get(a1)).toString(16).padStart(8, '0') + ' size=' + window.__fakeStore.get(a1).length);
+        case 'GET': if (window.__fakeFw < 8) return say('ERR unknown command'); if (!window.__fakeStore.has(a1)) return say('ERR no such sprite');
+          { const b = window.__fakeStore.get(a1); const out = b.slice(); if (window.__fakeBreak === 'badget') out[20] ^= 1;
+            for (let i = 0; i < out.length; i += 48) say('D ' + Array.from(out.subarray(i, i + 48), (v) => v.toString(16).padStart(2, '0')).join(''));
+            return say('OK crc=' + crc32(b).toString(16).padStart(8, '0') + ' size=' + b.length); }
         case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate);
         case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
@@ -397,6 +401,96 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
         self.assertEqual(self.status(), f'Added {total - 2} examples; 2 already on the board were left alone.')
         self.assertEqual(self.pg.evaluate("Array.from(window.__fakeStore.get(GG_EXAMPLES[0].name))"), edited)
+
+    def test_load_a_board_sprite_into_the_grid_and_open_a_gg_file(self):
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        dialogs = []
+        self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept() if self.answer else d.dismiss()))
+        self.answer = True
+        self.pg.evaluate("""() => { window.__fakeFw = 8; const px = (c) => new Array(256).fill(c);
+            window.__fakeStore.set('lantern', ggBytes([px('#ff8800'), px('#0000ff')], 16, 16, 5, 0.45, 2.6)); }""")
+        self.connect()
+        load = "#boardList .board-row:nth-child(1) button:has-text('Load')"
+        self.assertFalse(self.pg.evaluate("document.querySelector('#boardList .board-row button').disabled"), 'firmware 8 can Load')
+        # the page opens on a blank frame, so nothing is asked; the frames, name, fps, brightness and gamma all come from the file
+        self.pg.click(load); self.pg.wait_for_timeout(800)
+        got = self.pg.evaluate("""() => ({frames: state.frames.length, a: state.frames[0][0], b: state.frames[1][255], fps: state.fps, name: state.name,
+            nameBox: document.getElementById('nameInput').value, bright: document.getElementById('brightInput').value,
+            gamma: document.getElementById('gammaInput').value, simB: sim.brightness, simG: sim.gamma, undo: !document.getElementById('undoBtn').disabled})""")
+        self.assertEqual(got, {'frames': 2, 'a': '#ff8800', 'b': '#0000ff', 'fps': 5, 'name': 'lantern', 'nameBox': 'lantern',
+                               'bright': '0.45', 'gamma': '2.6', 'simB': 0.45, 'simG': 2.6, 'undo': True})
+        self.assertEqual(dialogs, [], 'a blank editor is replaced without asking')
+        self.assertIn('Loaded lantern into the editor', self.status())
+        # change a pixel and Send: same name, so it replaces the sprite on the board (and asks first), keeping 0.45 / 2.6
+        self.pg.evaluate("() => { state.frames[0][0] = '#00ff00'; afterFrameChange(); }")
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(900)
+        self.assertTrue(any('Replace' in m for m in dialogs))
+        stored = self.pg.evaluate("Array.from(window.__fakeStore.get('lantern'))")
+        self.assertEqual(stored[10:12], [45, 26]); self.assertEqual(stored[12:15], [0, 255, 0])
+        # loading over a drawing asks first; saying no leaves the drawing alone
+        dialogs.clear(); self.answer = False
+        self.pg.evaluate("() => { state.frames[0][1] = '#123456'; afterFrameChange(); }")
+        self.pg.click(load); self.pg.wait_for_timeout(800)
+        self.assertTrue(any('Replace the drawing' in m for m in dialogs))
+        self.assertEqual(self.pg.evaluate("state.frames[0][1]"), '#123456')
+        self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('GET')).length"), 2)
+        self.assertEqual(self.status(), 'Not loaded.')
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"), 'buttons come back')
+        # a transfer that arrives damaged is refused and changes nothing
+        self.pg.evaluate("window.__fakeBreak = 'badget'"); self.answer = True
+        self.pg.click(load); self.pg.wait_for_timeout(800)
+        self.assertIn('damaged', self.status()); self.assertEqual(self.pg.evaluate("state.frames[0][1]"), '#123456')
+        self.pg.evaluate("window.__fakeBreak = null")
+        # a sprite that is not on the board any more
+        self.pg.evaluate("window.__fakeStore.delete('lantern')")
+        self.pg.click(load); self.pg.wait_for_timeout(600)
+        self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        # older firmware: Load is greyed out, says why, and never sends GET
+        self.pg.evaluate("() => { window.__fakeFw = 7; window.__fakeLog.length = 0; }")
+        self.pg.evaluate(self.SEED, ['old'])
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        self.assertTrue(self.pg.evaluate("document.querySelector('#boardList .board-row button').disabled"))
+        self.assertIn('firmware 8', self.pg.evaluate("document.querySelector('#boardList .board-row button').title"))
+        self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('GET')).length"), 0)
+        # File > Open .gg sprite: from a file on the computer, named after the file
+        blob = self.pg.evaluate("Array.from(ggBytes([new Array(256).fill('#abcdef')], 16, 16, 9, 0.3, 2.2))")
+        self.pg.evaluate("() => { state.frames = [new Array(256).fill('#000000')]; state.currentFrame = 0; afterFrameChange(); }")
+        self.assertTrue(self.pg.evaluate("!!document.getElementById('menuOpenGg')"))
+        self.pg.set_input_files('#ggInput', files=[{'name': 'my sprite.gg', 'mimeType': 'application/octet-stream', 'buffer': bytes(blob)}])
+        self.pg.wait_for_timeout(500)
+        self.assertEqual(self.pg.evaluate("[state.name, state.fps, state.frames[0][7], sim.brightness]"), ['my_sprite', 9, '#abcdef', 0.3])
+        toast = lambda: self.pg.evaluate("document.getElementById('statusEl').textContent")
+        self.assertIn('Loaded my_sprite from the file', toast())
+        # a file that is not a sprite is refused and the drawing stays
+        self.pg.set_input_files('#ggInput', files=[{'name': 'notes.gg', 'mimeType': 'application/octet-stream', 'buffer': b'hello world, not a sprite'}])
+        self.pg.wait_for_timeout(400)
+        self.assertIn('not a Glow Grid sprite', toast()); self.assertEqual(self.pg.evaluate("state.name"), 'my_sprite')
+
+    def test_load_resizes_the_grid_undo_restores_it_and_fps_rounds(self):
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        self.pg.on('dialog', lambda d: d.accept())
+        # the editor is 8 x 32 with a drawing, a name and 1 frame; the board holds a 16 x 16 sprite at 7.2 fps
+        self.pg.evaluate("""() => { window.__fakeFw = 8;
+            window.__fakeStore.set('odd', ggBytes([new Array(256).fill('#ff0000'), new Array(256).fill('#00ff00')], 16, 16, 7.2, 0.45, 2.6));
+            state.cols = 8; state.rows = 32; $('colsInput').value = 8; $('rowsInput').value = 32; buildGridDOM();
+            state.frames = [new Array(256).fill('#123456')]; state.currentFrame = 0; state.name = 'mine'; $('nameInput').value = 'mine';
+            state.fps = 12; $('fpsInput').value = 12; afterFrameChange(); }""")
+        self.connect()
+        self.pg.click("#boardList .board-row:nth-child(1) button:has-text('Load')"); self.pg.wait_for_timeout(800)
+        got = self.pg.evaluate("""() => ({cols: state.cols, rows: state.rows, cells: document.querySelectorAll('#grid .cell').length, colsBox: $('colsInput').value,
+            rowsBox: $('rowsInput').value, frames: state.frames.length, fps: state.fps, name: state.name, bright: sim.brightness, gamma: sim.gamma})""")
+        self.assertEqual(got, {'cols': 16, 'rows': 16, 'cells': 256, 'colsBox': '16', 'rowsBox': '16', 'frames': 2, 'fps': 7, 'name': 'odd', 'bright': 0.45, 'gamma': 2.6})
+        toast = self.pg.evaluate("document.getElementById('statusEl').textContent")
+        self.assertIn('7.2 fps', toast, 'a rounded fps is reported, not hidden')
+        # Send writes the editor's whole-number fps and the loaded brightness and gamma; the board keeps 0.45 / 2.6
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(900)
+        stored = self.pg.evaluate("Array.from(window.__fakeStore.get('odd'))")
+        self.assertEqual((stored[8] | stored[9] << 8, stored[10], stored[11]), (70, 45, 26))
+        # Undo puts back the old grid size, frames and the 8 x 32 cells
+        self.pg.click('#undoBtn'); self.pg.wait_for_timeout(300)
+        back = self.pg.evaluate("""() => ({cols: state.cols, rows: state.rows, cells: document.querySelectorAll('#grid .cell').length, frames: state.frames.length,
+            px: state.frames[0][0], colsBox: $('colsInput').value, rowsBox: $('rowsInput').value})""")
+        self.assertEqual(back, {'cols': 8, 'rows': 32, 'cells': 256, 'frames': 1, 'px': '#123456', 'colsBox': '8', 'rowsBox': '32'})
 
     def test_examples_old_firmware_full_board_and_errors(self):
         self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
