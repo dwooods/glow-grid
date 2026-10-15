@@ -20,6 +20,7 @@
 //                                 then OK saved <name> or ERR <reason>
 //   DEL <name>                 -> OK deleted <name> or ERR <reason>
 //   SHOW <name>                -> OK showing <name> or ERR <reason>
+//   OFF / ON                   -> OK panel off / OK panel on (same as the On/off button)
 //   INFO                       -> OK current=<name> ...
 
 #include <Adafruit_NeoPixel.h>
@@ -162,16 +163,19 @@ bool pressed(GGButton& b) {  // true once per press
   return false;
 }
 
+// Panel off (all LEDs dark, playback paused) or on (resume from frame 0). Same as the On/off button.
+void setPanel(bool on) {
+  panelOn = on;
+  if (on) { dirty = true; nextFrameAt = millis(); frameNo = 0; }
+  else { strip.clear(); strip.show(); }
+}
+
 void handleButtons() {
   if (pressed(btnNext)) {
     if (!panelOn) { panelOn = true; dirty = true; nextFrameAt = millis(); }
     else if (nSprites > 0) selectIndex((cur + 1) % nSprites);
   }
-  if (pressed(btnOff)) {
-    panelOn = !panelOn;
-    if (panelOn) { dirty = true; nextFrameAt = millis(); frameNo = 0; }
-    else { strip.clear(); strip.show(); }
-  }
+  if (pressed(btnOff)) setPanel(!panelOn);
 }
 
 // ---- serial commands ----
@@ -270,6 +274,12 @@ void doCommand(char* line) {
   } else if (c == "SHOW") {
     if (n >= 2 && selectName(String(a1))) Serial.printf("OK showing %s\n", a1);
     else Serial.println("ERR no such sprite");
+  } else if (c == "OFF") {
+    setPanel(false);
+    Serial.println("OK panel off");
+  } else if (c == "ON") {
+    setPanel(true);
+    Serial.println(data ? "OK panel on" : "OK panel on (nothing stored)");
   } else if (c == "INFO") {
     Serial.printf("OK current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u\n",
                   cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",

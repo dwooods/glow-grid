@@ -5,6 +5,8 @@
     python3 gg_tool.py put fire_flower.gg lantern.gg      # add, or replace a sprite with the same name
     python3 gg_tool.py show lantern                       # play this one now
     python3 gg_tool.py del lantern
+    python3 gg_tool.py off                                # panel dark, board keeps running
+    python3 gg_tool.py on
     python3 gg_tool.py info
     python3 gg_tool.py --port COM3 list                   # name the port if it is not found automatically
 
@@ -145,6 +147,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
     sub.add_parser("info")
+    sub.add_parser("off")
+    sub.add_parser("on")
     p = sub.add_parser("put")
     p.add_argument("files", nargs="+")
     for c in ("show", "del"):
@@ -169,6 +173,8 @@ def main():
             print(board.simple(f"DEL {a.name}"))
         elif a.cmd == "info":
             print(board.simple("INFO"))
+        elif a.cmd in ("off", "on"):
+            print(board.simple(a.cmd.upper()))
     except (RuntimeError, TimeoutError, ValueError) as e:
         raise SystemExit(f"error: {e}")
     finally:

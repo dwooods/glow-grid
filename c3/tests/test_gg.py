@@ -350,6 +350,23 @@ class Board(unittest.TestCase):
         self.press(None)
         self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
 
+    def test_off_and_on_over_serial(self):
+        self.start()
+        a = sample_frames(13, 1)
+        self.board.put(self.write_gg("alpha", a))
+        self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
+        self.assertEqual(self.board.simple("OFF"), "OK panel off")
+        self.assertEqual(self.last_frames(1)[0], "000000" * 256)
+        self.assertIn("panel=off", self.board.simple("INFO"))
+        self.assertEqual(self.board.simple("ON"), "OK panel on")
+        self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
+        # a PUT while off turns the panel back on with the new sprite
+        self.board.simple("OFF")
+        b = sample_frames(14, 1)
+        self.board.put(self.write_gg("beta", b))
+        self.assertEqual(self.last_frames(1)[0], self.led_of(b)[0])
+        self.assertIn("panel=on", self.board.simple("INFO"))
+
     def test_empty_board_shows_dim_marker_and_survives_restart(self):
         self.start()
         self.assertEqual(self.last_frames(1)[0], "00000c" + "000000" * 255)

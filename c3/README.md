@@ -11,9 +11,9 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `c3_player/c3_player.ino` | the firmware: flash storage, serial commands, buttons, playback. The folder is named after the sketch because the Arduino IDE insists on it, so it opens straight from the clone |
 | `c3_player/gg_core.h` | the parts with no Arduino dependency: the `.gg` file check, the wiring map, the brightness/gamma table (same maths as `grid_common.py`), CRC-32 |
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
-| `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `info` on the board over USB |
+| `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `off`, `on`, `info` on the board over USB |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 12 tests; see below |
+| `tests/` | 13 tests; see below |
 
 ## The `.gg` sprite file
 
@@ -36,6 +36,7 @@ python3 tools/gg_tool.py put lantern.gg
 python3 tools/gg_tool.py list
 python3 tools/gg_tool.py show lantern
 python3 tools/gg_tool.py del lantern
+python3 tools/gg_tool.py off          # panel dark, board keeps running; `on` resumes
 ```
 
 Close the Arduino Serial Monitor first; only one program can use the port. `gg_tool.py` finds the C3's port by its USB id; if it cannot, add `--port COM3`.
@@ -51,7 +52,7 @@ python3 -m unittest discover -s tests -v      # needs g++, Pillow, pyserial; Lin
 Set `GLOWGRID_REPO=/path/to/glow-grid` if this folder is not inside the repo (the parity tests import `grid_common.py`).
 
 - **Parity:** `gg_core.h`, compiled on the PC, places and corrects every pixel exactly as `grid_common.py` does, for all 16 wiring combinations and nine brightness/gamma settings, including the 0.4 cap.
-- **Board:** `c3_player.ino` itself, compiled against small stand-ins for the Arduino core (`tests/arduino_stub/`), driven by the real `gg_tool.py` through a pseudo-terminal: add, list, replace, delete, show, a wrong checksum, an invalid file, a bad name, a stalled upload, both buttons, and a restart that finds the stored sprite.
+- **Board:** `c3_player.ino` itself, compiled against small stand-ins for the Arduino core (`tests/arduino_stub/`), driven by the real `gg_tool.py` through a pseudo-terminal: add, list, replace, delete, show, a wrong checksum, an invalid file, a bad name, a stalled upload, both buttons, `OFF`/`ON` over serial, and a restart that finds the stored sprite.
 - **Format:** round trip and rejection of bad files, in both the Python and the C check. The repo's own `tests/test_gg_export.py` adds that the editor writes byte-identical files.
 
 Two deliberate breaks (wrong wiring default; checksum not checked) each made the suite fail. The first real IDE compile failed on an Arduino quirk the PC build cannot see (auto-generated prototypes above a struct); fixed by moving the struct into `gg_core.h`.
