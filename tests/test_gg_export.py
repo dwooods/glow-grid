@@ -57,5 +57,41 @@ class GgExportParity(unittest.TestCase):
         self.assertEqual(out, 'OK 3 50 30 22')
 
 
+def js_decode(blob):
+    d = tempfile.mkdtemp()
+    fp = os.path.join(d, 'x.gg')
+    with open(fp, 'wb') as fh:
+        fh.write(blob)
+    out = subprocess.run(['node', os.path.join(HERE, 'gg_decode.js'), fp], capture_output=True, text=True, check=True).stdout.strip()
+    return out if out.startswith('ERR') else json.loads(out)
+
+
+class GgDecode(unittest.TestCase):
+    """ggDecode (File > Open .gg, and Load from the board) must read back exactly what gg_format.py wrote, light settings included."""
+    def test_decodes_what_python_wrote(self):
+        for seed, n, fps, b, g in [(1, 1, 6, 0.3, 2.2), (2, 4, 8, 0.45, 2.6), (3, 64, 0.5, 0.01, 1.0), (4, 3, 30, 1.0, 3.0), (5, 2, 7.2, 0.35, 2.05)]:
+            fr = frames(seed, n)
+            d = js_decode(gg.pack(fr, fps, b, g))
+            self.assertEqual((d['cols'], d['rows']), (16, 16))
+            self.assertEqual(d['frames'], [hexes(f) for f in fr], f'seed {seed}')
+            self.assertAlmostEqual(d['fps'], round(fps * 10) / 10)
+            self.assertAlmostEqual(d['brightness'], round(b * 100) / 100)
+            self.assertAlmostEqual(d['gamma'], round(g * 10) / 10)
+
+    def test_round_trips_the_editors_own_bytes(self):
+        fr = frames(9, 3)
+        blob = js_gg([hexes(f) for f in fr], 12, 0.4, 2.2)
+        d = js_decode(blob)
+        self.assertEqual(d['frames'], [hexes(f) for f in fr])
+        self.assertEqual((d['fps'], d['brightness'], d['gamma']), (12, 0.4, 2.2))
+
+    def test_refuses_damaged_files(self):
+        good = gg.pack(frames(1, 2), 6, 0.3, 2.2)
+        bad = {'empty': b'', 'short': good[:8], 'magic': b'XX' + good[2:], 'version': good[:2] + bytes([9]) + good[3:],
+               'truncated': good[:-1], 'extra': good + b'\0', 'zero frames': good[:6] + b'\0\0' + good[8:]}
+        for why, blob in bad.items():
+            self.assertTrue(str(js_decode(blob)).startswith('ERR'), why)
+
+
 if __name__ == '__main__':
     unittest.main()

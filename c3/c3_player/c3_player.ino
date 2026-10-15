@@ -25,6 +25,9 @@
 //                                 a power cycle; each sprite keeps animating for the whole interval (David, 2026-10-15)
 //   CRC <name>                 -> OK crc=<8 hex> size=<bytes> of the stored file, so the editor can tell an unchanged
 //                                 example from one you replaced (fw 7); ERR no such sprite
+//   GET <name>                 -> D <96 hex digits> lines (48 bytes each) with the stored file, then
+//                                 OK crc=<8 hex> size=<bytes>; ERR no such sprite. Lets the editor load a sprite
+//                                 back into the grid (fw 8). The panel pauses on its current frame while it runs.
 //   INFO                       -> OK current=<name> ... rotate=<seconds>
 
 #include <Adafruit_NeoPixel.h>
@@ -35,7 +38,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 7           // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 8           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -338,6 +341,22 @@ void doCommand(char* line) {
     uint32_t crc = 0;
     size_t total = 0, r;
     while ((r = f.read(buf, sizeof(buf))) > 0) { crc = gg_crc32(crc, buf, r); total += r; }
+    f.close();
+    Serial.printf("OK crc=%08x size=%u\n", (unsigned)crc, (unsigned)total);
+  } else if (c == "GET") {
+    File f = (n >= 2 && gg_name_ok(a1)) ? LittleFS.open(pathOf(String(a1)), "r") : File();
+    if (!f) { Serial.println("ERR no such sprite"); return; }
+    uint8_t buf[48];
+    char hex[2 * sizeof(buf) + 1];
+    uint32_t crc = 0;
+    size_t total = 0, r;
+    while ((r = f.read(buf, sizeof(buf))) > 0) {
+      crc = gg_crc32(crc, buf, r);
+      total += r;
+      for (size_t i = 0; i < r; i++) sprintf(hex + 2 * i, "%02x", buf[i]);
+      Serial.print("D ");
+      Serial.println(hex);
+    }
     f.close();
     Serial.printf("OK crc=%08x size=%u\n", (unsigned)crc, (unsigned)total);
   } else if (c == "INFO") {

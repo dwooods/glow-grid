@@ -3,6 +3,7 @@
 
     python3 gg_tool.py list
     python3 gg_tool.py put fire_flower.gg lantern.gg      # add, or replace a sprite with the same name
+    python3 gg_tool.py get lantern                        # save lantern.gg from the board (firmware 8 or later)
     python3 gg_tool.py show lantern                       # play this one now
     python3 gg_tool.py del lantern
     python3 gg_tool.py off                                # panel dark, board keeps running
@@ -126,6 +127,27 @@ class Board:
                 self.expect(["A"], timeout=5.0)
         return self.expect(["OK"], timeout=10.0)
 
+    def get(self, name):
+        """The stored file as bytes, checked against the board's own CRC. Needs firmware 8 or later."""
+        self.ser.reset_input_buffer()
+        self.send(f"GET {name}")
+        chunks, end = [], time.time() + 20.0
+        while time.time() < end:
+            line = self.readline(0.5)
+            if not line:
+                continue
+            if line.startswith("ERR"):
+                raise RuntimeError(line)
+            if line.startswith("D "):
+                chunks.append(bytes.fromhex(line[2:]))
+            elif line.startswith("OK"):
+                blob = b"".join(chunks)
+                want = f"OK crc={zlib.crc32(blob) & 0xFFFFFFFF:08x} size={len(blob)}"
+                if line != want:
+                    raise RuntimeError(f"the file came through damaged (board said {line}, got {want})")
+                return blob
+        raise TimeoutError("no answer to GET. This board may be running firmware older than 8; re-flash c3_player.ino.")
+
     def simple(self, command):
         self.send(command)
         return self.expect(["OK"])
@@ -154,7 +176,7 @@ def main():
     r.add_argument("seconds", type=int)
     p = sub.add_parser("put")
     p.add_argument("files", nargs="+")
-    for c in ("show", "del"):
+    for c in ("show", "del", "get"):
         s = sub.add_parser(c)
         s.add_argument("name")
     a = ap.parse_args()
@@ -172,6 +194,12 @@ def main():
                 print(board.put(f))
         elif a.cmd == "show":
             print(board.simple(f"SHOW {a.name}"))
+        elif a.cmd == "get":
+            blob = board.get(a.name)
+            gg.unpack(blob)
+            with open(a.name + ".gg", "wb") as fh:
+                fh.write(blob)
+            print(f"saved {a.name}.gg ({len(blob)} bytes)")
         elif a.cmd == "del":
             print(board.simple(f"DEL {a.name}"))
         elif a.cmd == "info":
