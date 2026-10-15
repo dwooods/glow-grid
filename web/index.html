@@ -173,9 +173,11 @@
         </div>
         <div class="btn-row" id="boardTools" hidden>
           <button id="boardSendBtn" class="btn" type="button" title="Store this drawing on the board, under the name in Export, and play it">Send to board</button>
-          <button id="boardPanelBtn" class="btn btn-quiet" type="button">Panel off</button>
+          <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
+          <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
           <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
         </div>
+        <p class="hint board-as" id="boardAs" hidden></p>
         <ul class="board-list" id="boardList" hidden></ul>
         <p class="hint board-status" id="boardStatus" role="status"></p>
       </section>
