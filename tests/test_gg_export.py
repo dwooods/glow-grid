@@ -1,5 +1,5 @@
 """The editor's ESP32-C3 export (ggBytes in web/js/export.js) must write exactly the bytes c3/tools/gg_format.py writes,
-and c3/gg_core.h (the board's check, compiled here) must accept them. Needs Node and g++.
+and c3/c3_player/gg_core.h (the board's check, compiled here) must accept them. Needs Node and g++.
 Run from the repo root:  python3 -m unittest discover -s tests -v
 """
 import json, os, random, subprocess, sys, tempfile, unittest

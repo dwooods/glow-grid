@@ -7,7 +7,7 @@ set GLOWGRID_REPO=/path/to/glow-grid if this folder is not inside it.
 What it proves:
   * gg_core.h (compiled on the PC) places and corrects every pixel exactly like grid_common.py,
     for all 16 wiring combinations and several brightness/gamma settings, including the 0.4 cap;
-  * c3_player.ino itself (compiled against small Arduino stand-ins) handles PUT, LIST, DEL, SHOW,
+  * c3_player/c3_player.ino itself (compiled against small Arduino stand-ins) handles PUT, LIST, DEL, SHOW,
     bad input, a wrong checksum, a timeout and both buttons, driven by the real tools/gg_tool.py.
 It does NOT test the real esp32 core, LittleFS on real flash, the NeoPixel timing or Bluetooth.
 """
@@ -26,6 +26,7 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+SKETCH = os.path.join(ROOT, "c3_player")   # the Arduino sketch folder (IDE rule: folder name = .ino name)
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import gg_format as gg  # noqa: E402
 import gg_tool  # noqa: E402
@@ -209,8 +210,8 @@ class Board(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        build(SIM, "-Wall", f"-I{os.path.join(HERE, 'arduino_stub')}", f"-I{ROOT}", "-x", "c++",
-              os.path.join(ROOT, "c3_player.ino"), "-x", "c++", os.path.join(HERE, "sim_main.cpp"))
+        build(SIM, "-Wall", f"-I{os.path.join(HERE, 'arduino_stub')}", f"-I{SKETCH}", "-x", "c++",
+              os.path.join(SKETCH, "c3_player.ino"), "-x", "c++", os.path.join(HERE, "sim_main.cpp"))
 
     def start(self):
         self.fs = tempfile.mkdtemp(prefix="gg_fs_")

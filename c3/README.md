@@ -8,8 +8,8 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 
 | File | Job |
 |---|---|
-| `c3_player.ino` | the firmware: flash storage, serial commands, buttons, playback |
-| `gg_core.h` | the parts with no Arduino dependency: the `.gg` file check, the wiring map, the brightness/gamma table (same maths as `grid_common.py`), CRC-32 |
+| `c3_player/c3_player.ino` | the firmware: flash storage, serial commands, buttons, playback. The folder is named after the sketch because the Arduino IDE insists on it, so it opens straight from the clone |
+| `c3_player/gg_core.h` | the parts with no Arduino dependency: the `.gg` file check, the wiring map, the brightness/gamma table (same maths as `grid_common.py`), CRC-32 |
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
 | `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `info` on the board over USB |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
@@ -17,14 +17,14 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 
 ## The `.gg` sprite file
 
-12-byte header (`GG`, version, flags, cols, rows, frames, fps×10, brightness %, gamma×10), then the frames as raw RGB, 768 bytes each, row by row from the top-left, exactly as drawn. The file carries **no wiring order and no gamma correction**: the board applies its own wiring setting (`GG_COLUMN_MAJOR` etc. in `gg_core.h`, same meaning as `local_config.py`) and the brightness table, and caps brightness at 0.4 (`GG_MAX_BRIGHT_PCT`). So a sprite file works on any panel, and a buggy app cannot overload the LEDs.
+12-byte header (`GG`, version, flags, cols, rows, frames, fps×10, brightness %, gamma×10), then the frames as raw RGB, 768 bytes each, row by row from the top-left, exactly as drawn. The file carries **no wiring order and no gamma correction**: the board applies its own wiring setting (`GG_COLUMN_MAJOR` etc. in `c3_player/gg_core.h`, same meaning as `local_config.py`) and the brightness table, and caps brightness at 0.4 (`GG_MAX_BRIGHT_PCT`). So a sprite file works on any panel, and a buggy app cannot overload the LEDs.
 
 A 4-frame sprite is 3,084 bytes. The default partition leaves about 1.5 MB for sprites, so roughly 400 of them; `MAX_SPRITES` (48) is the list limit in RAM and is easy to raise.
 
 ## Install on the board
 
 1. Arduino IDE: board **ESP32C3 Dev Module**, **USB CDC On Boot: Enabled**, **Partition Scheme: Default 4MB with spiffs**. Library: **Adafruit NeoPixel**. (LittleFS and the serial port are part of the esp32 core.)
-2. Open `c3_player.ino` and upload. The first start formats the flash storage (a few seconds). With nothing stored, LED 0 glows dim blue.
+2. Open `c3_player/c3_player.ino` (File > Open in the IDE, straight from the clone) and upload. The first start formats the flash storage (a few seconds). With nothing stored, LED 0 glows dim blue.
 3. Wiring for the bench: GPIO6 to DIN, the C3's G to the panel GND and the supply GND, panel 5V from the supply only, C3 on USB. Buttons: GPIO5 and GPIO7 to GND (optional for this test; the serial `SHOW` command does the same).
 
 ## Use

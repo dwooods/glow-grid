@@ -9,7 +9,7 @@
 #include <string.h>
 #include <string>
 #include <vector>
-#include "../gg_core.h"
+#include "../c3_player/gg_core.h"
 
 static std::vector<uint8_t> slurp(const char* path) {
   std::vector<uint8_t> v;
