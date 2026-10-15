@@ -422,6 +422,25 @@ class Board(unittest.TestCase):
         self.assertIn(f"OK fw={fw} ", info)
         self.assertFalse(os.path.exists(os.path.join(self.fs, "upload.tmp")))
 
+    def test_crc_command_reports_the_stored_file(self):
+        self.start()
+        a = sample_frames(41, 3)
+        path = self.write_gg("alpha", a)
+        self.board.put(path)
+        with open(path, "rb") as fh:
+            blob = fh.read()
+        want = f"OK crc={zlib.crc32(blob) & 0xFFFFFFFF:08x} size={len(blob)}"
+        self.assertEqual(self.board.simple("CRC alpha"), want)
+        # a different drawing under the same name gives a different checksum; the old one is gone
+        self.board.put(self.write_gg("alpha", sample_frames(42, 3)))
+        self.assertNotEqual(self.board.simple("CRC alpha"), want)
+        # unknown and unsafe names are refused, and CRC leaves the panel and the list alone
+        for bad in ("CRC nope", "CRC ../alpha", "CRC"):
+            with self.assertRaises(RuntimeError, msg=bad):
+                self.board.simple(bad)
+        files, _ = self.board.list()
+        self.assertEqual([f[0] for f in files], ["alpha"])
+
     def test_errors_leave_storage_clean(self):
         self.start()
         good = gg.pack(sample_frames(1, 1), 8, 0.3, 2.2)
