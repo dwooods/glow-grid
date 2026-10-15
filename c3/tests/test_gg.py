@@ -620,6 +620,59 @@ class Board(unittest.TestCase):
         self.assertEqual([f[0] for f in board.list()[0]], ["keep"])
         self.assertIn("panel=on", board.simple("INFO"))
 
+    def test_rotate_cycles_sprites_and_survives_a_power_cycle(self):
+        self.start()
+        a, b, c = sample_frames(61, 2), sample_frames(62, 1), sample_frames(63, 1)
+        self.board.put(self.write_gg("alpha", a, fps=10))
+        self.board.put(self.write_gg("beta", b))
+        self.board.put(self.write_gg("gamma", c))
+        self.board.simple("SHOW alpha")
+        want_b = self.led_of(b)[0]                            # built now, not inside the timed sequence
+        self.assertIn("rotate=0", self.board.simple("INFO"))
+        # bad values are refused
+        for bad in ("ROTATE", "ROTATE -1", "ROTATE x", "ROTATE 99999999"):
+            self.board.send(bad)
+            with self.assertRaisesRegex(RuntimeError, "usage"):
+                self.board.expect(["OK"])
+        # every second: alpha -> beta -> gamma -> alpha, in list order; alpha keeps animating meanwhile
+        self.assertEqual(self.board.simple("ROTATE 1"), "OK rotate 1")
+        self.assertIn("rotate=1", self.board.simple("INFO"))
+        write_text(self.led, "")
+        time.sleep(0.7)
+        self.assertIn("current=alpha", self.board.simple("INFO"))
+        self.assertGreater(len(self.last_frames(50, wait=0)), 4, "the animation runs during the interval")
+        time.sleep(0.6)
+        self.assertIn("current=beta", self.board.simple("INFO"))
+        self.assertEqual(self.last_frames(1, wait=0)[0], want_b)
+        time.sleep(1.0)
+        self.assertIn("current=gamma", self.board.simple("INFO"))
+        time.sleep(1.0)
+        self.assertIn("current=alpha", self.board.simple("INFO"))
+        # Next (or Play) restarts the interval for the sprite it lands on
+        self.press(5); time.sleep(0.3); self.press(None)
+        self.assertIn("current=beta", self.board.simple("INFO"))
+        time.sleep(0.5)
+        self.assertIn("current=beta", self.board.simple("INFO"), "a fresh interval after Next")
+        # off pauses rotation; on restarts the interval
+        self.board.simple("OFF")
+        time.sleep(1.3)
+        self.assertIn("current=beta", self.board.simple("INFO"))
+        self.board.simple("ON")
+        time.sleep(1.3)
+        self.assertIn("current=gamma", self.board.simple("INFO"))
+        # a power cycle keeps the setting and keeps cycling
+        board = self.restart()
+        self.assertIn("rotate=1", board.simple("INFO"))
+        self.assertEqual([f[0] for f in board.list()[0]], ["alpha", "beta", "gamma"], "the setting file is not a sprite")
+        time.sleep(1.3)
+        self.assertIn("current=beta", board.simple("INFO"))
+        # 0 switches it off, also across a restart
+        self.assertEqual(board.simple("ROTATE 0"), "OK rotate 0")
+        time.sleep(1.3)
+        self.assertIn("current=beta", board.simple("INFO"))
+        board = self.restart()
+        self.assertIn("rotate=0", board.simple("INFO"))
+
     def test_off_survives_a_power_cycle(self):
         # Decided 2026-10-15: an unplugged-and-replugged board that was off comes back dark.
         self.start()
