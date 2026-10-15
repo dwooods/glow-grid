@@ -288,11 +288,18 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(4600)
         self.assertEqual(status(), 'Board said: no reply from the board')
         self.pg.evaluate("window.__fakeBreak = null")
-        # the cable is pulled: the card resets itself
+        # the cable is pulled in the middle of a Send: the card resets itself, the upload fails at once,
+        # and no timer fires later to overwrite the message
+        self.set_name('cut'); self.pg.evaluate("window.__fakeBreak = 'mute'")
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(200)
+        self.assertIn('Sending cut', status())
         self.pg.evaluate("window.__fakeTransport.close()"); self.pg.wait_for_timeout(300)
         self.assertEqual(status(), 'Board disconnected.')
         self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"))
         self.assertFalse(self.pg.evaluate("document.getElementById('boardConnectBtn').hidden"))
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
+        self.pg.wait_for_timeout(4500)
+        self.assertEqual(status(), 'Board disconnected.', 'the 4 s command timeout must not fire after a disconnect')
         self.assertEqual(self.errors, [])
 
     def test_board_card_without_web_serial(self):
