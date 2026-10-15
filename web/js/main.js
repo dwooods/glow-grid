@@ -31,6 +31,7 @@ fileMenu.addEventListener('beforetoggle', (e) => {
 fileMenu.addEventListener('toggle', (e) => fileBtn.setAttribute('aria-expanded', e.newState === 'open'));
 fileBtn.addEventListener('click', () => { if (fileMenu.togglePopover) fileMenu.togglePopover(); });
 $('menuImport').addEventListener('click', () => { fileMenu.hidePopover(); $('imageInput').click(); });
+$('menuOpenGg').addEventListener('click', () => { fileMenu.hidePopover(); $('ggInput').click(); });
 $('menuExport').addEventListener('click', () => { fileMenu.hidePopover(); updateCmd(); if (exportDlg.showModal) exportDlg.showModal(); else exportDlg.setAttribute('open', ''); });
 $('exportClose').addEventListener('click', () => exportDlg.close());
 exportDlg.addEventListener('click', (e) => { if (e.target === exportDlg) exportDlg.close(); });
