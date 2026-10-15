@@ -23,6 +23,8 @@
 //   OFF / ON                   -> OK panel off / OK panel on (same as the On/off button; off is kept across a power cycle)
 //   ROTATE <seconds>           -> OK rotate <seconds>; 0 = off. Cycles the stored sprites in list order, kept across
 //                                 a power cycle; each sprite keeps animating for the whole interval (David, 2026-10-15)
+//   CRC <name>                 -> OK crc=<8 hex> size=<bytes> of the stored file, so the editor can tell an unchanged
+//                                 example from one you replaced (fw 7); ERR no such sprite
 //   INFO                       -> OK current=<name> ... rotate=<seconds>
 
 #include <Adafruit_NeoPixel.h>
@@ -33,7 +35,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 6           // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 7           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -329,6 +331,15 @@ void doCommand(char* line) {
     saveRotate();
     rotateReset();
     Serial.printf("OK rotate %lu\n", (unsigned long)rotateSec);
+  } else if (c == "CRC") {
+    File f = (n >= 2 && gg_name_ok(a1)) ? LittleFS.open(pathOf(String(a1)), "r") : File();
+    if (!f) { Serial.println("ERR no such sprite"); return; }
+    uint8_t buf[256];
+    uint32_t crc = 0;
+    size_t total = 0, r;
+    while ((r = f.read(buf, sizeof(buf))) > 0) { crc = gg_crc32(crc, buf, r); total += r; }
+    f.close();
+    Serial.printf("OK crc=%08x size=%u\n", (unsigned)crc, (unsigned)total);
   } else if (c == "INFO") {
     Serial.printf("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu\n",
                   GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",

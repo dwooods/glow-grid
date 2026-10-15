@@ -11,9 +11,9 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `c3_player/c3_player.ino` | the firmware: flash storage, serial commands, buttons, playback. The folder is named after the sketch because the Arduino IDE insists on it, so it opens straight from the clone |
 | `c3_player/gg_core.h` | the parts with no Arduino dependency: the `.gg` file check, the wiring map, the brightness/gamma table (same maths as `grid_common.py`), CRC-32 |
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
-| `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `off`, `on`, `rotate`, `info` on the board over USB |
+| `tools/gg_tool.py` | `list`, `put`, `show`, `del`, `off`, `on`, `rotate`, `info` on the board over USB (the firmware also answers `CRC <name>`: the checksum and size of a stored file, which the editor's Remove examples uses) |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 27 tests; see below |
+| `tests/` | 28 tests; see below |
 
 ## The `.gg` sprite file
 
@@ -58,7 +58,7 @@ Set `GLOWGRID_REPO=/path/to/glow-grid` if this folder is not inside the repo (th
 - **Parity:** `gg_core.h`, compiled on the PC, places and corrects every pixel exactly as `grid_common.py` does, for all 16 wiring combinations and nine brightness/gamma settings, including the 0.4 cap.
 - **Board:** `c3_player.ino` itself, compiled against small stand-ins for the Arduino core (`tests/arduino_stub/`), driven by the real `gg_tool.py` through a pseudo-terminal: add, list, replace, delete, show, a wrong checksum, an invalid file, a bad name, a stalled upload, both buttons, `OFF`/`ON` over serial, and a restart that finds the stored sprite.
 - **Format:** round trip and rejection of bad files, in both the Python and the C check. The repo's own `tests/test_gg_export.py` adds that the editor writes byte-identical files.
-- **Playback and edges:** frames advance at the stored fps and wrap, a still renders once; replacing the sprite that is playing; Next while the panel is off; over-long and malformed serial lines; a 31-character name; the `MAX_SPRITES` limit; `ROTATE` cycling in list order, paused by `OFF`, restarted by Next, kept across a power cycle, switched off with 0.
+- **Playback and edges:** frames advance at the stored fps and wrap, a still renders once; replacing the sprite that is playing; Next while the panel is off; `CRC`; over-long and malformed serial lines; a 31-character name; the `MAX_SPRITES` limit; `ROTATE` cycling in list order, paused by `OFF`, restarted by Next, kept across a power cycle, switched off with 0.
 - **Converter and tool:** `png_to_gg.py` writes the same bytes as `gg_format.pack` (metadata, defaults, overrides, transparency, wrong sizes refused); `gg_tool.py` turns a dead or silent port into a plain message and picks the Espressif device among several ports.
 - **IDE build:** the sketch is compiled with the function prototypes the Arduino IDE generates, so a definition order the IDE rejects fails here too.
 
