@@ -374,5 +374,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .board-row:first-child { border-top: 0; }
 .board-row.playing .board-name { color: var(--accent, #4fd1c5); font-weight: 600; }
 .board-row small { color: var(--text-dim); }
+.board-pager { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); font-size: var(--fs-sm); color: var(--text-dim); margin-top: var(--s-1); }
+.board-pager[hidden] { display: none; }
+#boardCard.unsupported > :not(.board-unsupported) { opacity: .5; }
+#boardCard.unsupported .board-unsupported { color: var(--text); }
 .board-status[data-kind="err"] { color: #f08c7a; }
 .board-status[data-kind="ok"] { color: var(--text); }
