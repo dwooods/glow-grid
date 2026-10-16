@@ -159,6 +159,10 @@ button:focus-visible, .swatch:focus-visible, input:focus-visible, select:focus-v
 .frame-thumb.active + .frame-n { color: var(--accent); }
 .frame-thumb { width: 40px; height: 40px; image-rendering: pixelated; border-radius: 6px; cursor: pointer; border: 0; box-shadow: 0 0 0 1px var(--ring); display: block; transition: box-shadow var(--ease), transform var(--ease); }
 .frame-thumb:active { transform: scale(.94); }
+.frame-slot { display: block; width: 40px; height: 40px; box-sizing: border-box; border-radius: 6px; border: 1px dashed var(--ring); opacity: .55; }
+.frame-empty .frame-n { opacity: .55; }
+.strip-hint { margin: 0; }
+.phone-dock .frame-empty, .phone-dock #framesCard > .strip-hint { display: none; }
 .frame-thumb.active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 
 .form-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-dim); }
@@ -287,7 +291,7 @@ input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
   .nudge { grid-template-rows: repeat(3, var(--tap)); }
   .swatch { width: var(--tap); height: var(--tap); }
   .swatches { gap: var(--s-2); }
-  .frame-thumb { width: 48px; height: 48px; }
+  .frame-thumb, .frame-slot { width: 48px; height: 48px; }
   input[type=number], input[type=text], input[type=password], select { font-size: 16px; min-height: 40px; box-sizing: border-box; } /* 16px stops iOS zooming on focus */
   input[type=number] { width: 76px; }
   .check input { width: 22px; height: 22px; }
