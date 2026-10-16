@@ -279,6 +279,11 @@ class SmokeWifi(unittest.TestCase):
         self.fresh_page(); self.board_helpers(); self.pg.wait_for_timeout(300)
         self.assertEqual(self.status(), ''); self.assertTrue(el('boardTools', 'hidden'))
         self.assertEqual(self.pg.evaluate('boardServedBy()'), '')
+        # served over http, the USB note says why (not "this browser" alone), and points at the https editor
+        self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", 'delete Navigator.prototype.serial', before=hb.install); self.board_helpers()
+        self.assertFalse(el('boardUnsupported', 'hidden')); self.assertIn('plain http', el('boardUnsupportedWhy')); self.assertIn('dwooods.github.io', el('boardUnsupportedWhy'))
+        self.fresh_page('delete Navigator.prototype.serial'); self.board_helpers()
+        self.assertIn('Chrome or Edge on a computer', el('boardUnsupportedWhy')); self.assertNotIn('plain http', el('boardUnsupportedWhy'))
 
 
 if __name__ == '__main__':
