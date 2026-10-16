@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <poll.h>
 #include <string>
+#include <strings.h>
 
 #define INPUT_PULLUP 2
 #define OUTPUT 1
@@ -55,6 +56,11 @@ class String {
   size_t length() const { return s.size(); }
   bool operator==(const String& o) const { return s == o.s; }
   bool operator==(const char* o) const { return s == o; }
+  bool operator!=(const char* o) const { return s != o; }
+  bool startsWith(const char* p) const { return s.rfind(p, 0) == 0; }
+  int indexOf(const char* p) const { size_t k = s.find(p); return k == std::string::npos ? -1 : (int)k; }
+  String& operator+=(const String& o) { s += o.s; return *this; }
+  String& operator+=(const char* o) { s += o; return *this; }
   int compareTo(const String& o) const { return s.compare(o.s); }
   bool endsWith(const char* e) const {
     size_t n = strlen(e);

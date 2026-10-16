@@ -125,3 +125,22 @@ static inline bool gg_name_ok(const char* s) {
 
 // One push button: pin number, last level read, when it last changed (millis).
 struct GGButton { uint8_t pin; bool last; uint32_t changed; };
+
+// Hex text to bytes, NUL-terminated, for text that must survive the command line (Wi-Fi name and password may hold
+// spaces and any character). Returns the byte count, or -1 for odd length, a non-hex digit or no room (cap includes the NUL).
+static inline int gg_hex_decode(const char* hex, char* out, size_t cap) {
+  size_t n = strlen(hex);
+  if (n % 2 || n / 2 + 1 > cap) return -1;
+  for (size_t i = 0; i < n; i += 2) {
+    int v = 0;
+    for (int k = 0; k < 2; k++) {
+      char c = hex[i + k];
+      int d = (c >= '0' && c <= '9') ? c - '0' : (c >= 'a' && c <= 'f') ? c - 'a' + 10 : (c >= 'A' && c <= 'F') ? c - 'A' + 10 : -1;
+      if (d < 0) return -1;
+      v = v * 16 + d;
+    }
+    out[i / 2] = (char)v;
+  }
+  out[n / 2] = 0;
+  return (int)(n / 2);
+}
