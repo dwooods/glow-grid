@@ -174,7 +174,7 @@
     <section class="card" id="boardCard">
       <h2>Board <small class="board-free" id="boardFree"></small><small class="board-free" id="boardLink"></small></h2>
       <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB or Wi-Fi, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
-      <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>USB is not supported in this browser.</strong> USB needs Chrome or Edge on a computer; Connect over Wi-Fi works here if the board is on your network. Help ▸ Board card lists where each works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
+      <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>USB is not supported in this browser.</strong> <span id="boardUnsupportedWhy">USB needs Chrome or Edge on a computer;</span> Connect over Wi-Fi works here if the board is on your network. Help ▸ Board card lists where each works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
       <div class="btn-row">
         <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect over USB</button>
         <button id="boardWifiBtn" class="btn btn-quiet" type="button" title="Connect to a board on your Wi-Fi (the Network button at the top sets the address)">Connect over Wi-Fi</button>
@@ -242,7 +242,7 @@
     <div class="photo-body export-body">
       <label>Board address <input id="netHost" type="text" value="glowgrid.local" spellcheck="false" autocapitalize="off" autocomplete="off" inputmode="url"></label>
       <button id="netConnectBtn" class="btn" type="button">Connect over Wi-Fi</button>
-      <p class="hint">Use <code>glowgrid.local</code>, or the IP address if that does not work. The board and this device must be on the same network. Chrome asks once whether this page may reach devices on your network: choose Allow.</p>
+      <p class="hint">Use <code>glowgrid.local</code>, or the IP address if that does not work. The board and this device must be on the same network. If the browser refuses (Safari on an iPhone always does from this https page), open the board's own address in that browser instead, <code>http://glowgrid.local/</code> or <code>http://</code> and its IP address: firmware 12 serves this editor itself and it connects on its own. Chrome on a computer may ask once whether this page may reach devices on your network: choose Allow.</p>
       <p class="hint board-status" id="netStatus" role="status"></p>
       <hr class="sub-rule">
       <h3>Set up the board's Wi-Fi</h3>
