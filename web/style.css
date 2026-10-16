@@ -153,7 +153,7 @@ button:focus-visible, .swatch:focus-visible, input:focus-visible, select:focus-v
   .swatch:hover { transform: scale(1.1); }
 }
 
-.frame-strip { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.frame-strip { display: grid; grid-template-columns: repeat(8, max-content); gap: var(--s-2); justify-content: start; }   /* 16 slots = two rows of 8 */
 .frame-cell { position: relative; display: block; flex: none; }
 .frame-n { position: absolute; left: 3px; bottom: 2px; font-size: 12px; line-height: 1; color: var(--text-dim); text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; font-variant-numeric: tabular-nums; }
 .frame-thumb.active + .frame-n { color: var(--accent); }
@@ -161,8 +161,9 @@ button:focus-visible, .swatch:focus-visible, input:focus-visible, select:focus-v
 .frame-thumb:active { transform: scale(.94); }
 .frame-slot { display: block; width: 40px; height: 40px; box-sizing: border-box; border-radius: 6px; border: 1px dashed var(--ring); opacity: .55; }
 .frame-empty .frame-n { opacity: .55; }
-.strip-hint { margin: 0; }
-.phone-dock .frame-empty, .phone-dock #framesCard > .strip-hint { display: none; }
+.strip-hint, .frame-count { margin: 0; }
+html:not(.phone-dock) #framesCard .frame-strip { margin-block: var(--s-2) var(--s-1); }   /* a little air between Play / FPS and the strip, and between the strip and its count */
+.phone-dock .frame-empty, .phone-dock #framesCard > .strip-hint, .phone-dock #framesCard > .frame-count { display: none; }
 .frame-thumb.active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 
 .form-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-dim); }
@@ -260,7 +261,7 @@ input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
 .phone-dock #framesCard.stack .frame-strip { grid-column: 1 / -1; grid-row: 2; }
 .phone-dock #framesCard .playback, .phone-dock #framesCard > .btn-row, .phone-dock #framesCard > .history-row { display: contents; }
 .phone-dock #framesCard > .sub-rule, .phone-dock #framesCard > .strip-meta, .phone-dock #historyWrap { display: none; }
-.phone-dock .frame-strip { box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
+.phone-dock .frame-strip { display: flex; box-sizing: border-box; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 4px; }
 .phone-dock #framesCard.stack .frame-strip { flex-wrap: wrap; align-content: flex-start; overflow: visible; }
 .phone-dock .frame-strip::-webkit-scrollbar { display: none; }
 .phone-dock .frame-thumb { flex: none; }
@@ -384,12 +385,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 /* Board card runs the full width under both columns. */
 #boardCard { flex: 1 1 100%; box-sizing: border-box; }
 .phone-dock #boardCard { margin-top: var(--s-2); }
-/* Frames card grows to end level with Panel settings, but only while both of its folds (What these settings mean, Panel Check) are closed;
-   open, the right column is longer and a stretched Frames card would just be empty. */
+/* The two columns keep their own heights: the Frames card ends after its buttons instead of stretching to match Panel settings. */
 .device-col, .panel-col { align-self: flex-start; }
-.layout:not(:has(#panelCard details[open])) .device-col, .layout:not(:has(#panelCard details[open])) .panel-col { align-self: stretch; }
-.layout:not(:has(#panelCard details[open])) #framesCard { flex-grow: 1; }
-#framesCard > .btn-row:not(#dangerRow) { margin-top: auto; }   /* Duplicate / Blank / Restore sit at the bottom, just above the red row */
 /* "Panel Check": capital P and C only, not the all-caps of the other small headings. */
 .check-label { text-transform: none; letter-spacing: 0; }
 .export-body h3 { margin: var(--s-1) 0 0; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
