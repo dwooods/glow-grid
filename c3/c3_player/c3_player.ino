@@ -59,12 +59,13 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 14          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 15          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the open network the board hosts in setup mode
 #define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
 #define JOIN_WAIT_BOOT_MS 90000UL              // after a power-up, a saved network gets this long before setup mode opens
 #define JOIN_WAIT_SAVE_MS 30000UL              // after new credentials are saved, this long
+#define SETUP_SAVE_CLOSE_MS 8000UL             // after Save the setup network stays up this long, so the page can show its countdown and the phone is not dropped mid-reply
 #define SETUP_HOLD_MS 5000UL                   // holding the On/off button this long opens setup mode
 // Whether setup mode may open by itself (no saved network, or the saved one will not join). The PC test stub overrides this so that
 // only the tests that ask for it see it; on the board it is always on. Asking for setup (POST /setup, WIFI SETUP) always works.
@@ -708,7 +709,7 @@ void setupSave() {
   if (e.length()) { setupServer.send(400, "text/plain", e + "\n"); return; }
   setupServer.send(200, "text/plain", "OK saved\n");
   setupSavePending = true;
-  setupSaveAt = millis();                       // the join starts a moment later, once this reply has gone out
+  setupSaveAt = millis();                       // the join starts after SETUP_SAVE_CLOSE_MS; the page counts it down
 }
 
 void setupStart() {
@@ -785,8 +786,11 @@ void setupTick() {
     strip.setPixelColor(0, 0, 0, setupPulse());
     strip.show();
   }
-  if (setupSavePending && now - setupSaveAt >= 1200) { setupFinish(); return; }
-  if (now - setupAt >= SETUP_TIMEOUT_MS) setupEnd();
+  // millis() again, not `now`: handleClient() above may just have set setupSaveAt, and `now - setupSaveAt` would wrap to a huge number
+  // and close the setup network on the same pass as the reply (which is what fw 13 and 14 did, whatever the delay was meant to be).
+  if (setupSavePending && millis() - setupSaveAt >= SETUP_SAVE_CLOSE_MS) { setupFinish(); return; }
+  // A Save in the last seconds must still go through setupFinish() (which watches the join and reopens setup if it fails), not setupEnd().
+  if (!setupSavePending && now - setupAt >= SETUP_TIMEOUT_MS) setupEnd();
 }
 
 // ---- serial commands ----
