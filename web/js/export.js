@@ -55,7 +55,7 @@ function applySavedLight(raw) {
 /* ---------- .gg sprite file for the ESP32-C3 player (read by c3/gg_core.h) ---------- */
 // 12-byte header: "GG", version 1, flags, cols, rows, frames (u16), fps x10 (u16), brightness %, gamma x10; then raw RGB
 // per frame, row by row from the top-left, exactly as drawn. The board applies wiring, gamma and the brightness cap itself.
-const GG_MAX_FRAMES = 64;
+const GG_MAX_FRAMES = 16;      // frames per sprite for every target (Pi and C3): a 16x16 panel plays simple loops. Same number in c3/c3_player/gg_core.h and c3/tools/gg_format.py
 function ggBytes(frames, cols, rows, fps, brightness, gamma) {
   const n = frames.length;
   if (n < 1 || n > GG_MAX_FRAMES) throw new Error(`1 to ${GG_MAX_FRAMES} frames`);
@@ -78,7 +78,8 @@ function ggDecode(b) {
   if (b.length < 12 || b[0] !== 0x47 || b[1] !== 0x47) throw new Error('that is not a Glow Grid sprite file');
   if (b[2] !== 1) throw new Error(`sprite file version ${b[2]} is newer than this editor understands`);
   const cols = b[4], rows = b[5], n = b[6] | (b[7] << 8), fps10 = b[8] | (b[9] << 8), bright = b[10], gamma10 = b[11];
-  if (!cols || !rows || n < 1 || n > GG_MAX_FRAMES) throw new Error('the sprite file header is not valid');
+  if (n > GG_MAX_FRAMES) throw new Error(`the sprite has ${n} frames; the limit is ${GG_MAX_FRAMES}`);
+  if (!cols || !rows || n < 1) throw new Error('the sprite file header is not valid');
   if (b.length !== 12 + n * cols * rows * 3) throw new Error(`the sprite file is ${b.length} bytes but its header says ${12 + n * cols * rows * 3}; it was cut off or damaged`);
   const frames = [];
   let p = 12;

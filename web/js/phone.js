@@ -25,7 +25,7 @@
     const first = strip.firstElementChild;
     if (first) {
       const cell = first.offsetWidth + 8, fits = Math.max(1, Math.floor((strip.clientWidth - 8 + 8) / cell));
-      card.classList.toggle('stack', strip.children.length > fits);
+      card.classList.toggle('stack', strip.querySelectorAll('.frame-cell:not(.frame-empty)').length > fits);
     }
     measure();
   }
