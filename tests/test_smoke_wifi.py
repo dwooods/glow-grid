@@ -102,14 +102,15 @@ class SmokeWifi(unittest.TestCase):
     def tearDown(self):
         if self.ctx: self.ctx.close()
 
-    def fresh_page(self, *init_scripts):
-        """A new page whose init scripts run before board.js, which reads its environment at load."""
+    def fresh_page(self, *init_scripts, before=None):
+        """A new page whose init scripts run before board.js, which reads its environment at load. before(ctx) runs before the page loads."""
         if self.ctx: self.ctx.close()
         self.ctx = self.browser.new_context(viewport={'width': 1200, 'height': 1000}, service_workers='block')
         self.pg = self.ctx.new_page(); self.pg.add_init_script('delete window.showSaveFilePicker')
         for js in init_scripts:
             self.pg.add_init_script(js)
         self.pg.on('pageerror', lambda e: self.errors.append(str(e)))
+        if before: before(self.ctx)
         self.pg.goto(self.url); self.pg.wait_for_timeout(400)
 
     def set_name(self, v): self.pg.evaluate(SET_NAME, v)
@@ -260,6 +261,24 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertTrue(el('netScanBtn', 'disabled')); self.assertIn('firmware 10', el('netScanHint')); self.assertFalse(el('netSaveBtn', 'disabled'))
         self.assertEqual(self.errors, [])
+
+    def test_editor_served_by_the_board_connects_to_it(self):
+        """Firmware 12 serves the editor from the board, so the page and the board share an origin (iPhone Safari refuses an https page
+        calling a plain-http board). Loaded that way, the editor knows the board's address, connects at once and fills the Network box."""
+        hb = FakeHttpBoard(fw=12)
+        self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
+        self.pg.wait_for_timeout(700)
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Firmware 12.')
+        self.assertIn('Wi-Fi glowgrid.local', el('boardLink')); self.assertFalse(el('boardTools', 'hidden'))
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertEqual(el('netHost', 'value'), 'glowgrid.local')
+        self.assertTrue(el('netConnectBtn', 'disabled'), 'already connected')
+        self.assertEqual(self.errors, [])
+        # a developer's own server (127.0.0.1) is never taken for a board: no automatic connection there
+        self.fresh_page(); self.board_helpers(); self.pg.wait_for_timeout(300)
+        self.assertEqual(self.status(), ''); self.assertTrue(el('boardTools', 'hidden'))
+        self.assertEqual(self.pg.evaluate('boardServedBy()'), '')
 
 
 if __name__ == '__main__':
