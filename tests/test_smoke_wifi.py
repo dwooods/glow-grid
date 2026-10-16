@@ -27,6 +27,7 @@ class FakeHttpBoard:
         self.panel, self.current, self.rotate = 'on', '-', 0
         self.fail_put = None                      # an ERR text to answer a /put with
         self.damage_get = False
+        self.setups = 0                           # POST /setup calls (firmware 13)
 
     def install(self, ctx, host=None):
         ctx.route(f'http://{host or self.HOST}/**', self.handle)
@@ -65,6 +66,8 @@ class FakeHttpBoard:
             del self.store[name]; self.current = sorted(self.store)[0] if self.store else '-'; return self.reply(route, 200, f'OK deleted {name}\n')
         if u.path in ('/off', '/on'):
             self.panel = u.path[1:]; return self.reply(route, 200, f'OK panel {self.panel}\n')
+        if u.path == '/setup' and self.fw >= 13:
+            self.setups += 1; return self.reply(route, 200, 'OK setup mode starts in a moment: join the Wi-Fi network GlowGrid-Setup and open http://192.168.4.1/\n')
         if u.path == '/rotate': self.rotate = int(q['s']); return self.reply(route, 200, f'OK rotate {self.rotate}\n')
         if u.path == '/put':
             if self.fail_put: return err(self.fail_put)
@@ -274,6 +277,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertEqual(el('netHost', 'value'), 'glowgrid.local')
         self.assertTrue(el('netConnectBtn', 'disabled'), 'already connected')
+        self.assertTrue(el('netSetupBtn', 'hidden'), 'firmware 12 has no setup mode: no button')
         self.assertEqual(self.errors, [])
         # a developer's own server (127.0.0.1) is never taken for a board: no automatic connection there
         self.fresh_page(); self.board_helpers(); self.pg.wait_for_timeout(300)
@@ -284,6 +288,51 @@ class SmokeWifi(unittest.TestCase):
         self.assertFalse(el('boardUnsupported', 'hidden')); self.assertIn('plain http', el('boardUnsupportedWhy')); self.assertIn('dwooods.github.io', el('boardUnsupportedWhy'))
         self.fresh_page('delete Navigator.prototype.serial'); self.board_helpers()
         self.assertIn('Chrome or Edge on a computer', el('boardUnsupportedWhy')); self.assertNotIn('plain http', el('boardUnsupportedWhy'))
+
+    def test_change_the_boards_wifi_from_the_editor(self):
+        """Firmware 13: over Wi-Fi the Network dialog offers 'Change the board's Wi-Fi'. It asks first, sends POST /setup, drops the
+        connection and says which network to join. Declining sends nothing."""
+        hb = FakeHttpBoard(fw=13)
+        self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
+        self.pg.wait_for_timeout(700)
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        dialogs = []
+        answer = {'ok': False}
+        self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept() if answer['ok'] else d.dismiss()))
+        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Firmware 13.')
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertFalse(el('netSetupBtn', 'hidden')); self.assertIn('Change the board', el('netSetupHint'))
+        self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(300)                  # declined
+        self.assertEqual(len(dialogs), 1); self.assertIn('GlowGrid-Setup', dialogs[0]); self.assertEqual(hb.setups, 0)
+        self.assertFalse(el('boardTools', 'hidden'), 'still connected')
+        answer['ok'] = True
+        self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(hb.setups, 1); self.assertIn('POST /setup', hb.log)
+        self.assertTrue(el('boardTools', 'hidden'), 'the card lets go of the board')
+        self.assertIn('GlowGrid-Setup', el('netStatus')); self.assertIn('192.168.4.1', el('netStatus'))
+        self.assertIn('GlowGrid-Setup', self.status())
+        self.assertTrue(el('netSetupBtn', 'hidden'))
+        self.assertEqual(self.errors, [])
+
+    def test_send_is_refused_when_the_board_is_full(self):
+        """At 64 sprites a new name is refused in the editor with the reason, before anything is sent; replacing a name still works."""
+        hb = FakeHttpBoard(fw=13)
+        gg_blob = b'GG' + bytes(10)
+        for i in range(64):
+            hb.store[f's{i:02d}'] = gg_blob
+        self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
+        self.pg.wait_for_timeout(700)
+        dialogs = []
+        self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept()))
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800')]; state.currentFrame = 0; afterFrameChange(); }""")
+        self.set_name('one_too_many'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(500)
+        self.assertIn('holds 64 sprites and is full', self.status())
+        self.assertFalse([l for l in hb.log if l.startswith('POST /put')], 'nothing was sent')
+        self.set_name('s05'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)   # replace an existing name: allowed
+        self.assertEqual(len(dialogs), 1); self.assertIn('Replace', dialogs[0])
+        self.assertTrue([l for l in hb.log if l.startswith('POST /put?name=s05')])
+        self.assertEqual(self.errors, [])
 
 
 if __name__ == '__main__':
