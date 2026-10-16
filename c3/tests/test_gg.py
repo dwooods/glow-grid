@@ -352,6 +352,9 @@ class Board(unittest.TestCase):
         env = dict(os.environ, GG_FS_DIR=self.fs, GG_LED_LOG=self.led, GG_PINS=self.pins, GG_NVS=self.fs + "_nvs",
                    GG_WIFI_LOG=self.fs + "_wifi.log", GG_HTTP_PORT_FILE=self.fs + "_port")
         env.pop("GG_WIFI_SIM", None)
+        env.pop("GG_WIFI_SCAN", None)
+        if getattr(self, "scan_env", None) is not None:
+            env["GG_WIFI_SCAN"] = self.scan_env
         if wifi or getattr(self, "wifi_sim", False):
             env["GG_WIFI_SIM"] = "1"
         return env
@@ -847,6 +850,34 @@ class Board(unittest.TestCase):
         # the longest legal name and password fit on one command line
         self.assertTrue(self.board.wifi_set("n" * 32, "p" * 63).startswith("OK wifi saved"))
         self.assertIn("begin " + "n" * 32 + " " + "p" * 63, self.wifi_log())
+
+    def test_wifi_scan(self):
+        # one name heard twice (keep the strongest), a hidden network, an open one, a name with spaces and non-ASCII, an illegal 33-byte name
+        self.scan_env = ";".join(["Home Net|-70|1", "Cafe Open|-55|0", "|-30|1", "Café ☕|-80|1", "Home Net|-42|1", "x" * 33 + "|-20|1", "Far|-91|1"])
+        self.start(wifi=True)
+        nets = self.board.wifi_scan()
+        self.assertEqual(nets, [("Home Net", -42, True), ("Cafe Open", -55, False), ("Café ☕", -80, True), ("Far", -91, True)])
+        self.assertIn("scan", self.wifi_log())
+        self.assertTrue(self.board.wifi_status().startswith("OK wifi=off "), "scanning saves and joins nothing")
+        self.assertNotIn("begin", self.wifi_log())
+        # a scan does not disturb a saved network
+        self.board.wifi_set("Home Net", "password1")
+        self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "joining")
+        self.assertEqual(len(self.board.wifi_scan()), 4)
+        self.assertIn("ssid=Home Net", self.board.wifi_status())
+        self.assertIn("wifi=connected", self.board.simple("INFO"))
+
+    def test_wifi_scan_edges(self):
+        self.scan_env = ""
+        self.start(wifi=True)
+        self.assertEqual(self.board.wifi_scan(), [], "nothing heard is an empty list, not an error")
+
+    def test_wifi_scan_is_capped_and_sorted(self):
+        self.scan_env = ";".join(f"net{i:02d}|{-30 - i}|1" for i in range(30))
+        self.start(wifi=True)
+        nets = self.board.wifi_scan()
+        self.assertEqual(len(nets), 20, "capped at 20")
+        self.assertEqual([n[1] for n in nets], sorted((n[1] for n in nets), reverse=True))
 
     def multipart(self, blob, name="x.gg", field="file"):
         b = "----t" + os.urandom(6).hex()
