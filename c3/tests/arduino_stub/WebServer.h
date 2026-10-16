@@ -106,7 +106,12 @@ class WebServer {
   }
 
  public:
-  explicit WebServer(int = 80) {}
+  // The first WebServer made is the API server (its port goes to $GG_HTTP_PORT_FILE); the second is the setup-mode page
+  // (its port goes to $GG_SETUP_PORT_FILE, and nowhere if that is not set), so the tests can tell them apart.
+  int id;
+  explicit WebServer(int = 80) { static int made = 0; id = made++; }
+  void close() { if (lfd >= 0) { ::close(lfd); lfd = -1; } }
+  void stop() { close(); }
   void on(const char* uri, HTTPMethod m, Fn fn) { routes.push_back({uri, m, fn, nullptr}); }
   void on(const char* uri, HTTPMethod m, Fn fn, Fn ufn) { routes.push_back({uri, m, fn, ufn}); }
   void onNotFound(Fn fn) { notFound = fn; }
@@ -123,7 +128,7 @@ class WebServer {
     socklen_t len = sizeof a;
     getsockname(lfd, (sockaddr*)&a, &len);
     fcntl(lfd, F_SETFL, O_NONBLOCK);
-    const char* pf = getenv("GG_HTTP_PORT_FILE");
+    const char* pf = getenv(id == 0 ? "GG_HTTP_PORT_FILE" : "GG_SETUP_PORT_FILE");
     if (pf) { FILE* f = fopen(pf, "w"); if (f) { fprintf(f, "%d", ntohs(a.sin_port)); fclose(f); } }
   }
 
@@ -167,7 +172,7 @@ class WebServer {
     size_t hend = std::string::npos;
     while (hend == std::string::npos) {
       ssize_t n = recv(cfd, buf, sizeof buf, 0);
-      if (n <= 0) { close(cfd); cfd = -1; return; }
+      if (n <= 0) { ::close(cfd); cfd = -1; return; }
       req.append(buf, (size_t)n);
       hend = req.find("\r\n\r\n");
     }
@@ -204,13 +209,15 @@ class WebServer {
     if (curMethod == HTTP_POST && ct.find("multipart/form-data") == 0) {
       size_t b = ct.find("boundary=");
       if (b != std::string::npos) multipart(body, ct.substr(b + 9));
+    } else if (curMethod == HTTP_POST && ct.find("application/x-www-form-urlencoded") == 0) {
+      parseQuery(body);                                    // like the real core: the form fields become arguments
     } else if (curMethod == HTTP_POST && !body.empty()) {
       args["plain"] = std::string(body.c_str());           // like the real core: a String, so it stops at the first zero byte
     }
     if (r) r->fn();
     else if (notFound) notFound();
     if (!responded) send(500, "text/plain", "no reply\n");
-    close(cfd);
+    ::close(cfd);
     cfd = -1;
   }
 };
