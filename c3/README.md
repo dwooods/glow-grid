@@ -76,6 +76,7 @@ HTTP API (all replies are the same `OK ...` / `ERR ...` text as USB, with status
 | `GET /ping`, `/info`, `/list` | `PING`, `INFO`, `LIST` |
 | `GET /crc?name=X`, `GET /get?name=X` | `CRC X`; the file's bytes |
 | `POST /show?name=X`, `/del?name=X`, `/off`, `/on`, `/rotate?s=N` | `SHOW`, `DEL`, `OFF`, `ON`, `ROTATE` |
+| `POST /setup` | `WIFI SETUP`: leave this network and open setup mode (firmware 13, see below) |
 | `POST /put?name=X[&size=N][&crc=hex]` | `PUT`; the file as `multipart/form-data`, field `file` |
 
 Uploads must be multipart: the ESP32 web server hands a raw POST body over as a text string that stops at the first zero byte (the probe cut a 49,164-byte sprite to 231 bytes), and multipart is binary-safe and is a plain "simple" request, so the browser sends no pre-flight. While a file is being received or stored the board is busy for a fraction of a second, so the animation may hitch; `INFO` reports `gap_ms`, the longest the main loop stalled since the last `INFO`.
@@ -90,6 +91,12 @@ python3 tools/build_site.py --check    # exit 1 if they are missing or out of da
 ```
 
 then flash `c3_player.ino` as usual. The board's copy is only as new as the last build and flash; the GitHub Pages site updates on its own. The page carries `<meta name="gg-site" content="glow-grid-vNN">` (the service worker cache name it was built from). No service worker or PWA install over plain http, and the page is not cached (`Cache-Control: no-store`), so each load is about 58 KB over your Wi-Fi; the animation may hitch for a moment while it is sent. Tests: the page's exact bytes, length and CRC through the loopback server, the base64 decoder against Python's, a build with no generated files, and a browser smoke test (`tests/test_smoke_wifi.py`) of an editor served by the board connecting to it.
+
+## Setup mode (firmware 13)
+
+Puts the board on a home network without USB or a computer. The board hosts the open Wi-Fi network `GlowGrid-Setup`, answers every DNS name with its own address (so a phone opens the page by itself as a "sign in" screen) and serves one small page (`c3_player/setup_page.h`, about 3.6 KB) at `http://192.168.4.1/`: a scan list, a name box, a password box, Save. LED 0 pulses dim blue while it runs, drawn over whatever the panel shows. On Save the page tells the phone to rejoin its home Wi-Fi and open `http://glowgrid.local/`; the board closes the setup network a moment later and joins the saved network.
+
+It starts by itself when there is no saved network at power-up, or a saved network has not joined 90 s after power-up (once per power-up), or a network just saved has not joined within 30 s. It starts on request with `POST /setup` (the editor's "Change the board's Wi-Fi" button in the Network dialog, shown over Wi-Fi on firmware 13) or the USB command `WIFI SETUP`. It ends after 5 minutes, or when a network is saved; after a timeout the saved network is tried again and kept. The API is not served on the setup network, because that network is open: only the page, its scan (`GET /scan`, the same text as `WIFI SCAN`) and its save (`POST /save`) are. `INFO` reports `wifi=setup` while it runs. Tests (`test_gg.py`, with the stub's `GG_SETUP_AUTO` and `GG_TIME_SCALE` switches): the page at `/` and at other addresses, the scan, a refused short password, a save that closes setup and joins, the API coming back, the pulse on LED 0 and the sprite's pixel returning, `POST /setup`, the 5-minute timeout, the 90 s and 30 s join watches, and nothing opening by itself on a network that joins.
 
 ## Tests
 
@@ -111,7 +118,7 @@ Set `GLOWGRID_REPO=/path/to/glow-grid` if this folder is not inside the repo (th
 
 Two deliberate breaks (wrong wiring default; checksum not checked) each made the suite fail. The first real IDE compile failed on an Arduino quirk the PC build could not see then (auto-generated prototypes above a struct); fixed by moving the struct into `gg_core.h`, and the IDE build test now covers it. The serial-line test found that an over-long line used to run its tail as a command; fixed.
 
-**Not tested:** the board-served editor on a real board (firmware 12) and from iPhone Safari, how long `WIFI SCAN` pauses the panel and what it does with hidden and duplicate names on the real board, mDNS after a router reconnect (a power cycle is tested), Safari, Firefox, Android and iPhone talking to the board, NeoPixel timing with 256 LEDs, serial throughput on the real USB port, Bluetooth.
+**Not tested:** setup mode on a real board (the open network, the page on a phone, whether iPhone's sign-in mini browser reaches it, how long the first scan pauses the panel, the AP and the station switching on the real Wi-Fi stack), how long `WIFI SCAN` pauses the panel and what it does with hidden and duplicate names on the real board, mDNS after a router reconnect (a power cycle is tested), Firefox and Android talking to the board, NeoPixel timing with 256 LEDs, serial throughput on the real USB port, Bluetooth.
 
 ## Next
 
