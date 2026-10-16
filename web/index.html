@@ -20,6 +20,7 @@
     <span class="brand-mark">●</span><h1>Glow Grid</h1>
     <div class="app-actions">
       <button id="fileBtn" class="btn btn-quiet" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="fileMenu">File <span aria-hidden="true">▾</span></button>
+      <button id="netBtn" class="btn btn-quiet" type="button" title="Connect to the board over Wi-Fi, or set up its Wi-Fi">Network</button>
       <button id="helpBtn" class="btn btn-quiet" type="button">Help</button>
       <button id="installBtn" class="btn btn-quiet" type="button" hidden>Install app</button>
     </div>
@@ -169,11 +170,12 @@
       </section>
     </aside>
     <section class="card" id="boardCard">
-      <h2>Board <small class="board-free" id="boardFree"></small></h2>
-      <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
-      <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>Not supported in this browser.</strong> The Board card needs Chrome or Edge on a computer; Help ▸ Board card lists where it works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
+      <h2>Board <small class="board-free" id="boardFree"></small><small class="board-free" id="boardLink"></small></h2>
+      <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB or Wi-Fi, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
+      <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>USB is not supported in this browser.</strong> USB needs Chrome or Edge on a computer; Connect over Wi-Fi works here if the board is on your network. Help ▸ Board card lists where each works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
       <div class="btn-row">
         <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect board</button>
+        <button id="boardWifiBtn" class="btn btn-quiet" type="button" title="Connect to a board on your Wi-Fi (the Network button at the top sets the address)">Connect over Wi-Fi</button>
         <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
       </div>
       <div class="btn-row" id="boardTools" hidden>
@@ -226,6 +228,30 @@
       <button id="helpClose" class="btn btn-quiet" type="button">Close</button>
     </div>
     <div class="help-body guide" id="helpBody"></div>
+  </div>
+</dialog>
+
+<dialog id="netDlg" class="photo-dlg export-dlg" aria-labelledby="netTitle">
+  <div class="photo-wrap">
+    <div class="photo-head">
+      <h2 id="netTitle">Network</h2>
+      <button id="netClose" class="btn btn-quiet" type="button">Close</button>
+    </div>
+    <div class="photo-body export-body">
+      <label>Board address <input id="netHost" type="text" value="glowgrid.local" spellcheck="false" autocapitalize="off" autocomplete="off" inputmode="url"></label>
+      <button id="netConnectBtn" class="btn" type="button">Connect over Wi-Fi</button>
+      <p class="hint">Use <code>glowgrid.local</code>, or the IP address if that does not work. The board and this device must be on the same network. Chrome asks once whether this page may reach devices on your network: choose Allow.</p>
+      <p class="hint board-status" id="netStatus" role="status"></p>
+      <hr class="sub-rule">
+      <h3>Set up the board's Wi-Fi</h3>
+      <p class="hint" id="netSetupHint"></p>
+      <label>Network name <input id="netSsid" type="text" spellcheck="false" autocapitalize="off" autocomplete="off"></label>
+      <label>Password <input id="netPass" type="password" autocomplete="new-password"></label>
+      <div class="btn-row">
+        <button id="netSaveBtn" class="btn" type="button">Save to board</button>
+        <button id="netClearBtn" class="btn btn-quiet" type="button">Forget network</button>
+      </div>
+    </div>
   </div>
 </dialog>
 
