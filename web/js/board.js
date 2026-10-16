@@ -257,7 +257,14 @@ const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
 const BOARD_SCAN_FW = 10;          // the first firmware that can list nearby networks (WIFI SCAN)
 const BOARD_HOST_KEY = 'ggBoardHost';
 const BOARD_HOST_DEFAULT = 'glowgrid.local';
-function boardSavedHost() { try { return localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; } catch (e) { return BOARD_HOST_DEFAULT; } }
+// The editor also runs from the board itself (firmware 12 serves it at http://glowgrid.local/ or its IP address). Then the page and the board
+// share an origin, so even iPhone Safari may call it (it refuses an https page calling a plain-http board). That address is the board's.
+// Tests set window.__ggBoardOrigin to stand in for it; localhost and 127.x are the developer's own server, never a board.
+function boardServedBy() {
+  if (window.__ggBoardOrigin) return window.__ggBoardOrigin;
+  return location.protocol === 'http:' && !/^(localhost|127\.|\[::1\])/.test(location.hostname) ? location.host : '';
+}
+function boardSavedHost() { const own = boardServedBy(); if (own) return own; try { return localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; } catch (e) { return BOARD_HOST_DEFAULT; } }
 function boardSaveHost(h) { try { localStorage.setItem(BOARD_HOST_KEY, h); } catch (e) { /* private window: just forget it */ } }
 // Accepts glowgrid.local, 192.168.1.50, or either with http:// or a trailing slash pasted in. Returns '' for something that cannot be an address.
 function boardCleanHost(raw) {
@@ -485,6 +492,9 @@ $('boardRotate').addEventListener('change', () => {
 });
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);
+if (boardServedBy()) {             // loaded from the board: say so, and connect to it at once (the same-origin address needs no Network dialog)
+  window.addEventListener('load', () => { boardSay(`This editor is running from the board (${boardServedBy()}). Connecting…`, ''); boardConnectWifi(boardServedBy()); });
+}
 if (!boardSupported()) {            // Firefox, Safari, iPhone: no Web Serial. USB is greyed out with the reason; Wi-Fi still works.
   $('boardUnsupported').hidden = false;
   $('boardConnectBtn').disabled = true;
