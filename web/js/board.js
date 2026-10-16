@@ -220,6 +220,7 @@ class HttpBoard {
   async off() { return this.call('POST', '/off'); }
   async on() { return this.call('POST', '/on'); }
   async rotate(sec) { return this.call('POST', `/rotate?s=${encodeURIComponent(sec)}`); }
+  async setup() { return this.call('POST', '/setup'); }              // firmware 13: leave this network and open GlowGrid-Setup
   async crc(name) {
     const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
     const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
@@ -255,6 +256,7 @@ let boardInfo = {};                // the last INFO, parsed (the Network dialog 
 const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);       // USB (Web Serial)
 const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
 const BOARD_SCAN_FW = 10;          // the first firmware that can list nearby networks (WIFI SCAN)
+const BOARD_SETUP_FW = 13;         // the first firmware with setup mode (POST /setup: the board hosts its own Wi-Fi setup page)
 const BOARD_HOST_KEY = 'ggBoardHost';
 const BOARD_HOST_DEFAULT = 'glowgrid.local';
 // The editor also runs from the board itself (firmware 12 serves it at http://glowgrid.local/ or its IP address). Then the page and the board
@@ -414,6 +416,7 @@ async function boardSend() {
   try { bytes = ggBytes(flat, state.cols, state.rows, state.fps, sim.brightness, sim.gamma); }
   catch (err) { boardSay(`Can’t send: ${err.message}.`, 'err'); return; }
   const name = boardSendName();
+  if (!boardNames.includes(name) && boardNames.length >= BOARD_MAX_SPRITES) { boardSay(`The board holds ${BOARD_MAX_SPRITES} sprites and is full. Delete one first, or send under the name of one to replace it. Nothing was sent.`, 'err'); return; }
   if (boardNames.includes(name) && !confirm(`Replace “${name}” on the board? The old sprite is lost.`)) { boardSay('Not sent.', ''); return; }
   const btn = $('boardSendBtn'); btn.disabled = true;
   try {
@@ -516,8 +519,11 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
   $('netScanRow').hidden = !fw9;
   $('netScanHint').textContent = fw9 && !canScan ? `Scanning needs firmware ${BOARD_SCAN_FW} (this board has ${boardFw}). Type the name below, or re-flash c3_player.ino.` : '';
   $('netConnectBtn').disabled = !!board && boardVia === 'wifi';
+  const canSetup = !!board && boardVia === 'wifi' && Number(boardFw) >= BOARD_SETUP_FW;
+  $('netSetupBtn').hidden = !canSetup;
   $('netSetupHint').textContent = !board ? 'Connect the board over USB first (the Board card, Connect over USB). Then its Wi-Fi can be set here.'
-    : boardVia === 'wifi' ? 'The board is connected over Wi-Fi. To change its network, disconnect and connect it over USB.'
+    : boardVia === 'wifi' ? (canSetup ? 'The board is connected over Wi-Fi. To move it to another network without USB, press Change the board\'s Wi-Fi.'
+      : 'The board is connected over Wi-Fi. To change its network, disconnect and connect it over USB.')
     : !fw9 ? `Wi-Fi needs firmware ${BOARD_WIFI_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`
     : '2.4 GHz networks only. The name and password are stored on the board, not in this page.';
 }
@@ -603,6 +609,19 @@ async function netClear() {
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
 }
+async function netSetup() {            // firmware 13: the board leaves this network and hosts GlowGrid-Setup, where its Wi-Fi can be changed from any phone
+  if (!board || boardVia !== 'wifi') return;
+  if (!confirm('The board will leave your Wi-Fi network and open its own setup network, GlowGrid-Setup, for 5 minutes. This page loses its connection to the board. Continue?')) return;
+  const b = board;
+  $('netSetupBtn').disabled = true;
+  try {
+    await b.setup();
+    await b.close();                     // the link ends now; the card clears itself
+    const msg = 'The board is opening its setup network. On this device, join the Wi-Fi network GlowGrid-Setup (no password); if its page does not appear by itself, open http://192.168.4.1/ . It closes after 5 minutes and the board then goes back to its saved network.';
+    netSay(msg, 'ok'); boardSay(msg, 'ok');
+  } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
+  finally { $('netSetupBtn').disabled = false; netSync(); }
+}
 const NET_POLL_MS = window.__ggNetPollMs || 1500;       // tests shorten the wait between Wi-Fi status checks
 $('netScanBtn').addEventListener('click', netScan);
 $('netPick').addEventListener('change', netPicked);
@@ -612,4 +631,5 @@ netDlg.addEventListener('click', (e) => { if (e.target === netDlg) netDlg.close(
 $('netConnectBtn').addEventListener('click', netConnect);
 $('netSaveBtn').addEventListener('click', netSave);
 $('netClearBtn').addEventListener('click', netClear);
+$('netSetupBtn').addEventListener('click', netSetup);
 $('netHost').addEventListener('keydown', (e) => { if (e.key === 'Enter') netConnect(); });
