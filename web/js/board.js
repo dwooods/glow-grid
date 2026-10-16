@@ -286,12 +286,16 @@ function boardShowRotate(sec) {       // the select shows the board's own settin
   sel.value = v;
   sel.disabled = false;
 }
+function boardLinkUpdate() {           // "· Wi-Fi glowgrid.local", or "· USB" plus the board's address once it has joined a network
+  const ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
+  $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' + (ip ? ` · address ${ip}` : '') : '';
+}
 async function boardRefresh(showName) {            // showName: jump to the page holding this sprite (after a Send)
   if (!board) return;
   const [{ files, free }, info] = [await board.list(), await board.info()];
   boardFiles = files; boardCurrent = info.current || '';
   boardInfo = info;
-  $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' : '';
+  boardLinkUpdate();
   boardFw = info.fw || '';           // before the list is drawn: Load greys itself out on a firmware without GET
   boardNames = files.map((f) => f.name);
   if (showName && boardNames.includes(showName)) boardPage = Math.floor(boardNames.indexOf(showName) / BOARD_PAGE);
@@ -540,6 +544,7 @@ async function netSave() {
       st = await b.wifiStatus();
       if (st.state === 'connected') break;
     }
+    if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); }
     if (st.state === 'connected') netSay(`Joined ${ssid}. The board's address is ${st.ip} (or glowgrid.local). You can unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
     else netSay(`Saved, but the board has not joined yet (${st.state || 'no answer'}). Check the name and password, and that it is a 2.4 GHz network.`, 'err');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
