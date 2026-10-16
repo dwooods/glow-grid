@@ -32,7 +32,7 @@ hexes = lambda fr: ['#%02x%02x%02x' % px for px in fr]
 
 class GgExportParity(unittest.TestCase):
     def test_editor_bytes_equal_python_bytes(self):
-        for seed, n, fps, b, g in [(1, 1, 6, 0.3, 2.2), (2, 4, 8, 0.4, 2.2), (3, 2, 7.25, 0.35, 2.05), (4, 64, 0.5, 0.01, 1.0), (5, 3, 30, 1.0, 3.0), (6, 2, 12.5, 0.125, 2.25)]:
+        for seed, n, fps, b, g in [(1, 1, 6, 0.3, 2.2), (2, 4, 8, 0.4, 2.2), (3, 2, 7.25, 0.35, 2.05), (4, 16, 0.5, 0.01, 1.0), (5, 3, 30, 1.0, 3.0), (6, 2, 12.5, 0.125, 2.25)]:
             fr = frames(seed, n)
             want = gg.pack(fr, fps, b, g)
             got = js_gg([hexes(f) for f in fr], fps, b, g)
@@ -44,7 +44,7 @@ class GgExportParity(unittest.TestCase):
             self.assertTrue(str(js_gg(fr, fps, b, g)).startswith('ERR'), (fps, b, g))
             with self.assertRaises(ValueError):
                 gg.pack(frames(1, 1), fps, b, g)
-        self.assertTrue(str(js_gg(fr * 65, 6, 0.3, 2.2)).startswith('ERR'))
+        self.assertTrue(str(js_gg(fr * 17, 6, 0.3, 2.2)).startswith('ERR'))
 
     def test_board_check_accepts_editor_file(self):
         exe = os.path.join(tempfile.mkdtemp(), 'host_gg')
@@ -69,7 +69,7 @@ def js_decode(blob):
 class GgDecode(unittest.TestCase):
     """ggDecode (File > Open .gg, and Load from the board) must read back exactly what gg_format.py wrote, light settings included."""
     def test_decodes_what_python_wrote(self):
-        for seed, n, fps, b, g in [(1, 1, 6, 0.3, 2.2), (2, 4, 8, 0.45, 2.6), (3, 64, 0.5, 0.01, 1.0), (4, 3, 30, 1.0, 3.0), (5, 2, 7.2, 0.35, 2.05)]:
+        for seed, n, fps, b, g in [(1, 1, 6, 0.3, 2.2), (2, 4, 8, 0.45, 2.6), (3, 16, 0.5, 0.01, 1.0), (4, 3, 30, 1.0, 3.0), (5, 2, 7.2, 0.35, 2.05)]:
             fr = frames(seed, n)
             d = js_decode(gg.pack(fr, fps, b, g))
             self.assertEqual((d['cols'], d['rows']), (16, 16))

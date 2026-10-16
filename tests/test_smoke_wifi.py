@@ -235,6 +235,8 @@ class SmokeWifi(unittest.TestCase):
         self.pg.fill('#netPass', 'hunter2hunter2'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate('window.__fakeWifiSet'), {'ssid': 'Home Net', 'pass': 'hunter2hunter2'})
         self.assertIn('Joined Home Net', el('netStatus'))
+        self.assertIn('address 192.168.50.6', el('boardLink'))        # the card keeps the address after the dialog message is replaced
+        self.assertIn('5 GHz-only', self.pg.evaluate("document.getElementById('netScanRow').textContent"))
         # an open network: the password box says so, and an empty password goes as "-"
         self.pg.select_option('#netPick', 'Cafe Open')
         self.assertEqual(el('netSsid', 'value'), 'Cafe Open'); self.assertIn('open', el('netPass', 'placeholder'))
