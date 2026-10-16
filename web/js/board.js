@@ -510,8 +510,13 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
     : !fw9 ? `Wi-Fi needs firmware ${BOARD_WIFI_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`
     : '2.4 GHz networks only. The name and password are stored on the board, not in this page.';
 }
+function netResetForm() {             // blank name and password, and drop the scan list, so nothing stale is shown
+  $('netSsid').value = ''; $('netPass').value = ''; $('netPass').placeholder = '';
+  $('netPick').replaceChildren(new Option('Press Scan first', ''));
+}
 function netOpen() {
   $('netHost').value = boardSavedHost();
+  netResetForm();
   netSay('', '');
   netSync();
   if (board && boardVia === 'usb' && boardInfo.wifi) netSay(`Board Wi-Fi: ${boardInfo.wifi}` + (boardInfo.ip && boardInfo.ip !== '-' ? `, address ${boardInfo.ip}` : '') + '.', '');
@@ -545,6 +550,7 @@ async function netSave() {
       if (st.state === 'connected') break;
     }
     if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); }
+    if (st.state === 'connected') netResetForm();
     if (st.state === 'connected') netSay(`Joined ${ssid}. The board's address is ${st.ip} (or glowgrid.local). You can unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
     else netSay(`Saved, but the board has not joined yet (${st.state || 'no answer'}). Check the name and password, and that it is a 2.4 GHz network.`, 'err');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
@@ -577,7 +583,14 @@ function netPicked() {
 }
 async function netClear() {
   if (!board || boardVia !== 'usb') return;
-  try { await board.wifiClear(); netSay('The board forgot its network.', 'ok'); } catch (err) { netSay(`Board said: ${err.message}`, 'err'); }
+  const b = board, was = boardInfo.wifi && boardInfo.wifi !== '-' ? boardInfo.wifi : '';
+  $('netClearBtn').disabled = true;
+  try {
+    await b.wifiClear();
+    netResetForm(); boardInfo.wifi = ''; boardInfo.ip = '';
+    netSay(`Forgot ${was ? `"${was}"` : 'the saved network'}. The board will not join Wi-Fi until you save a network again here over USB.`, 'ok');
+  } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
+  finally { netSync(); }
 }
 const NET_POLL_MS = window.__ggNetPollMs || 1500;       // tests shorten the wait between Wi-Fi status checks
 $('netScanBtn').addEventListener('click', netScan);
