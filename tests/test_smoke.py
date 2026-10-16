@@ -180,6 +180,20 @@ class Smoke(unittest.TestCase):
         self.import_file(self.photo); self.pg.click('#photoApply'); self.pg.wait_for_timeout(300)
         self.assertEqual(self.name(), 'sunset_sprite')
 
+    def test_frame_cap_is_16_for_every_target(self):
+        """One cap for the Pi and the C3, so the editor never needs to know the target: Duplicate and Blank stop at 16, and say why."""
+        self.pg.evaluate("() => { state.frames = [newBlankFrame(state.cols, state.rows)]; state.currentFrame = 0; afterFrameChange(); }")
+        dis = lambda i: self.pg.evaluate(f"document.getElementById('{i}').disabled")
+        for _ in range(15): self.pg.click('#addFrameBtn')
+        self.assertEqual(self.pg.evaluate('state.frames.length'), 16)
+        self.assertTrue(dis('addFrameBtn')); self.assertTrue(dis('addBlankFrameBtn'))
+        self.assertIn('at most 16', self.pg.evaluate("document.getElementById('addFrameBtn').title"))
+        self.pg.evaluate("document.getElementById('addFrameBtn').disabled = false; document.getElementById('addFrameBtn').click()")   # even a forced click adds nothing
+        self.assertEqual(self.pg.evaluate('state.frames.length'), 16)
+        self.pg.click('#deleteFrameBtn'); self.assertFalse(dis('addFrameBtn')); self.assertFalse(dis('addBlankFrameBtn'))
+        self.assertEqual(self.pg.evaluate("(() => { try { ggDecode(ggBytes(Array.from({length: 16}, () => new Array(256).fill('#112233')), 16, 16, 6, 0.3, 2.2)); return 'ok'; } catch (e) { return e.message; } })()"), 'ok')
+        self.assertIn('limit is 16', self.pg.evaluate("(() => { const b = ggBytes(Array.from({length: 16}, () => new Array(256).fill('#112233')), 16, 16, 6, 0.3, 2.2); b[6] = 17; b[7] = 0; try { ggDecode(b); return ''; } catch (e) { return e.message; } })()"))
+
     def test_sheet_by_filename_and_no_double_suffix(self):
         self.import_file(self.walk)
         self.assertEqual(self.name(), 'walk_sprite')
@@ -561,8 +575,8 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("window.__fakeStore.get('walk').length"), 780)
         # too many frames is refused before anything is sent
         before = self.pg.evaluate('window.__fakeLog.length')
-        frames(65); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(300)
-        self.assertIn('up to 64 frames', status()); self.assertEqual(self.pg.evaluate('window.__fakeLog.length'), before)
+        frames(17); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(300)
+        self.assertIn('up to 16 frames', status()); self.assertEqual(self.pg.evaluate('window.__fakeLog.length'), before)
         # the board refuses mid-upload: its message is shown and the Send button comes back
         frames(1); self.set_name('nope'); self.pg.evaluate("window.__fakeBreak = 'full'")
         self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
