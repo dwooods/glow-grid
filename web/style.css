@@ -162,6 +162,8 @@ button:focus-visible, .swatch:focus-visible, input:focus-visible, select:focus-v
 .frame-slot { display: block; width: 40px; height: 40px; box-sizing: border-box; border-radius: 6px; border: 1px dashed var(--ring); opacity: .55; }
 .frame-empty .frame-n { opacity: .55; }
 .strip-hint, .frame-count { margin: 0; }
+.strip-hint { text-wrap: balance; }
+.frame-count + .strip-hint { margin-top: calc(-1 * var(--s-2)); }   /* count and hint read as one block: 4px apart instead of the card's 12px */
 html:not(.phone-dock) #framesCard .frame-strip { margin-block: var(--s-2) var(--s-1); }   /* a little air between Play / FPS and the strip, and between the strip and its count */
 .phone-dock .frame-empty, .phone-dock #framesCard > .strip-hint, .phone-dock #framesCard > .frame-count { display: none; }
 .frame-thumb.active { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
@@ -236,8 +238,8 @@ input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
 .dock-history { display: flex; gap: 6px; flex: none; }
 .dock-history:empty { display: none; }
 .phone-dock #undoBtn, .phone-dock #redoBtn { font-size: 0; width: var(--tap); padding: 0; }
-.phone-dock #undoBtn::before { content: "\21B6"; font-size: 1.3rem; }
-.phone-dock #redoBtn::before { content: "\21B7"; font-size: 1.3rem; }
+.phone-dock #undoBtn::before { content: "\\21B6"; font-size: 1.3rem; }
+.phone-dock #redoBtn::before { content: "\\21B7"; font-size: 1.3rem; }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) 2px var(--s-2); background: var(--bg); font-family: var(--font-display); font-weight: 600; }
 .phone-dock { --dock-h: 150px; --sheet-top: 440px; }
 .phone-dock .page { padding-block: var(--s-2) calc(var(--dock-h) + var(--s-3)); padding-inline: max(8px, env(safe-area-inset-left), env(safe-area-inset-right)); gap: var(--s-2); }
@@ -334,6 +336,17 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 /* Help dialog */
 .help-dlg .help-body { overflow: auto; padding: 14px var(--s-4) 18px; display: flex; flex-direction: column; gap: var(--s-1); }
 .help-dlg .help-body h3:first-of-type { margin-top: var(--s-2); }
+.help-dlg .help-body { font-family: system-ui, 'Segoe UI', Roboto, sans-serif; font-size: 0.9rem; line-height: 1.65; gap: var(--s-2); }   /* sentences in a readable face; the mono font stays for code */
+.help-dlg .help-body .hint, .help-dlg .help-body ul, .help-dlg .help-body ol { font-size: inherit; line-height: inherit; }
+.help-dlg .help-body li { margin-bottom: 2px; }
+.help-dlg .help-body code { font-family: var(--font-mono); font-size: 0.85em; background: var(--panel-3); padding: 1px 5px; border-radius: 4px; color: var(--text); }
+.help-chips { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; gap: 6px; padding: var(--s-2) 0; background: var(--panel); }
+.help-chip { padding: 5px 11px; font-size: var(--fs-sm); border-radius: 999px; }
+.help-sec { border-top: 1px solid var(--border); scroll-margin-top: 56px; }
+.help-sec[open] { padding-bottom: var(--s-3); }
+.help-sec > summary { padding: var(--s-3) 0; min-height: 24px; }
+.help-sec[open] > summary { padding-bottom: var(--s-2); }
+.help-dlg .help-body .help-sec > summary h3 { margin: 0; font-family: var(--font-display); font-size: 0.95rem; font-weight: 600; color: var(--text); }
 .sub-h { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); font-weight: 500; font-family: inherit; }
 .check-details > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: var(--s-2); min-height: 28px; }
 .check-details > summary::-webkit-details-marker { display: none; }
