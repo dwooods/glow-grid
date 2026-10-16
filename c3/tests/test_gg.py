@@ -556,15 +556,35 @@ class Board(unittest.TestCase):
         time.sleep(0.3)
         self.press(None)
         self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
-        self.press(7)                                # On/off: off = all black
+        self.press(7)                                # On/off: off = all black (acts on release since firmware 14)
         time.sleep(0.3)
         self.press(None)
+        time.sleep(0.3)
         self.assertEqual(self.last_frames(1)[0], "000000" * 256)
         self.assertIn("panel=off", self.board.simple("INFO"))
-        self.press(7)                                # on again
-        time.sleep(0.3)
+        self.press(7)                                # on again; a 1 s hold is still a short press (the setup hold is 5 s)
+        time.sleep(1.0)
         self.press(None)
+        time.sleep(0.3)
         self.assertEqual(self.last_frames(1)[0], self.led_of(a)[0])
+        self.assertEqual(self.log_count("softap GlowGrid-Setup"), 0, "a short press never opens setup")
+
+    def test_holding_on_off_for_five_seconds_opens_setup_with_wifi_off(self):
+        """Hold On/off (GPIO7) for 5 s: the setup network opens even with nothing saved and Wi-Fi off; the release does not switch the panel.
+        Time runs 50x here, so a 0.4 s hold is 20 s."""
+        self.extra_env = {"GG_TIME_SCALE": "50"}
+        self.start()
+        self.board.put(self.write_gg("alpha", sample_frames(31, 1)))
+        self.assertIn("panel=on", self.board.simple("INFO"))
+        self.assertNotIn("softap", self.wifi_log())
+        self.press(7)
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode after the hold", timeout=6)
+        self.press(None)
+        time.sleep(0.5)
+        info = self.board.simple("INFO")
+        self.assertIn("wifi=setup", info)
+        self.assertIn("panel=on", info, "the release after a setup hold does not switch the panel")
+        self.assertEqual(self.log_count("softap GlowGrid-Setup"), 1)
 
     def test_off_and_on_over_serial(self):
         self.start()
