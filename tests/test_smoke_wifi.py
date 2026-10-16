@@ -219,6 +219,39 @@ class SmokeWifi(unittest.TestCase):
         self.assertTrue(el('netSaveBtn', 'disabled')); self.assertIn('firmware 9', el('netSetupHint'))
         self.assertEqual(self.errors, [])
 
+    def test_scan_and_pick_a_network(self):
+        self.fresh_page(f'({FAKE_BOARD})()', 'window.__ggNetPollMs = 30;'); self.board_helpers()
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        self.pg.evaluate("window.__fakeFw = 10; window.__fakeScan = [{ssid: 'Home Net', rssi: -42, secure: true}, {ssid: 'Cafe Open', rssi: -60, secure: false}]")
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertFalse(el('netScanBtn', 'disabled')); self.assertTrue(el('netPick', 'disabled'))   # nothing to pick before a scan
+        self.pg.click('#netScanBtn'); self.pg.wait_for_timeout(400)
+        self.assertIn('2 networks found', el('netStatus')); self.assertFalse(el('netPick', 'disabled'))
+        self.assertEqual(self.pg.evaluate("Array.from(document.getElementById('netPick').options, (o) => o.value)"), ['', 'Home Net', 'Cafe Open'])
+        # picking fills the name and moves to the password; saving sends exactly that name and password
+        self.pg.select_option('#netPick', 'Home Net')
+        self.assertEqual(el('netSsid', 'value'), 'Home Net')
+        self.pg.fill('#netPass', 'hunter2hunter2'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(self.pg.evaluate('window.__fakeWifiSet'), {'ssid': 'Home Net', 'pass': 'hunter2hunter2'})
+        self.assertIn('Joined Home Net', el('netStatus'))
+        # an open network: the password box says so, and an empty password goes as "-"
+        self.pg.select_option('#netPick', 'Cafe Open')
+        self.assertEqual(el('netSsid', 'value'), 'Cafe Open'); self.assertIn('open', el('netPass', 'placeholder'))
+        self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(self.pg.evaluate('window.__fakeWifiSet'), {'ssid': 'Cafe Open', 'pass': ''})
+        # typing a name by hand still works (hidden networks), and an empty scan says so
+        self.pg.fill('#netSsid', 'Hidden One'); self.pg.fill('#netPass', 'password123'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(self.pg.evaluate('window.__fakeWifiSet.ssid'), 'Hidden One')
+        self.pg.evaluate('window.__fakeScan = []'); self.pg.click('#netScanBtn'); self.pg.wait_for_timeout(300)
+        self.assertIn('heard no networks', el('netStatus')); self.assertTrue(el('netPick', 'disabled'))
+        # firmware 9: scanning is off and says which firmware it needs; the typed form still works
+        self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        self.pg.evaluate('window.__fakeFw = 9'); self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertTrue(el('netScanBtn', 'disabled')); self.assertIn('firmware 10', el('netScanHint')); self.assertFalse(el('netSaveBtn', 'disabled'))
+        self.assertEqual(self.errors, [])
+
 
 if __name__ == '__main__':
     unittest.main()
