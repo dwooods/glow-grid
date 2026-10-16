@@ -99,7 +99,7 @@ function paintCanvas(ctx, frame, offsetX) {
   }
   ctx.putImageData(img, offsetX, 0);
 }
-const updateReadout = () => { const r = $('frameReadout'); r.textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; r.hidden = state.frames.length < 2;
+const updateReadout = () => { $('frameCount').textContent = `${state.frames.length} of ${GG_MAX_FRAMES} frames`; const r = $('frameReadout'); r.textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; r.hidden = state.frames.length < 2;
   const full = state.frames.length >= GG_MAX_FRAMES;       // the cap is the same for the Pi and the C3
   for (const id of ['addFrameBtn', 'addBlankFrameBtn']) { $(id).disabled = full; $(id).title = full ? `A sprite has at most ${GG_MAX_FRAMES} frames` : ''; }
 };
