@@ -1,10 +1,10 @@
 // The Board card: talk to the ESP32-C3 player from the editor. Classic script (load order in index.html).
 //
-// Two layers, so a second transport (Wi-Fi) can reuse everything above the wire:
-//   * a transport: writes bytes, delivers the board's text lines, can close.
-//       SerialTransport uses Web Serial (Chrome and Edge on a computer). Tests pass a fake one.
-//   * GgBoard: the line protocol c3/c3_player.ino speaks (PING, LIST, PUT, DEL, SHOW, OFF, ON, ROTATE, INFO, CRC),
-//       the same one c3/tools/gg_tool.py uses.
+// Two ways to reach the board; the card above them does not know which one it has:
+//   * USB: SerialTransport (Web Serial, Chrome and Edge on a computer; tests pass a fake one) carries the text lines, and
+//       GgBoard speaks the line protocol c3/c3_player.ino answers (PING, LIST, PUT, DEL, SHOW, OFF, ON, ROTATE, INFO, CRC, GET),
+//       the same one c3/tools/gg_tool.py uses. It also sets the board's Wi-Fi (WIFI SET), which only works over USB.
+//   * Wi-Fi: HttpBoard calls the board's HTTP API with fetch (firmware 9 and later). Any browser that lets the page reach the board.
 // The card lists what is on the board, sends the current drawing as a .gg sprite (the bytes ggBytes() makes,
 // same as Export for ESP32-C3), plays or deletes a stored sprite, and turns the panel off and on.
 
@@ -142,7 +142,88 @@ class GgBoard {
     if (bytes.length !== Number(m[2]) || crc32(bytes).toString(16).padStart(8, '0') !== m[1]) throw new Error('the sprite came through damaged; try Load again');
     return bytes;
   }
+  async wifiStatus() {                // firmware 9 and later: "OK wifi=connected ip=192.168.1.50 rssi=-40 host=glowgrid.local ssid=<name>"
+    const line = await this.cmd('WIFI STATUS', ['OK']);
+    const m = /wifi=(\w+) ip=(\S+)/.exec(line);
+    if (!m) throw new Error(`unexpected reply: ${line}`);
+    return { state: m[1], ip: m[2] === '-' ? '' : m[2] };
+  }
+  // The name and password go as hex, so spaces and symbols survive the command line. The password is never echoed by the board.
+  async wifiSet(ssid, password) {
+    const hex = (s) => Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, '0')).join('');
+    return this.cmd(`WIFI SET ${hex(ssid)} ${password ? hex(password) : '-'}`, ['OK']);
+  }
+  async wifiClear() { return this.cmd('WIFI CLEAR', ['OK']); }
   async close() { await this.t.close(); }
+}
+
+// The same operations as GgBoard, over Wi-Fi (firmware 9 and later; the HTTP API in c3/README.md). The replies are the same
+// OK / ERR text as USB, so the card above cannot tell the two apart. There is no connection to lose: close() only forgets it.
+class HttpBoard {
+  constructor(host) {
+    this.host = host;
+    this.base = 'http://' + host;
+    this.onClose = null; this.closed = false;
+    this.via = 'wifi';
+  }
+  async call(method, path, body, ms, asBytes) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), ms || 6000);
+    let res;
+    try { res = await fetch(this.base + path, { method, body, signal: ac.signal }); }
+    catch (e) {
+      throw new Error(e && e.name === 'AbortError' ? `no reply from the board at ${this.host}`
+        : `cannot reach the board at ${this.host}. Is it on the same Wi-Fi as this device, and did the browser allow this page to reach devices on your network?`);
+    } finally { clearTimeout(timer); }
+    if (!res.ok) { const t = (await res.text()).trim(); throw new Error(t.replace(/^ERR\s*/, '') || `HTTP ${res.status}`); }
+    return asBytes ? new Uint8Array(await res.arrayBuffer()) : (await res.text()).trim();
+  }
+  async ping() { return this.call('GET', '/ping', null, 3000); }
+  async hello() {
+    let last;
+    for (let i = 0; i < 2; i++) { try { return await this.ping(); } catch (e) { last = e; } }
+    throw last;
+  }
+  async list() {
+    const files = []; let summary = '';
+    for (const l of (await this.call('GET', '/list')).split('\n')) {
+      if (l.startsWith('FILE ')) { const [, name, size] = l.split(' '); files.push({ name, size: Number(size) }); }
+      else if (l.startsWith('OK')) summary = l;
+    }
+    const m = /^OK (\d+) files?, (\d+) bytes free/.exec(summary);
+    return { files, free: m ? Number(m[2]) : null };
+  }
+  async info() {
+    const out = {};
+    (await this.call('GET', '/info')).replace(/(\w+)=(\S+)/g, (_, k, v) => { out[k] = v; return ''; });
+    return out;
+  }
+  async put(name, bytes, onProgress) {
+    const crc = crc32(bytes).toString(16).padStart(8, '0');
+    const fd = new FormData();                       // multipart, not a raw body: the board's web server cuts a raw body at the first zero byte
+    fd.append('file', new Blob([bytes]), name + '.gg');
+    if (onProgress) onProgress(0, bytes.length);
+    await this.call('POST', `/put?name=${encodeURIComponent(name)}&size=${bytes.length}&crc=${crc}`, fd, 30000);
+    if (onProgress) onProgress(bytes.length, bytes.length);
+  }
+  async show(name) { return this.call('POST', `/show?name=${encodeURIComponent(name)}`); }
+  async del(name) { return this.call('POST', `/del?name=${encodeURIComponent(name)}`); }
+  async off() { return this.call('POST', '/off'); }
+  async on() { return this.call('POST', '/on'); }
+  async rotate(sec) { return this.call('POST', `/rotate?s=${encodeURIComponent(sec)}`); }
+  async crc(name) {
+    const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
+    const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
+    if (!m) throw new Error(`unexpected reply: ${line}`);
+    return { crc: m[1], size: Number(m[2]) };
+  }
+  async get(name) {                                   // the file's bytes, checked against the board's own CRC
+    const bytes = await this.call('GET', `/get?name=${encodeURIComponent(name)}`, null, 20000, true);
+    const want = await this.crc(name);
+    if (bytes.length !== want.size || crc32(bytes).toString(16).padStart(8, '0') !== want.crc) throw new Error('the sprite came through damaged; try Load again');
+    return bytes;
+  }
+  async close() { if (this.closed) return; this.closed = true; if (this.onClose) this.onClose(); }
 }
 
 /* ---------- the shipped example sprites (web/js/examples_data.js, generated from examples/sprites.py) ---------- */
@@ -160,13 +241,27 @@ let boardNames = [];               // what the board listed last, so Send can wa
 let boardFiles = [];               // the last LIST, in the board's order; the pager slices this
 let boardPage = 0;                 // 0-based page of the list
 let boardCurrent = '';             // the sprite playing, from INFO
-const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);
+let boardVia = '';                 // 'usb' or 'wifi' while connected
+let boardInfo = {};                // the last INFO, parsed (the Network dialog shows the board's Wi-Fi state from it)
+const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);       // USB (Web Serial)
+const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
+const BOARD_HOST_KEY = 'ggBoardHost';
+const BOARD_HOST_DEFAULT = 'glowgrid.local';
+function boardSavedHost() { try { return localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; } catch (e) { return BOARD_HOST_DEFAULT; } }
+function boardSaveHost(h) { try { localStorage.setItem(BOARD_HOST_KEY, h); } catch (e) { /* private window: just forget it */ } }
+// Accepts glowgrid.local, 192.168.1.50, or either with http:// or a trailing slash pasted in. Returns '' for something that cannot be an address.
+function boardCleanHost(raw) {
+  const h = String(raw || '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+  return /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?$/.test(h) ? h : '';
+}
 
 function boardSay(msg, kind) {
   const el = $('boardStatus'); el.textContent = msg || ''; el.dataset.kind = kind || '';
 }
 function boardUi(connected) {
   $('boardConnectBtn').hidden = connected;
+  $('boardWifiBtn').hidden = connected;
+  if (!connected) { boardVia = ''; boardInfo = {}; $('boardLink').textContent = ''; }
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
   $('boardExamples').hidden = !connected;
@@ -185,6 +280,8 @@ async function boardRefresh(showName) {            // showName: jump to the page
   if (!board) return;
   const [{ files, free }, info] = [await board.list(), await board.info()];
   boardFiles = files; boardCurrent = info.current || '';
+  boardInfo = info;
+  $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' : '';
   boardFw = info.fw || '';           // before the list is drawn: Load greys itself out on a firmware without GET
   boardNames = files.map((f) => f.name);
   if (showName && boardNames.includes(showName)) boardPage = Math.floor(boardNames.indexOf(showName) / BOARD_PAGE);
@@ -242,7 +339,7 @@ async function boardAct(fn, doneMsg) {
   catch (err) { if (board) boardSay(`Board said: ${err.message}`, 'err'); }
 }
 async function boardConnect() {
-  if (!boardSupported()) { boardSay('Connecting a board needs Chrome or Edge on a computer. From a phone, export a .gg file instead.', 'err'); return; }
+  if (!boardSupported()) { boardSay('USB needs Chrome or Edge on a computer. Use Connect over Wi-Fi, or export a .gg file.', 'err'); return; }
   let transport;
   try {
     if (window.__ggFakeSerial) transport = window.__ggFakeSerial();
@@ -250,18 +347,40 @@ async function boardConnect() {
       const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });
       transport = new SerialTransport(port);
     }
-    transport.onClose = () => { board = null; boardUi(false); boardSay('Board disconnected.', ''); };
+    transport.onClose = () => { board = null; boardUi(false); boardSay('Board disconnected.', ''); netSync(); };
     await transport.open();
   } catch (err) {
     boardSay(err && err.name === 'NotFoundError' ? 'No board chosen.' : `Could not open the port: ${err.message}. Close the Arduino Serial Monitor or any other program using it.`, 'err');
     return;
   }
   const b = new GgBoard(transport);
+  b.via = 'usb';
   try { await b.hello(); } catch (err) { boardSay(err.message, 'err'); await transport.close(); return; }
-  board = b;
+  await boardAttach(b);
+}
+async function boardConnectWifi(rawHost) {
+  const host = boardCleanHost(rawHost || boardSavedHost());
+  if (!host) { boardSay('That does not look like a board address. Use glowgrid.local or the IP address, like 192.168.1.50.', 'err'); return false; }
+  const b = new HttpBoard(host);
+  boardSay(`Looking for the board at ${host}…`, '');
+  $('boardWifiBtn').disabled = true;
+  try { await b.hello(); }
+  catch (err) { boardSay(`${err.message} The Network button at the top sets the address.`, 'err'); return false; }
+  finally { $('boardWifiBtn').disabled = false; }
+  b.onClose = () => { board = null; boardUi(false); boardSay('Board disconnected.', ''); netSync(); };
+  boardSaveHost(host);
+  await boardAttach(b);
+  return true;
+}
+async function boardAttach(b) {
+  board = b; boardVia = b.via;
   boardUi(true);
-  try { await boardRefresh(); boardSay(`Connected. Firmware ${boardFw || 'older than 3 (re-flash from the repo)'}.`, 'ok'); }
-  catch (err) { boardSay(`Board said: ${err.message}`, 'err'); }
+  try {
+    await boardRefresh();
+    const fwNote = boardFw ? `Firmware ${boardFw}.` : 'Firmware older than 3 (re-flash from the repo).';
+    boardSay(`Connected${b.via === 'wifi' ? ` over Wi-Fi (${b.host})` : ''}. ${fwNote}` + (b.via === 'wifi' && Number(boardFw) && Number(boardFw) < BOARD_WIFI_FW ? ' (Wi-Fi needs firmware 9, so this will not last.)' : ''), 'ok');
+  } catch (err) { boardSay(`Board said: ${err.message}`, 'err'); }
+  netSync();
 }
 async function boardSend() {
   if (!board) return;
@@ -340,6 +459,7 @@ $('boardRemoveExBtn').addEventListener('click', boardRemoveExamples);
 $('boardPrevBtn').addEventListener('click', () => { boardPage--; boardRenderList(); });
 $('boardNextBtn').addEventListener('click', () => { boardPage++; boardRenderList(); });
 $('boardConnectBtn').addEventListener('click', boardConnect);
+$('boardWifiBtn').addEventListener('click', () => boardConnectWifi());
 $('boardDisconnectBtn').addEventListener('click', async () => { if (board) await board.close(); });
 $('boardSendBtn').addEventListener('click', boardSend);
 $('boardOnBtn').addEventListener('click', () => boardAct(() => board.on(), 'Lights on.'));
@@ -351,10 +471,74 @@ $('boardRotate').addEventListener('change', () => {
 });
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);
-if (!boardSupported()) {            // Firefox, Safari, iPhone: no Web Serial. Show the card greyed out with the reason, not hidden.
-  $('boardCard').classList.add('unsupported');
+if (!boardSupported()) {            // Firefox, Safari, iPhone: no Web Serial. USB is greyed out with the reason; Wi-Fi still works.
   $('boardUnsupported').hidden = false;
   $('boardConnectBtn').disabled = true;
-  $('boardConnectBtn').title = 'Not supported in this browser';
+  $('boardConnectBtn').title = 'USB needs Chrome or Edge on a computer';
 }
 if (navigator.serial) navigator.serial.addEventListener('disconnect', () => { if (board) board.close(); });
+
+/* ---------- the Network dialog: the board's address, and setting its Wi-Fi over USB ---------- */
+const netDlg = $('netDlg');
+function netSay(msg, kind) { const el = $('netStatus'); el.textContent = msg || ''; el.dataset.kind = kind || ''; }
+function netSync() {                  // enable the Wi-Fi setup form only while a firmware-9 board is on USB, and show what it reports
+  const usb = !!board && boardVia === 'usb';
+  const fw9 = usb && Number(boardFw) >= BOARD_WIFI_FW;
+  for (const id of ['netSsid', 'netPass', 'netSaveBtn', 'netClearBtn']) $(id).disabled = !fw9;
+  $('netConnectBtn').disabled = !!board && boardVia === 'wifi';
+  $('netSetupHint').textContent = !board ? 'Connect the board over USB first (the Board card, Connect board). Then its Wi-Fi can be set here.'
+    : boardVia === 'wifi' ? 'The board is connected over Wi-Fi. To change its network, disconnect and connect it over USB.'
+    : !fw9 ? `Wi-Fi needs firmware ${BOARD_WIFI_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`
+    : '2.4 GHz networks only. The name and password are stored on the board, not in this page.';
+}
+function netOpen() {
+  $('netHost').value = boardSavedHost();
+  netSay('', '');
+  netSync();
+  if (board && boardVia === 'usb' && boardInfo.wifi) netSay(`Board Wi-Fi: ${boardInfo.wifi}` + (boardInfo.ip && boardInfo.ip !== '-' ? `, address ${boardInfo.ip}` : '') + '.', '');
+  if (netDlg.showModal) netDlg.showModal(); else netDlg.setAttribute('open', '');
+}
+async function netConnect() {
+  const host = boardCleanHost($('netHost').value);
+  if (!host) { netSay('That does not look like an address. Use glowgrid.local or the IP address, like 192.168.1.50.', 'err'); return; }
+  $('netConnectBtn').disabled = true;
+  netSay(`Looking for the board at ${host}…`, '');
+  const ok = await boardConnectWifi(host);
+  if (ok) netDlg.close(); else netSay($('boardStatus').textContent, 'err');
+  netSync();
+}
+async function netSave() {
+  const ssid = $('netSsid').value, pass = $('netPass').value;
+  const n = new TextEncoder().encode(ssid).length;
+  if (n < 1 || n > 32) { netSay('The network name must be 1 to 32 characters.', 'err'); return; }
+  if (pass && (pass.length < 8 || pass.length > 63)) { netSay('A password is 8 to 63 characters. Leave it empty for an open network.', 'err'); return; }
+  if (!board || boardVia !== 'usb') { netSay('The board is not connected over USB.', 'err'); return; }
+  const b = board;
+  $('netSaveBtn').disabled = true;
+  try {
+    netSay(`Saving ${ssid} to the board…`, '');
+    await b.wifiSet(ssid, pass);
+    $('netPass').value = '';
+    let st = { state: '', ip: '' };
+    for (let i = 0; i < 12 && board === b; i++) {
+      await new Promise((r) => setTimeout(r, NET_POLL_MS));
+      st = await b.wifiStatus();
+      if (st.state === 'connected') break;
+    }
+    if (st.state === 'connected') netSay(`Joined ${ssid}. The board's address is ${st.ip} (or glowgrid.local). You can unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
+    else netSay(`Saved, but the board has not joined yet (${st.state || 'no answer'}). Check the name and password, and that it is a 2.4 GHz network.`, 'err');
+  } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
+  finally { netSync(); }
+}
+async function netClear() {
+  if (!board || boardVia !== 'usb') return;
+  try { await board.wifiClear(); netSay('The board forgot its network.', 'ok'); } catch (err) { netSay(`Board said: ${err.message}`, 'err'); }
+}
+const NET_POLL_MS = window.__ggNetPollMs || 1500;       // tests shorten the wait between Wi-Fi status checks
+$('netBtn').addEventListener('click', netOpen);
+$('netClose').addEventListener('click', () => netDlg.close());
+netDlg.addEventListener('click', (e) => { if (e.target === netDlg) netDlg.close(); });
+$('netConnectBtn').addEventListener('click', netConnect);
+$('netSaveBtn').addEventListener('click', netSave);
+$('netClearBtn').addEventListener('click', netClear);
+$('netHost').addEventListener('keydown', (e) => { if (e.key === 'Enter') netConnect(); });
