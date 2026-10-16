@@ -3,6 +3,7 @@
 #pragma once
 #include <Arduino.h>
 #define WIFI_STA 1
+#define WIFI_AP_STA 3
 #define WIFI_POWER_8_5dBm 34
 #define WIFI_OFF 0
 #define WIFI_AUTH_OPEN 0
@@ -13,7 +14,7 @@ class WiFiStub {
   void log(const char* a, const char* b = "", const char* c = "") { const char* p = getenv("GG_WIFI_LOG"); if (!p) return; FILE* f = fopen(p, "a"); if (!f) return; fprintf(f, "%s %s %s\n", a, b, c); fclose(f); }
  public:
   int m = 0;
-  bool mode(int x) { m = x; return true; }
+  bool mode(int x) { m = x; log("mode", x == 0 ? "off" : x == 1 ? "sta" : "ap_sta"); return true; }
   int getMode() { return m; }
   // $GG_WIFI_SCAN = "name|rssi|secure;name|rssi|secure;..." is what a scan "hears" (an empty name is a hidden network).
   struct Hit { String ssid; int rssi, sec; };
@@ -36,6 +37,10 @@ class WiFiStub {
   void scanDelete() { nHits = 0; }
   bool setHostname(const char* h) { log("hostname", h); return true; }
   void setAutoReconnect(bool) {}
+  // Access point: only logged ("softap <ssid>", "softap off") so the tests can see setup mode start and end.
+  bool softAP(const char* ssid, const char* = NULL) { log("softap", ssid); return true; }
+  bool softAPdisconnect(bool = false) { log("softap", "off"); return true; }
+  IPAddress softAPIP() { return IPAddress(); }
   bool setTxPower(int) { return true; }
   bool setSleep(bool s) { log("sleep", s ? "on" : "off"); return true; }
   int begin(const char* ssid, const char* pass = NULL) { began = true; log("begin", ssid, pass ? pass : "(open)"); return 0; }
