@@ -45,12 +45,17 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include "gg_core.h"
+// The editor page for http://glowgrid.local/ comes from tools/build_site.py (git-ignored output). Without it the sketch still builds.
+#if !defined(GG_NO_SITE) && __has_include("site_data.h")
+#include "site_data.h"
+#define GG_HAS_SITE 1
+#endif
 
 #define DATA_PIN 6
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 11          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 12          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -546,7 +551,32 @@ void httpNotFound() {
   server.send(404, "text/plain", "ERR not found\n");
 }
 
+// The editor itself, so a phone can load it from the board over plain http (iPhone Safari will not let the https site call this board).
+// The page is gzip stored as base64; it is decoded 1024 characters at a time into a small buffer and sent with its exact length.
+#ifndef GG_HAS_SITE
+void httpSite() {
+  server.send(404, "text/plain", "The editor is not built into this firmware. Run c3/tools/build_site.py, then flash c3_player.ino again.");
+}
+#else
+void httpSite() {
+  server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "no-store");
+  server.setContentLength(GG_SITE_LEN);
+  server.send(200, "text/html", "");
+  const size_t total = sizeof(GG_SITE_B64) - 1;
+  uint8_t buf[768];
+  for (size_t i = 0; i < total; i += 1024) {
+    size_t n = total - i < 1024 ? total - i : 1024;
+    int m = gg_b64_decode(GG_SITE_B64 + i, n, buf);
+    if (m <= 0) return;
+    server.sendContent((const char*)buf, (size_t)m);
+  }
+}
+#endif
+
 void httpBegin() {
+  server.on("/", HTTP_GET, httpSite);
+  server.on("/index.html", HTTP_GET, httpSite);
   server.on("/ping", HTTP_GET, []() { httpReply("PONG"); });
   server.on("/info", HTTP_GET, []() { httpReply(infoText()); });
   server.on("/list", HTTP_GET, []() { httpReply(listText()); });
