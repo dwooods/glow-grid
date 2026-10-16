@@ -121,7 +121,7 @@ The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Exp
 
 - **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. Copy it to the Pi with `scp` (the command is in Help and below).
 - **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.
-- **ESP32-C3:** a small `.gg` sprite file for the C3 player in [`c3/`](c3/) (16×16 only, up to 64 frames). The pixels stay as drawn; the board applies the wiring order, gamma and the 0.4 brightness cap itself. Put it on the board with `python c3/tools/gg_tool.py put sprite.gg`; the same name replaces the old sprite. With the board on USB and Chrome or Edge on a computer, the **Board** card does this without a file: *Connect over USB*, then *Send to board*.
+- **ESP32-C3:** a small `.gg` sprite file for the C3 player in [`c3/`](c3/) (16×16 only, up to 16 frames: the panel is for simple loops). The pixels stay as drawn; the board applies the wiring order, gamma and the 0.4 brightness cap itself. Put it on the board with `python c3/tools/gg_tool.py put sprite.gg`; the same name replaces the old sprite. With the board on USB and Chrome or Edge on a computer, the **Board** card does this without a file: *Connect over USB*, then *Send to board*.
 
 ## Hardware and software (the tested build)
 
