@@ -211,7 +211,8 @@ class SmokeWifi(unittest.TestCase):
         self.pg.fill('#netSsid', 'Cafe'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('WIFI SET')).pop().endsWith(' -')"), True)
         self.pg.click('#netClearBtn'); self.pg.wait_for_timeout(300)
-        self.assertIn('forgot', el('netStatus')); self.assertEqual(self.pg.evaluate("window.__fakeWifi.state"), 'off')
+        self.assertIn('Forgot', el('netStatus')); self.assertEqual(self.pg.evaluate("window.__fakeWifi.state"), 'off')
+        self.assertEqual(el('netSsid', 'value'), ''); self.assertEqual(el('netClearBtn'), 'Forget saved network')
         # an older board: the form is off and says which firmware it needs
         self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.pg.evaluate('window.__fakeFw = 8'); self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
@@ -235,13 +236,19 @@ class SmokeWifi(unittest.TestCase):
         self.pg.fill('#netPass', 'hunter2hunter2'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate('window.__fakeWifiSet'), {'ssid': 'Home Net', 'pass': 'hunter2hunter2'})
         self.assertIn('Joined Home Net', el('netStatus'))
+        self.assertEqual(el('netSsid', 'value'), ''); self.assertEqual(el('netPick', 'options.length'), 1)   # joined: the form is blank again
         self.assertIn('address 192.168.50.6', el('boardLink'))        # the card keeps the address after the dialog message is replaced
         self.assertIn('5 GHz-only', self.pg.evaluate("document.getElementById('netScanRow').textContent"))
         # an open network: the password box says so, and an empty password goes as "-"
+        self.pg.click('#netScanBtn'); self.pg.wait_for_timeout(400)
         self.pg.select_option('#netPick', 'Cafe Open')
         self.assertEqual(el('netSsid', 'value'), 'Cafe Open'); self.assertIn('open', el('netPass', 'placeholder'))
         self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate('window.__fakeWifiSet'), {'ssid': 'Cafe Open', 'pass': ''})
+        # leaving USB and reopening the dialog shows a blank name, not the last one typed
+        self.pg.fill('#netSsid', 'Stale Name'); self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200); self.assertEqual(el('netSsid', 'value'), '')
+        self.pg.click('#netClose'); self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600); self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         # typing a name by hand still works (hidden networks), and an empty scan says so
         self.pg.fill('#netSsid', 'Hidden One'); self.pg.fill('#netPass', 'password123'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate('window.__fakeWifiSet.ssid'), 'Hidden One')
