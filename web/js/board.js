@@ -605,7 +605,7 @@ async function netClear() {
   try {
     await b.wifiClear();
     netResetForm(); boardInfo.wifi = ''; boardInfo.ip = '';
-    netSay(`Forgot ${was ? `"${was}"` : 'the saved network'}. The board will not join Wi-Fi until you save a network again here over USB.`, 'ok');
+    netSay(`Forgot ${was ? `"${was}"` : 'the saved network'}. The board will not join Wi-Fi until you save a network again here over USB. After a power-up it opens its own setup network, GlowGrid-Setup, for 5 minutes.`, 'ok');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
 }
