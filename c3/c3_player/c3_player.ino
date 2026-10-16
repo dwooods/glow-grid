@@ -5,8 +5,8 @@
 //   Panel data: GPIO6 to DIN.
 //
 // Put sprites on the board over USB with ../tools/gg_tool.py (close the Serial Monitor first).
-// Wi-Fi (firmware 9) is set up over USB (WIFI command below); the same operations are then served over HTTP, see "HTTP API".
-// Bluetooth comes later.
+// Wi-Fi (firmware 9) is set up over USB (WIFI command below), or without USB through the board's own setup page (firmware 13, see
+// "Setup mode"); the same operations are then served over HTTP, see "HTTP API". Bluetooth comes later.
 //
 // Arduino IDE setup (open c3/c3_player/c3_player.ino straight from the repo):
 //   Board: ESP32C3 Dev Module, USB CDC On Boot: Enabled,
@@ -35,6 +35,7 @@
 //                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
 //   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid.local ssid=<name>   (never the password)
 //   WIFI CLEAR                 -> OK wifi cleared
+//   WIFI SETUP                 -> OK setup mode ...: the board leaves its network and opens "GlowGrid-Setup" for 5 minutes (fw 13)
 //   WIFI SCAN                  -> NET <ssid hex> <rssi dBm> <1 if it needs a password, else 0> lines (strongest first, up to 20, one per name,
 //                                 hidden networks left out), then OK networks=<n> (fw 10). Takes 2 to 5 seconds; the animation stalls meanwhile.
 
@@ -43,8 +44,10 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 #include <Preferences.h>
 #include "gg_core.h"
+#include "setup_page.h"
 // The editor page for http://glowgrid.local/ comes from tools/build_site.py (git-ignored output). Without it the sketch still builds.
 #if !defined(GG_NO_SITE) && __has_include("site_data.h")
 #include "site_data.h"
@@ -55,8 +58,17 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 12          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 13          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
+#define SETUP_SSID "GlowGrid-Setup"            // the open network the board hosts in setup mode
+#define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
+#define JOIN_WAIT_BOOT_MS 90000UL              // after a power-up, a saved network gets this long before setup mode opens
+#define JOIN_WAIT_SAVE_MS 30000UL              // after new credentials are saved, this long
+// Whether setup mode may open by itself (no saved network, or the saved one will not join). The PC test stub overrides this so that
+// only the tests that ask for it see it; on the board it is always on. Asking for setup (POST /setup, WIFI SETUP) always works.
+#ifndef GG_SETUP_AUTO_START
+#define GG_SETUP_AUTO_START() true
+#endif
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -71,6 +83,7 @@ uint8_t lut[256];
 int frameNo = 0;
 uint32_t nextFrameAt = 0;
 bool panelOn = true;
+bool setupOn = false;        // setup mode is running: the board hosts GlowGrid-Setup and a slow blue pulse shows on LED 0
 bool dirty = true;           // a still needs drawing
 uint32_t rotateSec = 0;      // 0 = stay on one sprite; else move to the next one every rotateSec seconds
 uint32_t rotateAt = 0;       // millis() at which the next sprite is due
@@ -178,6 +191,13 @@ bool selectName(const String& name) {
   return false;
 }
 
+// The setup-mode signal: LED 0 pulses dim blue (about 2 s a cycle), drawn over whatever the panel shows.
+uint8_t setupPulse() {
+  uint32_t t = millis() % 2000UL;
+  uint32_t up = t < 1000 ? t : 2000 - t;
+  return (uint8_t)(3 + up * 40 / 1000);
+}
+
 // Applies the wiring order and the brightness/gamma table, then sends one frame to the panel.
 void render(int frame) {
   const uint8_t* px = data + GG_HEADER_SIZE + (size_t)frame * GG_FRAME_BYTES;
@@ -187,6 +207,7 @@ void render(int frame) {
       strip.setPixelColor(gg_led_index(x, y), lut[p[0]], lut[p[1]], lut[p[2]]);
     }
   }
+  if (setupOn) strip.setPixelColor(0, 0, 0, setupPulse());
   strip.show();
 }
 
@@ -256,6 +277,7 @@ String sfmt(const char* f, ...) {
 uint32_t freeBytes() { return (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes()); }
 
 String wifiState() {
+  if (setupOn) return String("setup");
   if (wifiSsid.length() == 0) return String("off");
   return String(WiFi.status() == WL_CONNECTED ? "connected" : "connecting");
 }
@@ -363,6 +385,15 @@ const char* putCommit(const String& name, size_t size) {
 WebServer server(80);
 Preferences prefs;
 bool serverUp = false, mdnsUp = false, wifiWasUp = false;
+// Setup mode state (see "Setup mode" below).
+WebServer setupServer(80);
+DNSServer dnsServer;
+uint32_t setupAt = 0;                          // when setup mode started
+bool setupAutoDone = false;                    // the automatic start has happened once since power-up
+bool setupRequested = false; uint32_t setupReqAt = 0;     // POST /setup or WIFI SETUP: starts a moment after the reply went out
+bool setupSavePending = false; uint32_t setupSaveAt = 0;  // credentials saved from the page: join a moment after the reply went out
+bool joinWatch = false, joinWatchForce = false; uint32_t joinWatchAt = 0, joinWatchMs = 0;   // a network is joining; if it does not, setup opens
+String setupScanText;                          // the last scan, served to the setup page without scanning again
 
 void wifiBegin() {
   WiFi.mode(WIFI_STA);
@@ -377,7 +408,7 @@ void wifiLoad() {
   wifiSsid = prefs.getString("ssid", "");
   wifiPass = prefs.getString("pass", "");
   prefs.end();
-  if (wifiSsid.length()) wifiBegin();
+  if (wifiSsid.length()) { wifiBegin(); joinWatch = true; joinWatchForce = false; joinWatchAt = millis(); joinWatchMs = JOIN_WAIT_BOOT_MS; }
 }
 
 void wifiStop() {
@@ -415,7 +446,36 @@ String wifiScanText() {
   return out;
 }
 
-// WIFI SET <ssid hex> <password hex, or - for an open network> | WIFI STATUS | WIFI CLEAR.
+// Checks a network name and password (both as hex; the password "-" or empty = an open network) and stores them in NVS and RAM.
+// Returns "" when stored, else the ERR text. It does not join: the caller decides when.
+String wifiStore(const char* h1, const char* h2) {
+  char ssid[40], pass[72];
+  int sl = gg_hex_decode(h1, ssid, sizeof ssid);
+  if (sl < 1 || sl > 32) return String("ERR usage: WIFI SET <ssid as hex, 1 to 32 bytes> <password as hex or ->");
+  int pl = 0;
+  pass[0] = 0;
+  if (h2 && h2[0] && strcmp(h2, "-") != 0) pl = gg_hex_decode(h2, pass, sizeof pass);
+  if (pl < 0 || pl > 63 || (pl > 0 && pl < 8)) return String("ERR password must be 8 to 63 characters (or - for an open network)");
+  prefs.begin("gg", false);
+  prefs.putString("ssid", ssid);
+  prefs.putString("pass", pass);
+  prefs.end();
+  wifiSsid = String(ssid);
+  wifiPass = String(pass);
+  return String("");
+}
+
+// Leave the current network (if any) and join the stored one; if it has not joined after watchMs, setup mode opens by itself.
+void wifiJoinNow(uint32_t watchMs) {
+  wifiStop();
+  wifiBegin();
+  joinWatch = true; joinWatchForce = true; joinWatchAt = millis(); joinWatchMs = watchMs;
+}
+
+void setupFinish();                            // defined with the setup code below
+String opSetup();
+
+// WIFI SET <ssid hex> <password hex, or - for an open network> | WIFI STATUS | WIFI CLEAR | WIFI SETUP.
 // Hex because a name or password can hold spaces and anything else; gg_tool.py does the encoding. The password is never printed.
 String opWifi(const char* rest) {
   char sub[8] = "", h1[66] = "", h2[130] = "";
@@ -438,31 +498,22 @@ String opWifi(const char* rest) {
     wifiStop();
     return String("OK wifi cleared");
   }
+  if (n >= 1 && s == "SETUP") return opSetup();
   if (n >= 2 && s == "SET") {
-    char ssid[40], pass[72];
-    int sl = gg_hex_decode(h1, ssid, sizeof ssid);
-    if (sl < 1 || sl > 32) return String("ERR usage: WIFI SET <ssid as hex, 1 to 32 bytes> <password as hex or ->");
-    int pl = 0;
-    pass[0] = 0;
-    if (n >= 3 && strcmp(h2, "-") != 0) pl = gg_hex_decode(h2, pass, sizeof pass);
-    if (pl < 0 || pl > 63 || (pl > 0 && pl < 8)) return String("ERR password must be 8 to 63 characters (or - for an open network)");
-    prefs.begin("gg", false);
-    prefs.putString("ssid", ssid);
-    prefs.putString("pass", pass);
-    prefs.end();
-    wifiStop();
-    wifiSsid = String(ssid);
-    wifiPass = String(pass);
-    wifiBegin();
+    String e = wifiStore(h1, n >= 3 ? h2 : "");
+    if (e.length()) return e;
+    if (setupOn) { setupFinish(); return String("OK wifi saved; setup mode closed, joining. Check with WIFI STATUS (2.4 GHz networks only)"); }
+    wifiJoinNow(JOIN_WAIT_SAVE_MS);
     return String("OK wifi saved; joining. Check with WIFI STATUS (2.4 GHz networks only)");
   }
-  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR");
+  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR | WIFI SETUP");
 }
 
 // ---- HTTP API ----
 //   GET  /ping /info /list            same text as PING, INFO, LIST
 //   GET  /crc?name=X   GET /get?name=X (the file's bytes)
 //   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N
+//   POST /setup                       leave this network and open setup mode (fw 13)
 //   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
 //                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
 // Replies are the same "OK ..." / "ERR ..." text as USB. Every reply carries CORS headers, and the pre-flight a browser sends before a
@@ -575,6 +626,9 @@ void httpSite() {
 #endif
 
 void httpBegin() {
+  static bool routesAdded = false;              // the server can be stopped for setup mode and begun again; the routes stay
+  if (routesAdded) { server.begin(); return; }
+  routesAdded = true;
   server.on("/", HTTP_GET, httpSite);
   server.on("/index.html", HTTP_GET, httpSite);
   server.on("/ping", HTTP_GET, []() { httpReply("PONG"); });
@@ -588,13 +642,14 @@ void httpBegin() {
   server.on("/on", HTTP_POST, []() { httpReply(opPower(true)); });
   server.on("/rotate", HTTP_POST, []() { httpReply(opRotate(server.arg("s").c_str())); });
   server.on("/put", HTTP_POST, httpPutDone, httpPutData);
+  server.on("/setup", HTTP_POST, []() { httpReply(opSetup()); });
   server.onNotFound(httpNotFound);
   server.begin();
 }
 
 // Called every pass of loop(): starts the server and mDNS when the Wi-Fi comes up (again), serves requests while it is up.
 void wifiTick() {
-  if (wifiSsid.length() == 0) return;
+  if (setupOn || wifiSsid.length() == 0) return;
   bool up = (WiFi.status() == WL_CONNECTED);
   if (up && !wifiWasUp) {
     WiFi.setSleep(false);                       // no modem sleep: steadier latency (the probe's setting)
@@ -606,6 +661,114 @@ void wifiTick() {
   if (!up && wifiWasUp && mdnsUp) { MDNS.end(); mdnsUp = false; }
   wifiWasUp = up;
   if (up && serverUp) server.handleClient();
+}
+
+
+// ---- Setup mode (firmware 13) ----
+// Puts the board on a home network without USB. The board hosts the open network "GlowGrid-Setup" (and answers every DNS name with its own
+// address, so a phone opens the page by itself as a "sign in" screen) and serves one small page at http://192.168.4.1/: pick a network
+// from a scan, type the password, Save. LED 0 pulses dim blue while it runs. It starts when
+//   * there is no saved network at power-up, or a saved network has not joined 90 s after power-up (once per power-up),
+//   * a network just saved did not join within 30 s,
+//   * it is asked for: POST /setup (the editor's "Change the board's Wi-Fi" button) or the USB command WIFI SETUP.
+// It ends after 5 minutes (the board goes back to the saved network, which is kept) or when a network is saved.
+// The API is not served on the setup network: it is open, so only this page and its scan and save are reachable.
+
+void setupPage() {
+  setupServer.sendHeader("Cache-Control", "no-store");
+  setupServer.send(200, "text/html", SETUP_PAGE);
+}
+
+void setupScanSend() {
+  if (setupServer.arg("fresh").length() || setupScanText.length() == 0) setupScanText = wifiScanText();
+  setupServer.sendHeader("Cache-Control", "no-store");
+  setupServer.send(200, "text/plain", setupScanText);
+}
+
+void setupSave() {
+  String e = wifiStore(setupServer.arg("s").c_str(), setupServer.arg("p").c_str());
+  if (e.length()) { setupServer.send(400, "text/plain", e + "\n"); return; }
+  setupServer.send(200, "text/plain", "OK saved\n");
+  setupSavePending = true;
+  setupSaveAt = millis();                       // the join starts a moment later, once this reply has gone out
+}
+
+void setupStart() {
+  if (setupOn) { setupAt = millis(); return; }
+  setupOn = true;
+  setupAt = millis();
+  setupSavePending = false;
+  joinWatch = false;
+  if (serverUp) { server.close(); serverUp = false; }
+  wifiStop();                                    // mDNS off, station off
+  WiFi.mode(WIFI_STA);
+  setupScanText = wifiScanText();                // scan first, while no phone is attached: the page then shows the list at once
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  WiFi.softAP(SETUP_SSID);
+  dnsServer.start(53, "*", WiFi.softAPIP());
+  static bool routesAdded = false;
+  if (!routesAdded) {
+    routesAdded = true;
+    setupServer.on("/", HTTP_GET, setupPage);
+    setupServer.on("/scan", HTTP_GET, setupScanSend);
+    setupServer.on("/save", HTTP_POST, setupSave);
+    setupServer.onNotFound(setupPage);           // every other address (the phone's "is there internet" checks) shows the page too
+  }
+  setupServer.begin();
+  Serial.println("setup mode: join the Wi-Fi network " SETUP_SSID " and open http://192.168.4.1/ (5 minutes)");
+}
+
+// Ends setup mode: the setup network and its server go away and the panel goes back to what it was showing.
+void setupEnd() {
+  if (!setupOn) return;
+  setupServer.close();
+  dnsServer.stop();
+  WiFi.softAPdisconnect(true);
+  setupOn = false;
+  setupSavePending = false;
+  if (!panelOn) { strip.clear(); strip.show(); }
+  else if (data) { dirty = true; nextFrameAt = millis(); }
+  else showEmpty();
+  if (wifiSsid.length()) wifiBegin(); else WiFi.mode(WIFI_OFF);
+  Serial.println("setup mode ended");
+}
+
+// Ends setup mode and joins the network that was just saved; if it does not join in 30 s, setup mode opens again.
+void setupFinish() {
+  setupEnd();
+  joinWatch = true; joinWatchForce = true; joinWatchAt = millis(); joinWatchMs = JOIN_WAIT_SAVE_MS;
+}
+
+String opSetup() {
+  if (setupOn) return String("OK setup mode is already on: join the Wi-Fi network " SETUP_SSID " and open http://192.168.4.1/");
+  setupRequested = true;
+  setupReqAt = millis();
+  return String("OK setup mode starts in a moment: join the Wi-Fi network " SETUP_SSID " and open http://192.168.4.1/ (5 minutes; this connection ends)");
+}
+
+// Called every pass of loop().
+void setupTick() {
+  uint32_t now = millis();
+  if (setupRequested && now - setupReqAt >= 800) { setupRequested = false; setupStart(); }
+  if (!setupOn) {
+    if (!joinWatch) return;
+    if (WiFi.status() == WL_CONNECTED || wifiSsid.length() == 0) { joinWatch = false; return; }
+    if (now - joinWatchAt < joinWatchMs) return;
+    joinWatch = false;
+    if (GG_SETUP_AUTO_START() && (joinWatchForce || !setupAutoDone)) { setupAutoDone = true; setupStart(); }
+    return;
+  }
+  dnsServer.processNextRequest();
+  setupServer.handleClient();
+  static uint32_t lastPulse = 0;
+  if (now - lastPulse >= 50) {
+    lastPulse = now;
+    strip.setPixelColor(0, 0, 0, setupPulse());
+    strip.show();
+  }
+  if (setupSavePending && now - setupSaveAt >= 1200) { setupFinish(); return; }
+  if (now - setupAt >= SETUP_TIMEOUT_MS) setupEnd();
 }
 
 // ---- serial commands ----
@@ -753,6 +916,7 @@ void setup() {
   bool wasOff = LittleFS.exists(OFF_MARK);
   if (nSprites > 0) selectIndex(0); else showEmpty();
   if (wasOff) { setPanel(false); Serial.println("panel off (as left)"); }
+  if (wifiSsid.length() == 0 && GG_SETUP_AUTO_START()) { setupAutoDone = true; setupStart(); }   // nothing saved: offer setup
 }
 
 void loop() {
@@ -762,6 +926,7 @@ void loop() {
   lastLoop = now;
   handleSerial();
   wifiTick();
+  setupTick();
   handleButtons();
   rotateTick();
   playTick();
