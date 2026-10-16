@@ -35,6 +35,8 @@
 //                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
 //   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid.local ssid=<name>   (never the password)
 //   WIFI CLEAR                 -> OK wifi cleared
+//   WIFI SCAN                  -> NET <ssid hex> <rssi dBm> <1 if it needs a password, else 0> lines (strongest first, up to 20, one per name,
+//                                 hidden networks left out), then OK networks=<n> (fw 10). Takes 2 to 5 seconds; the animation stalls meanwhile.
 
 #include <Adafruit_NeoPixel.h>
 #include <LittleFS.h>
@@ -48,7 +50,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 9           // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 10          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -379,6 +381,35 @@ void wifiStop() {
   wifiWasUp = false;
 }
 
+// WIFI SCAN: the networks the board can hear. Names come back as hex, like WIFI SET takes them.
+String wifiScanText() {
+  if (WiFi.getMode() == WIFI_OFF) WiFi.mode(WIFI_STA);
+  int found = WiFi.scanNetworks();
+  const int MAXN = 20;
+  String names[MAXN];
+  int rssi[MAXN], sec[MAXN], n = 0;
+  for (int i = 0; i < found; i++) {
+    String name = WiFi.SSID(i);
+    if (name.length() == 0 || name.length() > 32) continue;       // hidden (or not a legal name)
+    int r = WiFi.RSSI(i), s = WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? 1 : 0, at = -1;
+    for (int j = 0; j < n; j++) if (names[j] == name) { at = j; break; }
+    if (at >= 0) { if (r > rssi[at]) { rssi[at] = r; sec[at] = s; } continue; }   // several access points, one name: keep the strongest
+    if (n < MAXN) { names[n] = name; rssi[n] = r; sec[n] = s; n++; }
+  }
+  WiFi.scanDelete();
+  for (int a = 1; a < n; a++)                                      // insertion sort, strongest first
+    for (int b = a; b > 0 && rssi[b] > rssi[b - 1]; b--) { String t = names[b]; names[b] = names[b - 1]; names[b - 1] = t; int x = rssi[b]; rssi[b] = rssi[b - 1]; rssi[b - 1] = x; x = sec[b]; sec[b] = sec[b - 1]; sec[b - 1] = x; }
+  String out;
+  for (int i = 0; i < n; i++) {
+    out += "NET ";
+    const char* cs = names[i].c_str();
+    for (size_t k = 0; k < names[i].length(); k++) out += sfmt("%02x", (unsigned)(uint8_t)cs[k]);
+    out += sfmt(" %d %d\n", rssi[i], sec[i]);
+  }
+  out += sfmt("OK networks=%d", n);
+  return out;
+}
+
 // WIFI SET <ssid hex> <password hex, or - for an open network> | WIFI STATUS | WIFI CLEAR.
 // Hex because a name or password can hold spaces and anything else; gg_tool.py does the encoding. The password is never printed.
 String opWifi(const char* rest) {
@@ -391,6 +422,7 @@ String opWifi(const char* rest) {
     int rssi = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
     return sfmt("OK wifi=%s ip=%s rssi=%d host=" HOSTNAME ".local ssid=%s", wifiState().c_str(), ip.c_str(), rssi, wifiSsid.c_str());
   }
+  if (n >= 1 && s == "SCAN") return wifiScanText();
   if (n >= 1 && s == "CLEAR") {
     prefs.begin("gg", false);
     prefs.remove("ssid");
@@ -419,7 +451,7 @@ String opWifi(const char* rest) {
     wifiBegin();
     return String("OK wifi saved; joining. Check with WIFI STATUS (2.4 GHz networks only)");
   }
-  return String("ERR usage: WIFI STATUS | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR");
+  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR");
 }
 
 // ---- HTTP API ----
