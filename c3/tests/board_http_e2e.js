@@ -22,7 +22,7 @@ const err = (p) => p.then(() => 'no error', (e) => e.message);
   const board = new HttpBoard(host);
   out.hello = await board.hello();
   const small = ggBytes([frame(1), frame(2)], 16, 16, 7, 0.45, 2.6);
-  const big = ggBytes(Array.from({ length: 64 }, (_, i) => frame(100 + i)), 16, 16, 12, 0.3, 2.2);   // the largest the format allows; has zero bytes
+  const big = ggBytes(Array.from({ length: 16 }, (_, i) => frame(100 + i)), 16, 16, 12, 0.3, 2.2);   // the largest the format allows; has zero bytes
   out.bigHasZero = big.includes(0);
   const prog = [];
   await board.put('small', small, (d, t) => prog.push([d, t]));

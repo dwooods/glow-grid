@@ -13,13 +13,13 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
 | `tools/gg_tool.py` | `list`, `put`, `get`, `show`, `del`, `off`, `on`, `rotate`, `info` on the board over USB, or over Wi-Fi with `--host`; `wifi scan/set/status/clear` over USB (the firmware also answers `CRC <name>`: the checksum and size of a stored file, which the editor's Remove examples uses; and `GET <name>`: the file as `D <hex>` lines then `OK crc=… size=…`, fw 8, which `gg_tool.py get` and the editor's Load button use) |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 38 tests; see below |
+| `tests/` | 39 tests; see below |
 
 ## The `.gg` sprite file
 
 12-byte header (`GG`, version, flags, cols, rows, frames, fps×10, brightness %, gamma×10), then the frames as raw RGB, 768 bytes each, row by row from the top-left, exactly as drawn. The file carries **no wiring order and no gamma correction**: the board applies its own wiring setting (`GG_COLUMN_MAJOR` etc. in `c3_player/gg_core.h`, same meaning as `local_config.py`) and the brightness table, and caps brightness at 0.4 (`GG_MAX_BRIGHT_PCT`). So a sprite file works on any panel, and a buggy app cannot overload the LEDs.
 
-A 4-frame sprite is 3,084 bytes. The default partition leaves about 1.5 MB for sprites, so roughly 400 of them; `MAX_SPRITES` (64) is the list limit in RAM; a 65th new name is refused with a message (replacing one of the 64 is fine).
+A sprite holds 1 to 16 frames (`GG_MAX_FRAMES`; the panel is for simple loops), so a file is at most 12,300 bytes; a 4-frame sprite is 3,084 bytes. The default partition leaves about 1.5 MB for sprites, so roughly 400 of them; `MAX_SPRITES` (64) is the list limit in RAM; a 65th new name is refused with a message (replacing one of the 64 is fine).
 
 ## Install on the board
 
@@ -49,7 +49,7 @@ Add = `put` a new name. Replace = `put` the same name. The upload goes to a temp
 
 ## Wi-Fi (firmware 9; scan is firmware 10)
 
-Set the network once over USB, with the Serial Monitor closed:
+Set the network once over USB, with the Serial Monitor closed (a step-by-step version for a friend who is not a programmer is in [`SETUP-FOR-A-FRIEND.md`](SETUP-FOR-A-FRIEND.md)):
 
 ```
 python3 tools/gg_tool.py wifi scan                              # networks the board can hear, strongest first (firmware 10)
@@ -88,12 +88,12 @@ Set `GLOWGRID_REPO=/path/to/glow-grid` if this folder is not inside the repo (th
 
 - **Parity:** `gg_core.h`, compiled on the PC, places and corrects every pixel exactly as `grid_common.py` does, for all 16 wiring combinations and nine brightness/gamma settings, including the 0.4 cap.
 - **Board:** `c3_player.ino` itself, compiled against small stand-ins for the Arduino core (`tests/arduino_stub/`), driven by the real `gg_tool.py` through a pseudo-terminal: add, list, replace, delete, show, a wrong checksum, an invalid file, a bad name, a stalled upload, both buttons, `OFF`/`ON` over serial, and a restart that finds the stored sprite.
-- **Editor against firmware:** `tests/board_e2e.js` runs the editor's real `SerialTransport` and `GgBoard` (and `ggBytes`, `ggDecode`) through Node against the compiled firmware: Send, List, CRC, Load (`GET`) of a 2-frame and a 64-frame sprite, Delete. Catches the two sides drifting apart.
+- **Editor against firmware:** `tests/board_e2e.js` runs the editor's real `SerialTransport` and `GgBoard` (and `ggBytes`, `ggDecode`) through Node against the compiled firmware: Send, List, CRC, Load (`GET`) of a 2-frame and a 16-frame sprite, Delete. Catches the two sides drifting apart.
 - **Format:** round trip and rejection of bad files, in both the Python and the C check. The repo's own `tests/test_gg_export.py` adds that the editor writes byte-identical files.
 - **Playback and edges:** frames advance at the stored fps and wrap, a still renders once; replacing the sprite that is playing; Next while the panel is off; `CRC`; `GET` returning the stored file byte for byte; over-long and malformed serial lines; a 31-character name; the `MAX_SPRITES` limit; `ROTATE` cycling in list order, paused by `OFF`, restarted by Next, kept across a power cycle, switched off with 0.
 - **Converter and tool:** `png_to_gg.py` writes the same bytes as `gg_format.pack` (metadata, defaults, overrides, transparency, wrong sizes refused); `gg_tool.py` turns a dead or silent port into a plain message and picks the Espressif device among several ports.
-- **Wi-Fi:** `WIFI SCAN/SET/STATUS/CLEAR` with names holding spaces and symbols (hex on the wire), the password never printed, rejoining after a power cycle, the longest legal name and password; `WIFI SCAN` (duplicates merged to the strongest, hidden and over-long names left out, sorted, capped at 20, empty result, saved network undisturbed); the HTTP API against the compiled firmware through a real loopback server (stand-in `WebServer.h`): every route, a 64-frame upload with zero bytes intact, CORS and the private-network pre-flight, every error path leaving the flash clean; `gg_tool.py --host` doing the same jobs.
-- **Editor over Wi-Fi:** `tests/board_http_e2e.js` runs the editor's real `HttpBoard` through Node against the compiled firmware's loopback HTTP server: multipart Send of a 64-frame sprite with zero bytes, List, Info, Load with CRC check, Play, lights, rotate, Delete, and the firmware's own refusals. Catches the editor and the HTTP API drifting apart.
+- **Wi-Fi:** `WIFI SCAN/SET/STATUS/CLEAR` with names holding spaces and symbols (hex on the wire), the password never printed, rejoining after a power cycle, the longest legal name and password; `WIFI SCAN` (duplicates merged to the strongest, hidden and over-long names left out, sorted, capped at 20, empty result, saved network undisturbed); the HTTP API against the compiled firmware through a real loopback server (stand-in `WebServer.h`): every route, a 16-frame upload with zero bytes intact, CORS and the private-network pre-flight, every error path leaving the flash clean; `gg_tool.py --host` doing the same jobs.
+- **Editor over Wi-Fi:** `tests/board_http_e2e.js` runs the editor's real `HttpBoard` through Node against the compiled firmware's loopback HTTP server: multipart Send of a 16-frame sprite with zero bytes, List, Info, Load with CRC check, Play, lights, rotate, Delete, and the firmware's own refusals. Catches the editor and the HTTP API drifting apart.
 - **IDE build:** the sketch is compiled with the function prototypes the Arduino IDE generates, so a definition order the IDE rejects fails here too.
 
 Two deliberate breaks (wrong wiring default; checksum not checked) each made the suite fail. The first real IDE compile failed on an Arduino quirk the PC build could not see then (auto-generated prototypes above a struct); fixed by moving the struct into `gg_core.h`, and the IDE build test now covers it. The serial-line test found that an over-long line used to run its tail as a command; fixed.

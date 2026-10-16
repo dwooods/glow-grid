@@ -30,7 +30,7 @@ const same = (a, b) => a.length === b.length && Buffer.compare(Buffer.from(a), B
   const board = new GgBoard(t);
   await board.hello();
   const small = ggBytes([frame(1), frame(2)], 16, 16, 7, 0.45, 2.6);
-  const big = ggBytes(Array.from({ length: 64 }, (_, i) => frame(100 + i)), 16, 16, 12, 0.3, 2.2);   // the largest the format allows
+  const big = ggBytes(Array.from({ length: 16 }, (_, i) => frame(100 + i)), 16, 16, 12, 0.3, 2.2);   // the largest the format allows
   out.bigBytes = big.length;
   await board.put('small', small);
   await board.put('big', big);
