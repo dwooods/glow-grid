@@ -71,6 +71,10 @@ FAKE_BOARD = """() => {
           if (window.__fakeFw < 9) return say('ERR unknown command');
           if (a1 === 'STATUS') { if (w.state === 'connecting' && ++w.polls >= 2) { w.state = 'connected'; w.ip = '192.168.50.6'; }
             return say('OK wifi=' + w.state + ' ip=' + w.ip + ' rssi=-40 host=glowgrid.local ssid=' + w.ssid); }
+          if (a1 === 'SCAN') { if (window.__fakeFw < 10) return say('ERR usage: WIFI STATUS | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR');
+            const hx = (s) => Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, '0')).join('');
+            for (const n of (window.__fakeScan || [])) say('NET ' + hx(n.ssid) + ' ' + n.rssi + ' ' + (n.secure ? 1 : 0));
+            return say('OK networks=' + (window.__fakeScan || []).length); }
           if (a1 === 'CLEAR') { window.__fakeWifi = { state: 'off', ip: '-', ssid: '', polls: 0 }; return say('OK wifi cleared'); }
           if (a1 === 'SET' && a2) { const dec = (h) => h === '-' ? '' : new TextDecoder().decode(Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16)));
             window.__fakeWifiSet = { ssid: dec(a2), pass: dec(a3 || '-') }; window.__fakeWifi = { state: 'connecting', ip: '-', ssid: dec(a2), polls: 0 };
