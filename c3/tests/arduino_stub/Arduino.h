@@ -17,11 +17,16 @@
 #define HIGH 1
 #define LOW 0
 
+// $GG_TIME_SCALE (e.g. 100) makes millis() run that many times faster, so the tests can sit through the setup-mode timeouts (90 s, 5 min).
 inline uint32_t millis() {
   timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
-  return (uint32_t)(ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL);
+  static const char* sc = getenv("GG_TIME_SCALE");
+  static const double scale = sc ? atof(sc) : 1.0;
+  return (uint32_t)((double)(ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL) * scale);
 }
+// Setup mode opens by itself on the board; here only when a test asks ($GG_SETUP_AUTO set), so the other tests see the old behaviour.
+#define GG_SETUP_AUTO_START() (getenv("GG_SETUP_AUTO") != NULL)
 inline void delay(uint32_t ms) { usleep(ms * 1000); }
 inline void pinMode(int, int) {}
 
