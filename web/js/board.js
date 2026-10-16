@@ -153,6 +153,15 @@ class GgBoard {
     const hex = (s) => Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, '0')).join('');
     return this.cmd(`WIFI SET ${hex(ssid)} ${password ? hex(password) : '-'}`, ['OK']);
   }
+  async wifiScan() {                  // firmware 10 and later: NET <name hex> <rssi> <1 = needs a password> lines, then "OK networks=<n>"
+    const lines = [];
+    await this.cmd('WIFI SCAN', ['OK'], 15000, lines);
+    return lines.filter((l) => l.startsWith('NET ')).map((l) => {
+      const [, h, rssi, sec] = l.split(' ');
+      const bytes = new Uint8Array((h || '').match(/../g).map((x) => parseInt(x, 16)));
+      return { ssid: new TextDecoder().decode(bytes), rssi: Number(rssi), secure: sec === '1' };
+    });
+  }
   async wifiClear() { return this.cmd('WIFI CLEAR', ['OK']); }
   async close() { await this.t.close(); }
 }
@@ -245,6 +254,7 @@ let boardVia = '';                 // 'usb' or 'wifi' while connected
 let boardInfo = {};                // the last INFO, parsed (the Network dialog shows the board's Wi-Fi state from it)
 const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);       // USB (Web Serial)
 const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
+const BOARD_SCAN_FW = 10;          // the first firmware that can list nearby networks (WIFI SCAN)
 const BOARD_HOST_KEY = 'ggBoardHost';
 const BOARD_HOST_DEFAULT = 'glowgrid.local';
 function boardSavedHost() { try { return localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; } catch (e) { return BOARD_HOST_DEFAULT; } }
@@ -485,8 +495,13 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
   const usb = !!board && boardVia === 'usb';
   const fw9 = usb && Number(boardFw) >= BOARD_WIFI_FW;
   for (const id of ['netSsid', 'netPass', 'netSaveBtn', 'netClearBtn']) $(id).disabled = !fw9;
+  const canScan = usb && Number(boardFw) >= BOARD_SCAN_FW;
+  $('netScanBtn').disabled = !canScan;
+  $('netPick').disabled = !canScan || $('netPick').options.length < 2;
+  $('netScanRow').hidden = !fw9;
+  $('netScanHint').textContent = fw9 && !canScan ? `Scanning needs firmware ${BOARD_SCAN_FW} (this board has ${boardFw}). Type the name below, or re-flash c3_player.ino.` : '';
   $('netConnectBtn').disabled = !!board && boardVia === 'wifi';
-  $('netSetupHint').textContent = !board ? 'Connect the board over USB first (the Board card, Connect board). Then its Wi-Fi can be set here.'
+  $('netSetupHint').textContent = !board ? 'Connect the board over USB first (the Board card, Connect over USB). Then its Wi-Fi can be set here.'
     : boardVia === 'wifi' ? 'The board is connected over Wi-Fi. To change its network, disconnect and connect it over USB.'
     : !fw9 ? `Wi-Fi needs firmware ${BOARD_WIFI_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`
     : '2.4 GHz networks only. The name and password are stored on the board, not in this page.';
@@ -530,11 +545,38 @@ async function netSave() {
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
 }
+async function netScan() {
+  if (!board || boardVia !== 'usb') return;
+  const b = board, pick = $('netPick');
+  $('netScanBtn').disabled = true;
+  netSay('Scanning… the panel pauses for a few seconds.', '');
+  try {
+    const nets = await b.wifiScan();
+    pick.replaceChildren(new Option(nets.length ? 'Choose a network…' : 'No networks found', ''));
+    for (const n of nets) {
+      const o = new Option(`${n.ssid}  (${n.rssi} dBm, ${n.secure ? 'password' : 'open'})`, n.ssid);
+      o.dataset.secure = n.secure ? '1' : '0';
+      pick.append(o);
+    }
+    netSay(nets.length ? `${nets.length} network${nets.length === 1 ? '' : 's'} found, strongest first. Only 2.4 GHz networks show up. A hidden network is not listed: type its name below.` : 'The board heard no networks. Type the name below, or move the board closer to the router.', nets.length ? 'ok' : 'err');
+  } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
+  finally { netSync(); }
+}
+function netPicked() {
+  const o = $('netPick').selectedOptions[0];
+  if (!o || !o.value) return;
+  $('netSsid').value = o.value;
+  $('netPass').value = '';
+  $('netPass').placeholder = o.dataset.secure === '0' ? 'empty: this network is open' : '';
+  $('netPass').focus();
+}
 async function netClear() {
   if (!board || boardVia !== 'usb') return;
   try { await board.wifiClear(); netSay('The board forgot its network.', 'ok'); } catch (err) { netSay(`Board said: ${err.message}`, 'err'); }
 }
 const NET_POLL_MS = window.__ggNetPollMs || 1500;       // tests shorten the wait between Wi-Fi status checks
+$('netScanBtn').addEventListener('click', netScan);
+$('netPick').addEventListener('change', netPicked);
 $('netBtn').addEventListener('click', netOpen);
 $('netClose').addEventListener('click', () => netDlg.close());
 netDlg.addEventListener('click', (e) => { if (e.target === netDlg) netDlg.close(); });
