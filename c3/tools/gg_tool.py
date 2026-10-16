@@ -14,6 +14,7 @@
 
 Wi-Fi (firmware 9). Set it up once over USB, then the same commands work over the network with --host:
     python3 gg_tool.py wifi set "My Network" "my password"   # the board joins in a few seconds (2.4 GHz only); "" = open network
+    python3 gg_tool.py wifi scan                              # the networks the board can hear (firmware 10)
     python3 gg_tool.py wifi status                            # connected? which address?
     python3 gg_tool.py wifi clear
     python3 gg_tool.py --host glowgrid.local list            # or the board's address, e.g. --host 192.168.1.50
@@ -178,6 +179,18 @@ class Board:
     def wifi_status(self):
         return self.simple("WIFI STATUS")
 
+    def wifi_scan(self):
+        """Networks the board can hear, strongest first, as [(name, rssi, needs_password)]. USB only; firmware 10 or later."""
+        self.send("WIFI SCAN")
+        nets = []
+        while True:
+            line = self.expect(["NET", "OK"], timeout=15.0)
+            if line.startswith("NET"):
+                _, h, rssi, sec = line.split()
+                nets.append((bytes.fromhex(h).decode("utf-8", "replace"), int(rssi), sec == "1"))
+            else:
+                return nets
+
     def wifi_clear(self):
         return self.simple("WIFI CLEAR")
 
@@ -287,6 +300,7 @@ def main():
     wset.add_argument("ssid")
     wset.add_argument("password", nargs="?", default="")
     ws.add_parser("status")
+    ws.add_parser("scan")
     ws.add_parser("clear")
     for c in ("show", "del", "get"):
         s = sub.add_parser(c)
@@ -303,6 +317,9 @@ def main():
         if a.cmd == "wifi":
             if a.wcmd == "set":
                 print(board.wifi_set(a.ssid, a.password))
+            elif a.wcmd == "scan":
+                for name, rssi, secure in board.wifi_scan():
+                    print(f"  {name:<34} {rssi:>4} dBm  {'password' if secure else 'open'}")
             else:
                 print(board.wifi_status() if a.wcmd == "status" else board.wifi_clear())
         elif a.cmd == "list":
