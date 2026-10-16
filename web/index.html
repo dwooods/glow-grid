@@ -49,7 +49,8 @@
           <label class="field-inline">FPS <input id="fpsInput" type="number" min="1" max="30" value="6"></label>
         </div>
         <div class="frame-strip" id="frameStrip"></div>
-        <p class="strip-meta"><span class="frame-readout" id="frameReadout">Frame 1 / 1</span><span id="stripHint" hidden>Blank. Draw on the grid, or use File ▸ Import image.</span></p>
+        <p class="strip-meta"><span class="frame-readout" id="frameReadout">Frame 1 / 1</span></p>
+        <p class="hint strip-hint" id="stripHint" hidden>Blank. Draw on the grid, or use File ▸ Import image.</p>
         <div class="btn-row">
           <button id="addFrameBtn" class="btn btn-quiet" type="button" aria-label="Duplicate this frame">+ Duplicate</button>
           <button id="addBlankFrameBtn" class="btn btn-quiet" type="button">+ Blank</button>
@@ -249,6 +250,7 @@
         <div class="btn-row"><button id="netScanBtn" class="btn" type="button">Scan for networks</button></div>
         <label>Networks found <select id="netPick" aria-label="Networks the board found"><option value="">Press Scan first</option></select></label>
         <p class="hint" id="netScanHint"></p>
+        <p class="hint">Not in the list? The board only hears 2.4 GHz Wi-Fi, so a 5 GHz-only network never appears. It may also be hidden or too far away. Move the board closer and scan again, or type the name below.</p>
       </div>
       <label>Network name <input id="netSsid" type="text" spellcheck="false" autocapitalize="off" autocomplete="off"></label>
       <label>Password <input id="netPass" type="password" autocomplete="new-password"></label>
