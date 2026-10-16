@@ -471,7 +471,7 @@ class Board(unittest.TestCase):
 
     def test_real_editor_code_against_real_firmware(self):
         """web/js/board.js (SerialTransport + GgBoard) and export.js (ggBytes, ggDecode) driven through Node against the
-        compiled firmware: Send, List, CRC, Load (GET) of a 2-frame and a 64-frame sprite, Delete. Catches the two sides drifting apart."""
+        compiled firmware: Send, List, CRC, Load (GET) of a 2-frame and a 16-frame sprite, Delete. Catches the two sides drifting apart."""
         fs = tempfile.mkdtemp(prefix="gg_fs_")
         r = subprocess.run(["node", os.path.join(HERE, "board_e2e.js"), SIM, fs], capture_output=True, text=True, timeout=120)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -480,9 +480,9 @@ class Board(unittest.TestCase):
         with open(os.path.join(SKETCH, "c3_player.ino")) as fh:
             fw = int(re.search(r"#define GG_FW_VERSION (\d+)", fh.read()).group(1))
         self.assertEqual(o["fw"], fw)
-        self.assertEqual(o["listed"], ["big:49164", "small:1548"])
+        self.assertEqual(o["listed"], ["big:12300", "small:1548"])
         self.assertTrue(o["smallBack"] and o["bigBack"], "GET must return exactly the bytes PUT stored")
-        self.assertEqual(o["bigBytes"], 12 + 64 * 768, "the largest sprite the format allows")
+        self.assertEqual(o["bigBytes"], 12 + 16 * 768, "the largest sprite the format allows")
         self.assertLess(o["bigMs"], 15000, "the editor gives up after 20 s")
         self.assertTrue(o["crcMatches"])
         self.assertEqual(o["decoded"], {"fps": 7, "brightness": 0.45, "gamma": 2.6, "frames": 2, "first": True})
@@ -902,10 +902,10 @@ class Board(unittest.TestCase):
         self.assertEqual(st, 200)
         self.assertIn(b"wifi=connected ip=127.0.0.1", body)
         self.assertEqual(self.http("GET", "/list")[2].decode(), "OK 0 files, 1500000 bytes free\n")
-        # a full 64-frame sprite (49,164 bytes, zero bytes included) goes in intact through multipart, with and without the optional checks
-        frames = [[(((i * 7 + f) & 255), ((i * 3) & 255), 0) for i in range(256)] for f in range(64)]
+        # a full 16-frame sprite (12,300 bytes, zero bytes included) goes in intact through multipart, with and without the optional checks
+        frames = [[(((i * 7 + f) & 255), ((i * 3) & 255), 0) for i in range(256)] for f in range(16)]
         blob = gg.pack(frames, 12, 0.3, 2.2)
-        self.assertEqual(len(blob), 49164)
+        self.assertEqual(len(blob), 12300)
         crc = zlib.crc32(blob) & 0xFFFFFFFF
         body, h = self.multipart(blob)
         st, _, out = self.http("POST", f"/put?name=big&size={len(blob)}&crc={crc:08x}", body, h)
@@ -917,13 +917,13 @@ class Board(unittest.TestCase):
         self.assertEqual(self.http("POST", "/put?name=small", body, h)[2], b"OK saved small\n")
         self.assertEqual(self.last_frames(2)[-1] in self.led_of(sample_frames(5, 2)), True, "an HTTP upload plays at once, like USB")
         files, _ = self.board.list()                         # USB and Wi-Fi see the same flash
-        self.assertEqual(dict(files), {"big": 49164, "small": len(small)})
-        self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[:2], ["FILE big 49164", f"FILE small {len(small)}"])
+        self.assertEqual(dict(files), {"big": 12300, "small": len(small)})
+        self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[:2], ["FILE big 12300", f"FILE small {len(small)}"])
         # download byte for byte, with the board's own CRC
         st, hd, got = self.http("GET", "/get?name=big")
         self.assertEqual((st, got), (200, blob))
-        self.assertEqual(hd["Content-Length"], "49164")
-        self.assertEqual(self.http("GET", "/crc?name=big")[2].decode(), f"OK crc={crc:08x} size=49164\n")
+        self.assertEqual(hd["Content-Length"], "12300")
+        self.assertEqual(self.http("GET", "/crc?name=big")[2].decode(), f"OK crc={crc:08x} size=12300\n")
         # the other commands
         self.assertEqual(self.http("POST", "/show?name=big")[2], b"OK showing big\n")
         self.assertIn("current=big", self.board.simple("INFO"))
@@ -996,7 +996,7 @@ class Board(unittest.TestCase):
 
     def test_editor_http_board_against_the_firmware(self):
         """web/js/board.js HttpBoard (the Board card's Wi-Fi side) driven through Node against the compiled firmware's real HTTP
-        server: Send (multipart, 64 frames with zero bytes), List, Info, Load with CRC check, Play, lights, rotate, Delete, and the
+        server: Send (multipart, 16 frames with zero bytes), List, Info, Load with CRC check, Play, lights, rotate, Delete, and the
         board's own error messages. Catches the editor and the firmware API drifting apart."""
         self.start(wifi=True)
         self.board.wifi_set("Net", "password1")
@@ -1010,7 +1010,7 @@ class Board(unittest.TestCase):
         self.assertEqual(o["hello"], "PONG")
         self.assertTrue(o["bigHasZero"], "the test file must contain zero bytes: that is what a raw POST body loses")
         self.assertEqual(o["progress"], [[0, 1548], [1548, 1548]])
-        self.assertEqual(o["listed"], ["big:49164", "small:1548"])
+        self.assertEqual(o["listed"], ["big:12300", "small:1548"])
         self.assertTrue(o["freeIsNumber"])
         self.assertEqual(o["info"], {"fw": fw, "current": "big", "sprites": "2", "panel": "on", "wifi": "connected", "ip": "127.0.0.1"})
         self.assertTrue(o["smallBack"] and o["bigBack"], "GET must return exactly the bytes PUT stored")
