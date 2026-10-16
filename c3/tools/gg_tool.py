@@ -12,8 +12,16 @@
     python3 gg_tool.py info
     python3 gg_tool.py --port COM3 list                   # name the port if it is not found automatically
 
+Wi-Fi (firmware 9). Set it up once over USB, then the same commands work over the network with --host:
+    python3 gg_tool.py wifi set "My Network" "my password"   # the board joins in a few seconds (2.4 GHz only); "" = open network
+    python3 gg_tool.py wifi status                            # connected? which address?
+    python3 gg_tool.py wifi clear
+    python3 gg_tool.py --host glowgrid.local list            # or the board's address, e.g. --host 192.168.1.50
+    python3 gg_tool.py --host glowgrid.local put lantern.gg  # every command except wifi works this way
+The network side has no password for now: anyone on your home network can change the sprites.
+
 Close the Arduino Serial Monitor first: only one program can use the port.
-Needs pyserial:  pip install pyserial
+Needs pyserial for USB:  pip install pyserial   (not needed with --host)
 """
 import argparse
 import os
@@ -21,8 +29,16 @@ import sys
 import time
 import zlib
 
-import serial
-import serial.tools.list_ports
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+
+try:
+    import serial
+    import serial.tools.list_ports
+except ImportError:                      # fine for --host; USB use then says so
+    serial = None
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gg_format as gg  # noqa: E402
@@ -32,6 +48,8 @@ BLOCK = 1024
 
 class Board:
     def __init__(self, port=None, baud=115200, timeout=5.0, ser=None):
+        if ser is None and serial is None:
+            raise SystemExit("USB needs pyserial:  pip install pyserial   (or use --host for Wi-Fi)")
         if ser is not None:             # a ready-made port object (the tests pass a fake board)
             self.ser = ser
         else:
@@ -152,8 +170,94 @@ class Board:
         self.send(command)
         return self.expect(["OK"])
 
+    def wifi_set(self, ssid, password=""):
+        """Store the Wi-Fi name and password on the board (USB only). Sent as hex so spaces and symbols survive."""
+        pw = password.encode().hex() if password else "-"
+        return self.simple(f"WIFI SET {ssid.encode().hex()} {pw}")
+
+    def wifi_status(self):
+        return self.simple("WIFI STATUS")
+
+    def wifi_clear(self):
+        return self.simple("WIFI CLEAR")
+
+
+class HttpBoard:
+    """The same operations as Board, over Wi-Fi (firmware 9). host is a name or address, optionally with :port."""
+
+    def __init__(self, host, timeout=10.0):
+        self.base = "http://" + host
+        self.timeout = timeout
+        self.simple("PING")
+
+    def close(self):
+        pass
+
+    def _call(self, method, path, body=None, headers=None, raw=False):
+        req = urllib.request.Request(self.base + path, data=body, method=method, headers=headers or {})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                data = r.read()
+        except urllib.error.HTTPError as e:                  # the board's own ERR text comes with the 4xx
+            raise RuntimeError(e.read().decode(errors="replace").strip() or f"HTTP {e.code}")
+        except (urllib.error.URLError, OSError) as e:
+            raise TimeoutError(f"cannot reach the board at {self.base} ({getattr(e, 'reason', e)}). Is it on the same Wi-Fi? "
+                               "Check with:  gg_tool.py wifi status  (over USB)")
+        return data if raw else data.decode(errors="replace").strip()
+
+    def simple(self, command):
+        verb, _, arg = command.partition(" ")
+        verb = verb.upper()
+        q = urllib.parse.quote(arg)
+        if verb == "PING":
+            return self._call("GET", "/ping")
+        if verb == "INFO":
+            return self._call("GET", "/info")
+        if verb == "CRC":
+            return self._call("GET", "/crc?name=" + q)
+        if verb in ("SHOW", "DEL"):
+            return self._call("POST", f"/{verb.lower()}?name={q}")
+        if verb in ("OFF", "ON"):
+            return self._call("POST", "/" + verb.lower())
+        if verb == "ROTATE":
+            return self._call("POST", "/rotate?s=" + q)
+        raise ValueError("not available over Wi-Fi: " + command)
+
+    def list(self):
+        files, summary = [], ""
+        for line in self._call("GET", "/list").splitlines():
+            if line.startswith("FILE"):
+                _, name, size = line.split()
+                files.append((name, int(size)))
+            elif line.startswith("OK"):
+                summary = line
+        return files, summary
+
+    def put(self, path):
+        with open(path, "rb") as fh:
+            blob = fh.read()
+        gg.unpack(blob)  # refuse a bad file before sending anything
+        name = os.path.splitext(os.path.basename(path))[0]
+        crc = zlib.crc32(blob) & 0xFFFFFFFF
+        boundary = "----gg" + uuid.uuid4().hex
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}.gg\"\r\n"
+                "Content-Type: application/octet-stream\r\n\r\n").encode() + blob + f"\r\n--{boundary}--\r\n".encode()
+        return self._call("POST", f"/put?name={urllib.parse.quote(name)}&size={len(blob)}&crc={crc:08x}", body,
+                          {"Content-Type": "multipart/form-data; boundary=" + boundary})
+
+    def get(self, name):
+        """The stored file as bytes, checked against the board's own CRC."""
+        blob = self._call("GET", "/get?name=" + urllib.parse.quote(name), raw=True)
+        want = self.simple(f"CRC {name}")
+        got = f"OK crc={zlib.crc32(blob) & 0xFFFFFFFF:08x} size={len(blob)}"
+        if want != got:
+            raise RuntimeError(f"the file came through damaged (board said {want}, got {got})")
+        return blob
+
 
 def find_port():
+    if serial is None:
+        raise SystemExit("USB needs pyserial:  pip install pyserial   (or use --host for Wi-Fi)")
     ports = list(serial.tools.list_ports.comports())
     esp = [p.device for p in ports if p.vid == 0x303A]    # Espressif's USB vendor id
     if len(esp) == 1:
@@ -167,6 +271,7 @@ def find_port():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port")
+    ap.add_argument("--host", help="use Wi-Fi instead of USB: glowgrid.local or the board's address")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
     sub.add_parser("info")
@@ -176,14 +281,31 @@ def main():
     r.add_argument("seconds", type=int)
     p = sub.add_parser("put")
     p.add_argument("files", nargs="+")
+    w = sub.add_parser("wifi")
+    ws = w.add_subparsers(dest="wcmd", required=True)
+    wset = ws.add_parser("set")
+    wset.add_argument("ssid")
+    wset.add_argument("password", nargs="?", default="")
+    ws.add_parser("status")
+    ws.add_parser("clear")
     for c in ("show", "del", "get"):
         s = sub.add_parser(c)
         s.add_argument("name")
     a = ap.parse_args()
 
-    board = Board(a.port or find_port())
+    if a.cmd == "wifi" and a.host:
+        raise SystemExit("error: wifi settings go over USB (leave out --host)")
     try:
-        if a.cmd == "list":
+        board = HttpBoard(a.host) if a.host else Board(a.port or find_port())
+    except (RuntimeError, TimeoutError) as e:
+        raise SystemExit(f"error: {e}")
+    try:
+        if a.cmd == "wifi":
+            if a.wcmd == "set":
+                print(board.wifi_set(a.ssid, a.password))
+            else:
+                print(board.wifi_status() if a.wcmd == "status" else board.wifi_clear())
+        elif a.cmd == "list":
             files, summary = board.list()
             for name, size in files:
                 print(f"  {name:<32} {size:>7} bytes")

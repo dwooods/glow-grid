@@ -5,7 +5,8 @@
 //   Panel data: GPIO6 to DIN.
 //
 // Put sprites on the board over USB with ../tools/gg_tool.py (close the Serial Monitor first).
-// Wi-Fi comes next and Bluetooth later; both carry the same files and commands.
+// Wi-Fi (firmware 9) is set up over USB (WIFI command below); the same operations are then served over HTTP, see "HTTP API".
+// Bluetooth comes later.
 //
 // Arduino IDE setup (open c3/c3_player/c3_player.ino straight from the repo):
 //   Board: ESP32C3 Dev Module, USB CDC On Boot: Enabled,
@@ -28,17 +29,26 @@
 //   GET <name>                 -> D <96 hex digits> lines (48 bytes each) with the stored file, then
 //                                 OK crc=<8 hex> size=<bytes>; ERR no such sprite. Lets the editor load a sprite
 //                                 back into the grid (fw 8). The panel pauses on its current frame while it runs.
-//   INFO                       -> OK current=<name> ... rotate=<seconds>
+//   INFO                       -> OK fw=<n> current=<name> ... rotate=<seconds> wifi=<off|connecting|connected> ip=<address or -> gap_ms=<n>
+//                                 (gap_ms: the longest the main loop went without running since the last INFO; fw 9)
+//   WIFI SET <ssid hex> <password hex, or -> for none>  -> OK wifi saved; joining. Stored in the chip's NVS, joined at every start (fw 9).
+//                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
+//   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid.local ssid=<name>   (never the password)
+//   WIFI CLEAR                 -> OK wifi cleared
 
 #include <Adafruit_NeoPixel.h>
 #include <LittleFS.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Preferences.h>
 #include "gg_core.h"
 
 #define DATA_PIN 6
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 8           // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 9           // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 
 Adafruit_NeoPixel strip(GG_PIXELS, DATA_PIN, NEO_GRB + NEO_KHZ800);
@@ -62,6 +72,8 @@ uint32_t rotateAt = 0;       // millis() at which the next sprite is due
 String pathOf(const String& name) { return "/" + name + ".gg"; }
 const char* OFF_MARK = "/panel.off";   // exists while the panel is off, so OFF survives a power cycle (David, 2026-10-15)
 const char* ROTATE_PATH = "/rotate.txt"; // the rotate interval in seconds, absent or 0 = off
+String wifiSsid, wifiPass;   // from NVS (not the sprite flash); empty ssid = Wi-Fi not set up
+uint32_t gapMaxMs = 0;       // longest main-loop gap since the last INFO
 
 void rotateReset() { rotateAt = millis() + rotateSec * 1000UL; }
 void saveRotate() {
@@ -223,6 +235,317 @@ void handleButtons() {
   if (pressed(btnOff)) setPanel(!panelOn);
 }
 
+// ---- commands shared by USB and Wi-Fi ----
+// Each returns the reply line(s) as text ("OK ..." or "ERR ..."); USB prints it, HTTP sends it. Nothing here touches Serial.
+String sfmt(const char* f, ...) {
+  char b[320];
+  va_list ap;
+  va_start(ap, f);
+  vsnprintf(b, sizeof b, f, ap);
+  va_end(ap);
+  return String(b);
+}
+
+uint32_t freeBytes() { return (uint32_t)(LittleFS.totalBytes() - LittleFS.usedBytes()); }
+
+String wifiState() {
+  if (wifiSsid.length() == 0) return String("off");
+  return String(WiFi.status() == WL_CONNECTED ? "connected" : "connecting");
+}
+
+String listText() {
+  String out;
+  for (int i = 0; i < nSprites; i++) {
+    File f = LittleFS.open(pathOf(names[i]), "r");
+    out += sfmt("FILE %s %u\n", names[i].c_str(), (unsigned)(f ? f.size() : 0));
+    if (f) f.close();
+  }
+  out += sfmt("OK %d files, %u bytes free", nSprites, (unsigned)freeBytes());
+  return out;
+}
+
+String infoText() {
+  uint32_t gap = gapMaxMs;
+  gapMaxMs = 0;                      // gap_ms = the longest the main loop went without running since the last INFO
+  String ip = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("-");
+  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu wifi=%s ip=%s gap_ms=%lu",
+              GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
+              data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
+              (unsigned)freeBytes(), (unsigned long)rotateSec, wifiState().c_str(), ip.c_str(), (unsigned long)gap);
+}
+
+String opShow(const String& name) {
+  if (selectName(name)) return "OK showing " + name;
+  return String("ERR no such sprite");
+}
+
+String opDel(const String& name) {
+  if (!gg_name_ok(name.c_str()) || !LittleFS.exists(pathOf(name))) return String("ERR no such sprite");
+  bool wasCurrent = (cur >= 0 && names[cur] == name);
+  LittleFS.remove(pathOf(name));
+  if (wasCurrent) { freeSprite(); cur = -1; }
+  scanSprites();
+  if (wasCurrent) { if (nSprites > 0) selectIndex(0); else showEmpty(); }
+  return "OK deleted " + name;
+}
+
+String opPower(bool on) {
+  setPanel(on);
+  if (!on) return String("OK panel off");
+  return String(data ? "OK panel on" : "OK panel on (nothing stored)");
+}
+
+String opRotate(const char* arg) {
+  char* end = NULL;
+  long v = (arg && *arg) ? strtol(arg, &end, 10) : -1;
+  if (!arg || !*arg || *end != 0 || v < 0 || v > (long)ROTATE_MAX) return sfmt("ERR usage: ROTATE <seconds 0..%lu> (0 = off)", ROTATE_MAX);
+  rotateSec = (uint32_t)v;
+  saveRotate();
+  rotateReset();
+  return sfmt("OK rotate %lu", (unsigned long)rotateSec);
+}
+
+String opCrc(const String& name) {
+  File f = gg_name_ok(name.c_str()) ? LittleFS.open(pathOf(name), "r") : File();
+  if (!f) return String("ERR no such sprite");
+  uint8_t buf[256];
+  uint32_t crc = 0;
+  size_t total = 0, r;
+  while ((r = f.read(buf, sizeof(buf))) > 0) { crc = gg_crc32(crc, buf, r); total += r; }
+  f.close();
+  return sfmt("OK crc=%08x size=%u", (unsigned)crc, (unsigned)total);
+}
+
+// The checks before a new file is accepted (USB and Wi-Fi alike). NULL = fine, else the error text.
+const char* putPrecheck(const String& name, size_t size) {
+  static char msg[64];
+  if (!gg_name_ok(name.c_str())) return "bad name (A-Z a-z 0-9 _ - up to 31)";
+  if (size < GG_HEADER_SIZE + GG_FRAME_BYTES || size > GG_MAX_FILE) return "bad size";
+  size_t oldSize = 0;
+  if (LittleFS.exists(pathOf(name))) { File o = LittleFS.open(pathOf(name), "r"); oldSize = o.size(); o.close(); }
+  if ((size_t)freeBytes() + oldSize < size + 8192) return "not enough space";
+  if (oldSize == 0 && nSprites >= MAX_SPRITES) { snprintf(msg, sizeof msg, "board holds %d sprites; delete one first", MAX_SPRITES); return msg; }
+  return NULL;
+}
+
+// The last step of every upload: the bytes are in TMP_PATH and their checksum matched. Checks the file as a sprite, moves it
+// into place, rescans and plays it. NULL = saved, else the error text. On an error TMP_PATH is gone.
+const char* putCommit(const String& name, size_t size) {
+  static char msg[64];
+  File chk = LittleFS.open(TMP_PATH, "r");
+  uint8_t h[GG_HEADER_SIZE] = {0};
+  size_t hr = chk ? chk.read(h, GG_HEADER_SIZE) : 0;
+  size_t onDisk = chk ? chk.size() : 0;
+  if (chk) chk.close();
+  const char* err = (hr == GG_HEADER_SIZE && onDisk == size) ? gg_parse_header(h, size, NULL) : "readback failed";
+  if (err) { LittleFS.remove(TMP_PATH); snprintf(msg, sizeof msg, "invalid sprite: %s", err); return msg; }
+  String dst = pathOf(name);
+  if (!LittleFS.rename(TMP_PATH, dst)) {          // some versions refuse to replace: remove, then rename
+    LittleFS.remove(dst);
+    if (!LittleFS.rename(TMP_PATH, dst)) { LittleFS.remove(TMP_PATH); return "rename failed"; }
+  }
+  scanSprites();
+  selectName(name);
+  return NULL;
+}
+
+// ---- Wi-Fi (firmware 9): credentials in NVS, set over USB; the board then serves the HTTP API below ----
+// No password on the API for now (David, 2026-10-15): anyone on the home network can list, send and delete sprites. Add a token before
+// this goes beyond a home network.
+#define HOSTNAME "glowgrid"
+WebServer server(80);
+Preferences prefs;
+bool serverUp = false, mdnsUp = false, wifiWasUp = false;
+
+void wifiBegin() {
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(HOSTNAME);
+  WiFi.setAutoReconnect(true);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);          // the usual fix for the weak-Wi-Fi SuperMini batches (the probe ran fine at this setting)
+  WiFi.begin(wifiSsid.c_str(), wifiPass.length() ? wifiPass.c_str() : NULL);
+}
+
+void wifiLoad() {
+  prefs.begin("gg", true);
+  wifiSsid = prefs.getString("ssid", "");
+  wifiPass = prefs.getString("pass", "");
+  prefs.end();
+  if (wifiSsid.length()) wifiBegin();
+}
+
+void wifiStop() {
+  if (mdnsUp) { MDNS.end(); mdnsUp = false; }
+  WiFi.disconnect(true);
+  wifiWasUp = false;
+}
+
+// WIFI SET <ssid hex> <password hex, or - for an open network> | WIFI STATUS | WIFI CLEAR.
+// Hex because a name or password can hold spaces and anything else; gg_tool.py does the encoding. The password is never printed.
+String opWifi(const char* rest) {
+  char sub[8] = "", h1[66] = "", h2[130] = "";
+  int n = sscanf(rest, "%7s %65s %129s", sub, h1, h2);
+  String s = String(sub);
+  s.toUpperCase();
+  if (n >= 1 && s == "STATUS") {
+    String ip = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("-");
+    int rssi = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
+    return sfmt("OK wifi=%s ip=%s rssi=%d host=" HOSTNAME ".local ssid=%s", wifiState().c_str(), ip.c_str(), rssi, wifiSsid.c_str());
+  }
+  if (n >= 1 && s == "CLEAR") {
+    prefs.begin("gg", false);
+    prefs.remove("ssid");
+    prefs.remove("pass");
+    prefs.end();
+    wifiSsid = "";
+    wifiPass = "";
+    wifiStop();
+    return String("OK wifi cleared");
+  }
+  if (n >= 2 && s == "SET") {
+    char ssid[40], pass[72];
+    int sl = gg_hex_decode(h1, ssid, sizeof ssid);
+    if (sl < 1 || sl > 32) return String("ERR usage: WIFI SET <ssid as hex, 1 to 32 bytes> <password as hex or ->");
+    int pl = 0;
+    pass[0] = 0;
+    if (n >= 3 && strcmp(h2, "-") != 0) pl = gg_hex_decode(h2, pass, sizeof pass);
+    if (pl < 0 || pl > 63 || (pl > 0 && pl < 8)) return String("ERR password must be 8 to 63 characters (or - for an open network)");
+    prefs.begin("gg", false);
+    prefs.putString("ssid", ssid);
+    prefs.putString("pass", pass);
+    prefs.end();
+    wifiStop();
+    wifiSsid = String(ssid);
+    wifiPass = String(pass);
+    wifiBegin();
+    return String("OK wifi saved; joining. Check with WIFI STATUS (2.4 GHz networks only)");
+  }
+  return String("ERR usage: WIFI STATUS | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR");
+}
+
+// ---- HTTP API ----
+//   GET  /ping /info /list            same text as PING, INFO, LIST
+//   GET  /crc?name=X   GET /get?name=X (the file's bytes)
+//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N
+//   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
+//                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
+// Replies are the same "OK ..." / "ERR ..." text as USB. Every reply carries CORS headers, and the pre-flight a browser sends before a
+// request from the https editor page to a private address is answered (Access-Control-Allow-Private-Network).
+void httpCors() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "*");
+  server.sendHeader("Access-Control-Allow-Private-Network", "true");
+  server.sendHeader("Access-Control-Max-Age", "600");
+  server.sendHeader("Cache-Control", "no-store");
+}
+
+void httpReply(const String& msg) {
+  int code = 200;
+  if (msg.startsWith("ERR")) code = (msg.indexOf("no such") >= 0) ? 404 : 400;
+  httpCors();
+  server.send(code, "text/plain", msg + "\n");
+}
+
+void httpGetFile() {
+  String name = server.arg("name");
+  File f = gg_name_ok(name.c_str()) ? LittleFS.open(pathOf(name), "r") : File();
+  if (!f) { httpReply("ERR no such sprite"); return; }
+  httpCors();
+  server.streamFile(f, "application/octet-stream");
+  f.close();
+}
+
+File putFile;
+String putName, putErr;
+size_t putGot = 0;
+uint32_t putCrc = 0;
+bool putSeen = false;
+
+void httpPutData() {
+  HTTPUpload& up = server.upload();
+  if (up.status == UPLOAD_FILE_START) {
+    putSeen = true;
+    putErr = "";
+    putGot = 0;
+    putCrc = 0;
+    putName = server.arg("name");
+    size_t want = (size_t)strtoul(server.arg("size").c_str(), NULL, 10);   // optional: lets the space check run before any byte is written
+    const char* e = putPrecheck(putName, want ? want : (size_t)(GG_HEADER_SIZE + GG_FRAME_BYTES));
+    if (e) { putErr = e; return; }
+    putFile = LittleFS.open(TMP_PATH, "w");
+    if (!putFile) putErr = "cannot create file";
+  } else if (up.status == UPLOAD_FILE_WRITE) {
+    if (putErr.length()) return;
+    if (putGot + up.currentSize > GG_MAX_FILE) { putErr = "bad size"; putFile.close(); return; }
+    if (putFile.write(up.buf, up.currentSize) != up.currentSize) { putErr = "flash write failed"; putFile.close(); return; }
+    putCrc = gg_crc32(putCrc, up.buf, up.currentSize);
+    putGot += up.currentSize;
+  } else {                                      // END or ABORTED
+    putFile.close();
+    if (up.status == UPLOAD_FILE_ABORTED) { putErr = "upload aborted"; }
+  }
+}
+
+void httpPutDone() {
+  String msg;
+  if (!putSeen) {
+    msg = "ERR send the sprite as multipart/form-data with the file in a field named file";
+  } else if (putErr.length()) {
+    LittleFS.remove(TMP_PATH);
+    msg = "ERR " + putErr;
+  } else {
+    String c = server.arg("crc");
+    if (c.length() && (uint32_t)strtoul(c.c_str(), NULL, 16) != putCrc) {
+      LittleFS.remove(TMP_PATH);
+      msg = "ERR checksum mismatch";
+    } else {
+      const char* err = putCommit(putName, putGot);
+      msg = err ? "ERR " + String(err) : "OK saved " + putName;
+    }
+  }
+  putSeen = false;
+  putErr = "";
+  httpReply(msg);
+}
+
+void httpNotFound() {
+  httpCors();
+  if (server.method() == HTTP_OPTIONS) { server.send(204); return; }   // the browser's pre-flight for the private-network and POST requests
+  server.send(404, "text/plain", "ERR not found\n");
+}
+
+void httpBegin() {
+  server.on("/ping", HTTP_GET, []() { httpReply("PONG"); });
+  server.on("/info", HTTP_GET, []() { httpReply(infoText()); });
+  server.on("/list", HTTP_GET, []() { httpReply(listText()); });
+  server.on("/crc", HTTP_GET, []() { httpReply(opCrc(server.arg("name"))); });
+  server.on("/get", HTTP_GET, httpGetFile);
+  server.on("/show", HTTP_POST, []() { httpReply(opShow(server.arg("name"))); });
+  server.on("/del", HTTP_POST, []() { httpReply(opDel(server.arg("name"))); });
+  server.on("/off", HTTP_POST, []() { httpReply(opPower(false)); });
+  server.on("/on", HTTP_POST, []() { httpReply(opPower(true)); });
+  server.on("/rotate", HTTP_POST, []() { httpReply(opRotate(server.arg("s").c_str())); });
+  server.on("/put", HTTP_POST, httpPutDone, httpPutData);
+  server.onNotFound(httpNotFound);
+  server.begin();
+}
+
+// Called every pass of loop(): starts the server and mDNS when the Wi-Fi comes up (again), serves requests while it is up.
+void wifiTick() {
+  if (wifiSsid.length() == 0) return;
+  bool up = (WiFi.status() == WL_CONNECTED);
+  if (up && !wifiWasUp) {
+    WiFi.setSleep(false);                       // no modem sleep: steadier latency (the probe's setting)
+    if (mdnsUp) MDNS.end();
+    mdnsUp = MDNS.begin(HOSTNAME);
+    if (mdnsUp) MDNS.addService("http", "tcp", 80);
+    if (!serverUp) { httpBegin(); serverUp = true; }
+  }
+  if (!up && wifiWasUp && mdnsUp) { MDNS.end(); mdnsUp = false; }
+  wifiWasUp = up;
+  if (up && serverUp) server.handleClient();
+}
+
 // ---- serial commands ----
 void drainSerial() {
   delay(300);
@@ -237,13 +560,8 @@ void putFail(File& f, const char* why) {
 }
 
 void doPut(const String& name, size_t size, uint32_t crcWant) {
-  if (!gg_name_ok(name.c_str())) { Serial.println("ERR bad name (A-Z a-z 0-9 _ - up to 31)"); return; }
-  if (size < GG_HEADER_SIZE + GG_FRAME_BYTES || size > GG_MAX_FILE) { Serial.println("ERR bad size"); return; }
-  size_t oldSize = 0;
-  if (LittleFS.exists(pathOf(name))) { File o = LittleFS.open(pathOf(name), "r"); oldSize = o.size(); o.close(); }
-  size_t freeBytes = LittleFS.totalBytes() - LittleFS.usedBytes();
-  if (freeBytes + oldSize < size + 8192) { Serial.println("ERR not enough space"); return; }
-  if (oldSize == 0 && nSprites >= MAX_SPRITES) { Serial.printf("ERR board holds %d sprites; delete one first\n", MAX_SPRITES); return; }
+  const char* pre = putPrecheck(name, size);
+  if (pre) { Serial.printf("ERR %s\n", pre); return; }
   File f = LittleFS.open(TMP_PATH, "w");
   if (!f) { Serial.println("ERR cannot create file"); return; }
   Serial.println("READY");
@@ -272,26 +590,15 @@ void doPut(const String& name, size_t size, uint32_t crcWant) {
   }
   f.close();
   if (crc != crcWant) { LittleFS.remove(TMP_PATH); Serial.println("ERR checksum mismatch"); return; }
-
-  File chk = LittleFS.open(TMP_PATH, "r");
-  uint8_t h[GG_HEADER_SIZE] = {0};
-  size_t hr = chk ? chk.read(h, GG_HEADER_SIZE) : 0;
-  size_t onDisk = chk ? chk.size() : 0;
-  if (chk) chk.close();
-  const char* err = (hr == GG_HEADER_SIZE && onDisk == size) ? gg_parse_header(h, size, NULL) : "readback failed";
-  if (err) { LittleFS.remove(TMP_PATH); Serial.printf("ERR invalid sprite: %s\n", err); return; }
-
-  String dst = pathOf(name);
-  if (!LittleFS.rename(TMP_PATH, dst)) {          // some versions refuse to replace: remove, then rename
-    LittleFS.remove(dst);
-    if (!LittleFS.rename(TMP_PATH, dst)) { LittleFS.remove(TMP_PATH); Serial.println("ERR rename failed"); return; }
-  }
-  scanSprites();
-  selectName(name);
+  const char* err = putCommit(name, size);
+  if (err) { Serial.printf("ERR %s\n", err); return; }
   Serial.printf("OK saved %s\n", name.c_str());
 }
 
+void say(const String& text) { Serial.println(text.c_str()); }
+
 void doCommand(char* line) {
+  if (strncasecmp(line, "WIFI", 4) == 0 && (line[4] == 0 || line[4] == ' ')) { say(opWifi(line + 4)); return; }
   char cmd[8] = "", a1[48] = "", a2[16] = "", a3[16] = "";
   int n = sscanf(line, "%7s %47s %15s %15s", cmd, a1, a2, a3);
   if (n < 1) return;
@@ -300,49 +607,22 @@ void doCommand(char* line) {
   if (c == "PING") {
     Serial.println("PONG");
   } else if (c == "LIST") {
-    for (int i = 0; i < nSprites; i++) {
-      File f = LittleFS.open(pathOf(names[i]), "r");
-      Serial.printf("FILE %s %u\n", names[i].c_str(), (unsigned)(f ? f.size() : 0));
-      if (f) f.close();
-    }
-    Serial.printf("OK %d files, %u bytes free\n", nSprites, (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
+    say(listText());
   } else if (c == "PUT") {
     if (n < 4) { Serial.println("ERR usage: PUT <name> <bytes> <crc32 hex>"); return; }
     doPut(String(a1), (size_t)strtoul(a2, NULL, 10), (uint32_t)strtoul(a3, NULL, 16));
   } else if (c == "DEL") {
-    if (n < 2 || !gg_name_ok(a1) || !LittleFS.exists(pathOf(String(a1)))) { Serial.println("ERR no such sprite"); return; }
-    bool wasCurrent = (cur >= 0 && names[cur] == String(a1));
-    LittleFS.remove(pathOf(String(a1)));
-    if (wasCurrent) { freeSprite(); cur = -1; }
-    scanSprites();
-    if (wasCurrent) { if (nSprites > 0) selectIndex(0); else showEmpty(); }
-    Serial.printf("OK deleted %s\n", a1);
+    say(n < 2 ? String("ERR no such sprite") : opDel(String(a1)));
   } else if (c == "SHOW") {
-    if (n >= 2 && selectName(String(a1))) Serial.printf("OK showing %s\n", a1);
-    else Serial.println("ERR no such sprite");
+    say(n < 2 ? String("ERR no such sprite") : opShow(String(a1)));
   } else if (c == "OFF") {
-    setPanel(false);
-    Serial.println("OK panel off");
+    say(opPower(false));
   } else if (c == "ON") {
-    setPanel(true);
-    Serial.println(data ? "OK panel on" : "OK panel on (nothing stored)");
+    say(opPower(true));
   } else if (c == "ROTATE") {
-    char* end = NULL;
-    long v = (n >= 2) ? strtol(a1, &end, 10) : -1;
-    if (n < 2 || *a1 == 0 || *end != 0 || v < 0 || v > (long)ROTATE_MAX) { Serial.printf("ERR usage: ROTATE <seconds 0..%lu> (0 = off)\n", ROTATE_MAX); return; }
-    rotateSec = (uint32_t)v;
-    saveRotate();
-    rotateReset();
-    Serial.printf("OK rotate %lu\n", (unsigned long)rotateSec);
+    say(opRotate(n >= 2 ? a1 : NULL));
   } else if (c == "CRC") {
-    File f = (n >= 2 && gg_name_ok(a1)) ? LittleFS.open(pathOf(String(a1)), "r") : File();
-    if (!f) { Serial.println("ERR no such sprite"); return; }
-    uint8_t buf[256];
-    uint32_t crc = 0;
-    size_t total = 0, r;
-    while ((r = f.read(buf, sizeof(buf))) > 0) { crc = gg_crc32(crc, buf, r); total += r; }
-    f.close();
-    Serial.printf("OK crc=%08x size=%u\n", (unsigned)crc, (unsigned)total);
+    say(n < 2 ? String("ERR no such sprite") : opCrc(String(a1)));
   } else if (c == "GET") {
     File f = (n >= 2 && gg_name_ok(a1)) ? LittleFS.open(pathOf(String(a1)), "r") : File();
     if (!f) { Serial.println("ERR no such sprite"); return; }
@@ -360,17 +640,14 @@ void doCommand(char* line) {
     f.close();
     Serial.printf("OK crc=%08x size=%u\n", (unsigned)crc, (unsigned)total);
   } else if (c == "INFO") {
-    Serial.printf("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu\n",
-                  GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
-                  data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
-                  (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()), (unsigned long)rotateSec);
+    say(infoText());
   } else {
     Serial.println("ERR unknown command");
   }
 }
 
 void handleSerial() {
-  static char line[96];
+  static char line[256];       // WIFI SET carries the name and password as hex: up to 200 characters
   static size_t len = 0;
   static bool tooLong = false;       // a line that overflowed is ignored up to its newline, tail included
   while (Serial.available()) {
@@ -407,6 +684,7 @@ void setup() {
   }
   LittleFS.remove(TMP_PATH);         // an upload cut off by a power loss leaves this behind
   loadRotate();
+  wifiLoad();                        // joins the saved network in the background; nothing waits for it
   scanSprites();
   Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
                 (unsigned)(LittleFS.totalBytes() - LittleFS.usedBytes()));
@@ -416,8 +694,14 @@ void setup() {
 }
 
 void loop() {
+  uint32_t now = millis();
+  static uint32_t lastLoop = 0;
+  if (lastLoop && now - lastLoop > gapMaxMs) gapMaxMs = now - lastLoop;
+  lastLoop = now;
   handleSerial();
+  wifiTick();
   handleButtons();
   rotateTick();
   playTick();
+  delay(1);                          // lets the Wi-Fi tasks run
 }
