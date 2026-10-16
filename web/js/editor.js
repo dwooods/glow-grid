@@ -83,6 +83,13 @@ function renderFrameStrip() {
     cell.append(t, n);
     strip.appendChild(cell);
   });
+  for (let i = state.frames.length; i < GG_MAX_FRAMES; i++) {      // empty slots show the cap: a sprite holds at most GG_MAX_FRAMES frames
+    const cell = document.createElement('span'); cell.className = 'frame-cell frame-empty'; cell.setAttribute('aria-hidden', 'true');
+    const slot = document.createElement('span'); slot.className = 'frame-slot';
+    const n = document.createElement('span'); n.className = 'frame-n'; n.textContent = i + 1;
+    cell.append(slot, n);
+    strip.appendChild(cell);
+  }
 }
 function paintCanvas(ctx, frame, offsetX) {
   const img = ctx.createImageData(state.cols, state.rows);
@@ -92,13 +99,16 @@ function paintCanvas(ctx, frame, offsetX) {
   }
   ctx.putImageData(img, offsetX, 0);
 }
-const updateReadout = () => { const r = $('frameReadout'); r.textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; r.hidden = state.frames.length < 2; };
+const updateReadout = () => { const r = $('frameReadout'); r.textContent = `Frame ${state.currentFrame + 1} / ${state.frames.length}`; r.hidden = state.frames.length < 2;
+  const full = state.frames.length >= GG_MAX_FRAMES;       // the cap is the same for the Pi and the C3
+  for (const id of ['addFrameBtn', 'addBlankFrameBtn']) { $(id).disabled = full; $(id).title = full ? `A sprite has at most ${GG_MAX_FRAMES} frames` : ''; }
+};
 function afterFrameChange() { syncRestoreBtn(); renderFrame(); renderFrameStrip(); updateReadout(); updateLayerUI(); updateCmd(); saveState(); }
 function selectFrame(i) { stopPlay(); state.currentFrame = i; afterFrameChange(); }
 
 /* ---------- frames ---------- */
-$('addFrameBtn').addEventListener('click', () => { stopPlay(); pushUndo(); state.frames.splice(state.currentFrame + 1, 0, [...state.frames[state.currentFrame]]); state.currentFrame++; afterFrameChange(); });
-$('addBlankFrameBtn').addEventListener('click', () => { stopPlay(); pushUndo(); state.frames.splice(state.currentFrame + 1, 0, newBlankFrame(state.cols, state.rows)); state.currentFrame++; afterFrameChange(); });
+$('addFrameBtn').addEventListener('click', () => { if (state.frames.length >= GG_MAX_FRAMES) return; stopPlay(); pushUndo(); state.frames.splice(state.currentFrame + 1, 0, [...state.frames[state.currentFrame]]); state.currentFrame++; afterFrameChange(); });
+$('addBlankFrameBtn').addEventListener('click', () => { if (state.frames.length >= GG_MAX_FRAMES) return; stopPlay(); pushUndo(); state.frames.splice(state.currentFrame + 1, 0, newBlankFrame(state.cols, state.rows)); state.currentFrame++; afterFrameChange(); });
 $('deleteFrameBtn').addEventListener('click', () => {
   stopPlay(); pushUndo();
   if (state.frames.length <= 1) {            // the last frame can't go, so blank it instead of doing nothing
