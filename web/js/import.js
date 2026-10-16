@@ -65,7 +65,7 @@ $('imageInput').addEventListener('change', async (e) => {
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       const x = c.getContext('2d'); x.drawImage(img, 0, 0);
       state.frames = []; state.shared = null; state.target = 'frame';
-      for (let k = 0; k < n; k++) {
+      for (let k = 0; k < Math.min(n, GG_MAX_FRAMES); k++) {
         const piece = document.createElement('canvas'); piece.width = state.cols; piece.height = state.rows;
         piece.getContext('2d').drawImage(c, k * state.cols, 0, state.cols, state.rows, 0, 0, state.cols, state.rows);
         state.frames.push(fitImage(piece, state.cols, state.rows, 'pixel'));
@@ -75,7 +75,7 @@ $('imageInput').addEventListener('change', async (e) => {
       if (typeof meta.fps === 'number' && meta.fps > 0) { state.fps = clamp(meta.fps, 1, 30); $('fpsInput').value = state.fps; }
       else if (m) { state.fps = clamp(Number(m[1]), 1, 30); $('fpsInput').value = state.fps; }
       setSpriteName(file);
-      setStatus(`Loaded ${n} frames from the sprite sheet. Undo reverts.`);
+      setStatus(n > GG_MAX_FRAMES ? `The sheet has ${n} frames; a sprite holds at most ${GG_MAX_FRAMES}, so the first ${GG_MAX_FRAMES} were loaded. Undo reverts.` : `Loaded ${n} frames from the sprite sheet. Undo reverts.`);
     } else {
       setEditLayer(fitImage(img, w, h, 'pixel'));
       setSpriteName(file);
@@ -512,6 +512,7 @@ $('photoCancel').addEventListener('click', () => $('photoDlg').close());
 $('photoDlg').addEventListener('close', () => { setPick(false); ptrs.clear(); photo.data = null; photo.canvas = null; });
 function applyPhoto(asNew) {
   if (!photo.result) return;
+  if (asNew && state.frames.length >= GG_MAX_FRAMES) { setStatus(`A sprite has at most ${GG_MAX_FRAMES} frames. Delete one first, or use Apply to this frame.`); return; }
   stopPlay(); pushUndo();
   if (photo.file) setSpriteName(photo.file);
   if (asNew) { state.target = 'frame'; state.frames.splice(state.currentFrame + 1, 0, photo.result); state.currentFrame++; }
@@ -539,6 +540,8 @@ async function openImport(file) {
     const cc = cornerColor(), solid = px.every((a) => a >= 250) && (cc[0] + cc[1] + cc[2]) > 0;
     photo.bg.rgb = cc; photo.bg.on = solid; photo.bgSet = solid; $('bgOn').checked = solid;
     photo.vwMax = Math.max(d.w, d.h * state.cols / state.rows) * 3; photo.vwMin = Math.max(state.cols, Math.min(d.w, d.h * state.cols / state.rows) / 40);
+    const full = state.frames.length >= GG_MAX_FRAMES;
+    $('photoAdd').disabled = full; $('photoAdd').title = full ? `A sprite has at most ${GG_MAX_FRAMES} frames` : '';
     $('photoDlg').showModal(); fitView(!small);
   } catch (err) { setStatus('That file couldn’t be read as an image.'); }
 }
