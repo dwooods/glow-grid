@@ -1,7 +1,8 @@
 // Glow Grid player for the ESP32-C3 SuperMini and the 16x16 WS2812B panel.
 // Stores several sprites (.gg files) in the board's flash and plays one at a time.
 //
-//   Next button (GPIO5 to GND): next sprite.   On/off button (GPIO7 to GND): panel off/on.
+//   Next button (GPIO5 to GND): next sprite.   On/off button (GPIO7 to GND): a short press switches the panel off/on (on release);
+//   holding it for 5 seconds opens the Wi-Fi setup network (firmware 14), also when Wi-Fi is off.
 //   Panel data: GPIO6 to DIN.
 //
 // Put sprites on the board over USB with ../tools/gg_tool.py (close the Serial Monitor first).
@@ -58,12 +59,13 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 13          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 14          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the open network the board hosts in setup mode
 #define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
 #define JOIN_WAIT_BOOT_MS 90000UL              // after a power-up, a saved network gets this long before setup mode opens
 #define JOIN_WAIT_SAVE_MS 30000UL              // after new credentials are saved, this long
+#define SETUP_HOLD_MS 5000UL                   // holding the On/off button this long opens setup mode
 // Whether setup mode may open by itself (no saved network, or the saved one will not join). The PC test stub overrides this so that
 // only the tests that ask for it see it; on the board it is always on. Asking for setup (POST /setup, WIFI SETUP) always works.
 #ifndef GG_SETUP_AUTO_START
@@ -255,12 +257,28 @@ void setPanel(bool on) {
   else { strip.clear(); strip.show(); }
 }
 
+String opSetup();                              // defined with the setup code below
+
+// On/off: a short press switches the panel on release; holding it SETUP_HOLD_MS opens the setup network instead (and the release then
+// does nothing). Held while powering up counts too. Reuses the WIFI SETUP / POST /setup path, so it works with Wi-Fi off.
+void handleOffButton() {
+  static bool down = false, fired = false;
+  static uint32_t downAt = 0;
+  bool wasUp = btnOff.last;
+  pressed(btnOff);                               // updates btnOff.last after the 40 ms debounce
+  bool isUp = btnOff.last;
+  uint32_t now = millis();
+  if (wasUp && !isUp) { down = true; fired = false; downAt = now; }
+  else if (down && !isUp && !fired && now - downAt >= SETUP_HOLD_MS) { fired = true; opSetup(); }
+  else if (down && isUp) { down = false; if (!fired) setPanel(!panelOn); }
+}
+
 void handleButtons() {
   if (pressed(btnNext)) {
     if (!panelOn) setPanel(true);
     else if (nSprites > 0) selectIndex((cur + 1) % nSprites);
   }
-  if (pressed(btnOff)) setPanel(!panelOn);
+  handleOffButton();
 }
 
 // ---- commands shared by USB and Wi-Fi ----
