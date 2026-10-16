@@ -56,3 +56,28 @@ $('helpBody').innerHTML = `
             <li><strong>Near-black and dark colors:</strong> near-black isn't off, and dark shades can vanish. The Panel check outlines both.</li>
           </ol>
 `;
+
+// Make the help easier to scan: each section becomes a fold (the first one open) and a row of chips at the top jumps to any of them.
+// The text above is untouched; the h3s stay (inside the fold's summary), so anything that reads them still works.
+(function () {
+  const body = $('helpBody');
+  const short = { 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Animating one part: move and still part': 'One part',
+    'Drawing tools': 'Drawing', 'Drawing on a phone': 'Phone', 'Getting a picture onto the panel': 'To the panel', 'Watch out for': 'Watch out' };
+  const chips = document.createElement('nav');
+  chips.className = 'help-chips'; chips.setAttribute('aria-label', 'Help sections');
+  const folds = [];
+  Array.from(body.querySelectorAll(':scope > h3')).forEach((h, i) => {
+    const d = document.createElement('details'), s = document.createElement('summary');
+    d.className = 'help-sec'; d.open = i === 0;
+    h.replaceWith(d); s.appendChild(h); d.appendChild(s);
+    while (d.nextElementSibling && d.nextElementSibling.tagName !== 'H3') d.appendChild(d.nextElementSibling);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-quiet help-chip'; b.textContent = short[h.textContent] || h.textContent;
+    b.addEventListener('click', () => {
+      d.open = true;
+      d.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    });
+    chips.appendChild(b); folds.push(d);
+  });
+  if (folds.length) body.insertBefore(chips, folds[0]);
+})();
