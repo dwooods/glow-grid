@@ -645,9 +645,9 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate('state.frames.map((f) => f[0])'), ['#ff0000', '#00ff00', '#0000ff'])
         self.assertEqual(self.name(), 'renamed_anything_sprite')
 
-    def test_desktop_layout_board_full_width_restore_button_and_levelled_columns(self):
+    def test_desktop_layout_board_full_width_restore_button_and_compact_frames_card(self):
         # 2026-10-15 layout: Board card under both columns; Restore last session is a button beside + Blank;
-        # Frames ends level with Panel settings while both folds are closed (and stops stretching when one is open);
+        # the Frames card keeps its own height (no stretching to match Panel settings, so no empty gap above its buttons);
         # the fold is labelled "Panel Check", not all caps.
         self.pg.evaluate("document.getElementById('restoreBtn').hidden = false")
         r = self.pg.evaluate("""() => { const b = (id) => document.getElementById(id).getBoundingClientRect();
@@ -655,14 +655,14 @@ class Smoke(unittest.TestCase):
                      label: document.querySelector('.check-label').textContent, upper: getComputedStyle(document.querySelector('.check-label')).textTransform }; }""")
         self.assertLessEqual(r['board']['left'], r['frames']['left'] + 1); self.assertGreaterEqual(r['board']['right'], r['panel']['right'] - 1)
         self.assertGreater(r['board']['top'], max(r['frames']['bottom'], r['panel']['bottom']) - 1, 'Board sits below both columns')
-        self.assertAlmostEqual(r['frames']['bottom'], r['panel']['bottom'], delta=1)
         self.assertAlmostEqual(r['restore']['top'], r['blank']['top'], delta=1); self.assertGreater(r['restore']['left'], r['blank']['left'])
         self.assertEqual((r['label'], r['upper']), ('Panel Check', 'none'))
-        self.assertGreater(r['blank']['top'], r['frames']['top'] + 100, 'Duplicate / Blank / Restore sit low in the Frames card, not under the hint')
+        self.assertEqual(self.pg.evaluate("document.getElementById('frameCount').textContent"), '1 of 16 frames')
+        rows = self.pg.evaluate("() => { const tops = Array.from(document.querySelectorAll('#frameStrip .frame-cell')).map((c) => Math.round(c.getBoundingClientRect().top)); return [tops.length, new Set(tops).size, tops.filter((x) => x === tops[0]).length]; }")
+        self.assertEqual(rows, [16, 2, 8], 'the 16 slots are two rows of 8')
+        gap = self.pg.evaluate("() => { const s = document.getElementById('stripHint'), h = (s.hidden ? document.getElementById('frameCount') : s).getBoundingClientRect(), b = document.getElementById('addBlankFrameBtn').getBoundingClientRect(); return b.top - h.bottom; }")
+        self.assertLess(gap, 40, 'Duplicate / Blank / Restore sit right under the count and hint, with no empty gap')
         self.assertLess(r['blank']['bottom'], r['frames']['bottom'] - 40, 'and above the red row')
-        self.pg.evaluate("document.getElementById('diagDetails').open = true")
-        r2 = self.pg.evaluate("""() => ({ frames: document.getElementById('framesCard').getBoundingClientRect().bottom, panel: document.getElementById('panelCard').getBoundingClientRect().bottom })""")
-        self.assertLess(r2['frames'], r2['panel'] - 50, 'with a fold open the Frames card keeps its own height')
 
     def test_help_dialog_renders(self):
         self.pg.click('#helpBtn'); self.pg.wait_for_timeout(200)
