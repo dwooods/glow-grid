@@ -144,3 +144,30 @@ static inline int gg_hex_decode(const char* hex, char* out, size_t cap) {
   out[n / 2] = 0;
   return (int)(n / 2);
 }
+
+// Base64 (standard alphabet) decoder for one span whose length is a multiple of 4; '=' padding only at the very end. Returns the bytes written,
+// or -1 for a bad character. The editor page the board serves is stored as base64 text and decoded a piece at a time while it is sent.
+static inline int gg_b64_decode(const char* in, size_t n, uint8_t* out) {
+  if (n % 4) return -1;
+  size_t o = 0;
+  for (size_t i = 0; i < n; i += 4) {
+    int v[4], pad = 0;
+    for (int k = 0; k < 4; k++) {
+      char c = in[i + k];
+      if (c == '=') {
+        if (i + 4 != n || k < 2) return -1;
+        pad++; v[k] = 0;
+      } else if (pad) {
+        return -1;                       // data after the padding
+      } else {
+        v[k] = (c >= 'A' && c <= 'Z') ? c - 'A' : (c >= 'a' && c <= 'z') ? c - 'a' + 26 : (c >= '0' && c <= '9') ? c - '0' + 52 : c == '+' ? 62 : c == '/' ? 63 : -1;
+        if (v[k] < 0) return -1;
+      }
+    }
+    uint32_t w = ((uint32_t)v[0] << 18) | ((uint32_t)v[1] << 12) | ((uint32_t)v[2] << 6) | (uint32_t)v[3];
+    out[o++] = (uint8_t)(w >> 16);
+    if (pad < 2) out[o++] = (uint8_t)(w >> 8);
+    if (pad < 1) out[o++] = (uint8_t)w;
+  }
+  return (int)o;
+}
