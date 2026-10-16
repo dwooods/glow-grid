@@ -963,6 +963,40 @@ class Board(unittest.TestCase):
             gg_tool.HttpBoard("127.0.0.1:1")
 
 
+    def test_editor_http_board_against_the_firmware(self):
+        """web/js/board.js HttpBoard (the Board card's Wi-Fi side) driven through Node against the compiled firmware's real HTTP
+        server: Send (multipart, 64 frames with zero bytes), List, Info, Load with CRC check, Play, lights, rotate, Delete, and the
+        board's own error messages. Catches the editor and the firmware API drifting apart."""
+        self.start(wifi=True)
+        self.board.wifi_set("Net", "password1")
+        base = self.http_base()
+        r = subprocess.run(["node", os.path.join(HERE, "board_http_e2e.js"), base], capture_output=True, text=True, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        import json
+        o = json.loads(r.stdout.strip().splitlines()[-1])
+        with open(os.path.join(SKETCH, "c3_player.ino")) as fh:
+            fw = int(re.search(r"#define GG_FW_VERSION (\d+)", fh.read()).group(1))
+        self.assertEqual(o["hello"], "PONG")
+        self.assertTrue(o["bigHasZero"], "the test file must contain zero bytes: that is what a raw POST body loses")
+        self.assertEqual(o["progress"], [[0, 1548], [1548, 1548]])
+        self.assertEqual(o["listed"], ["big:49164", "small:1548"])
+        self.assertTrue(o["freeIsNumber"])
+        self.assertEqual(o["info"], {"fw": fw, "current": "big", "sprites": "2", "panel": "on", "wifi": "connected", "ip": "127.0.0.1"})
+        self.assertTrue(o["smallBack"] and o["bigBack"], "GET must return exactly the bytes PUT stored")
+        self.assertTrue(o["crcMatches"])
+        self.assertEqual(o["decoded"], {"fps": 7, "brightness": 0.45, "gamma": 2.6, "frames": 2, "first": True})
+        for k in ("missingGet", "missingShow", "missingDel"):
+            self.assertEqual(o[k], "no such sprite", k)
+        self.assertNotEqual(o["badSprite"], "no error"); self.assertNotEqual(o["badName"], "no error")
+        self.assertEqual(o["afterBad"], ["big", "small"], "a refused upload leaves storage as it was")
+        self.assertTrue(o["show"].startswith("OK showing")); self.assertEqual(o["currentAfterShow"], "small")
+        self.assertEqual((o["panelOff"], o["panelOn"]), ("off", "on"))
+        self.assertEqual(o["rotateInfo"], "300")
+        self.assertTrue(o["del"].startswith("OK deleted")); self.assertEqual(o["afterDel"], ["big"])
+        self.assertTrue(o["closedOnce"])
+        self.assertIn("cannot reach the board at 127.0.0.1:1", o["unreachable"])
+
+
 class Hex(unittest.TestCase):
     def test_hex_decode(self):
         for text, cap, want in [("4142", 8, "OK 2 AB"), ("41 42", 8, "no"), ("414", 8, "no"), ("4g", 8, "no"), ("", 8, "OK 0 "),
