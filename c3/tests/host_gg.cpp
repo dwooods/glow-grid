@@ -4,6 +4,7 @@
 //   host_gg crc <file>           CRC-32 of the file, 8 hex digits
 //   host_gg hdr <file>           "OK <frames> <fps10> <bright> <gamma10>" or the error text
 //   host_gg name <text>          "yes" or "no"
+//   host_gg b64 <text>           the decoded bytes as hex, or "no"
 //   host_gg hex <hex> <cap>      the decoded text as "OK <n> <text>", or "no" (cap = room incl. the NUL)
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,6 +34,14 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (cmd == "name") { printf("%s\n", gg_name_ok(argv[2]) ? "yes" : "no"); return 0; }
+  if (cmd == "b64") {
+    std::vector<uint8_t> out(strlen(argv[2]) + 4);
+    int n = gg_b64_decode(argv[2], strlen(argv[2]), out.data());
+    if (n < 0) { printf("no\n"); return 0; }
+    for (int i = 0; i < n; i++) printf("%02x", out[i]);
+    printf("\n");
+    return 0;
+  }
   if (cmd == "hex") {
     char out[256];
     int n = gg_hex_decode(argv[2], out, argc > 3 ? (size_t)atoi(argv[3]) : sizeof out);

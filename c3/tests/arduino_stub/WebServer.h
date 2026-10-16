@@ -34,6 +34,7 @@ class WebServer {
   std::map<std::string, std::string> args;
   std::string outHeaders;
   bool responded = false;
+  long fixedLen = -1;
   HTTPUpload up;
 
   static std::string urldecode(const std::string& s) {
@@ -132,10 +133,13 @@ class WebServer {
   String uri() { return String(curUri.c_str()); }
   HTTPUpload& upload() { return up; }
   void sendHeader(const String& n, const String& v, bool = false) { outHeaders += n.s + ": " + v.s + "\r\n"; }
+  // Like the real core: setContentLength(n) before send(code, type, "") fixes the Content-Length for a body written with sendContent().
+  void setContentLength(size_t n) { fixedLen = (long)n; }
+  void sendContent(const char* p, size_t n) { writeAll(p, n); }
   void send(int code, const char* type = NULL, const String& content = String("")) {
     std::string h = "HTTP/1.1 " + std::to_string(code) + " X\r\n";
     if (type) h += std::string("Content-Type: ") + type + "\r\n";
-    h += "Content-Length: " + std::to_string(content.s.size()) + "\r\nConnection: close\r\n" + outHeaders + "\r\n";
+    h += "Content-Length: " + std::to_string(fixedLen >= 0 ? (size_t)fixedLen : content.s.size()) + "\r\nConnection: close\r\n" + outHeaders + "\r\n";
     writeAll(h.data(), h.size());
     writeAll(content.s.data(), content.s.size());
     responded = true;
@@ -192,6 +196,7 @@ class WebServer {
     curUri = target.substr(0, qm);
     args.clear();
     outHeaders.clear();
+    fixedLen = -1;
     responded = false;
     if (qm != std::string::npos) parseQuery(target.substr(qm + 1));
     std::string ct = hd.count("content-type") ? hd["content-type"] : "";
