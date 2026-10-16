@@ -357,8 +357,11 @@ class Board(unittest.TestCase):
     def sim_env(self, wifi=False):
         """wifi=True lets the stand-in Wi-Fi library "join" at once (as 127.0.0.1) so the HTTP server starts."""
         env = dict(os.environ, GG_FS_DIR=self.fs, GG_LED_LOG=self.led, GG_PINS=self.pins, GG_NVS=self.fs + "_nvs",
-                   GG_WIFI_LOG=self.fs + "_wifi.log", GG_HTTP_PORT_FILE=self.fs + "_port")
+                   GG_WIFI_LOG=self.fs + "_wifi.log", GG_HTTP_PORT_FILE=self.fs + "_port", GG_SETUP_PORT_FILE=self.fs + "_setupport")
         env.pop("GG_WIFI_SIM", None)
+        env.pop("GG_SETUP_AUTO", None)
+        env.pop("GG_TIME_SCALE", None)
+        env.update(getattr(self, "extra_env", {}))
         env.pop("GG_WIFI_SCAN", None)
         if getattr(self, "scan_env", None) is not None:
             env["GG_WIFI_SCAN"] = self.scan_env
@@ -672,8 +675,9 @@ class Board(unittest.TestCase):
         self.proc.kill()
         self.proc.wait()
         write_text(self.led, "")
-        if os.path.exists(self.fs + "_port"):
-            os.remove(self.fs + "_port")
+        for suffix in ("_port", "_setupport"):
+            if os.path.exists(self.fs + suffix):
+                os.remove(self.fs + suffix)
         master, slave = pty.openpty()
         tty.setraw(slave)
         self.proc = subprocess.Popen([SIM], stdin=slave, stdout=slave, env=self.sim_env())
@@ -1063,6 +1067,143 @@ class Board(unittest.TestCase):
         self.assertEqual(status, 404)
         status, _, body = self.http("GET", "/ping", base=base)  # the API next to it is unchanged
         self.assertEqual((status, body.strip()), (200, b"PONG"))
+
+
+    # ---- setup mode (firmware 13): the board hosts GlowGrid-Setup and a page to pick a network ----
+    def setup_base(self):
+        def port():
+            p = self.fs + "_setupport"
+            return open(p).read().strip() if os.path.exists(p) and open(p).read().strip() else None
+        return "127.0.0.1:" + self.wait_for(port, "the setup page's server to start")
+
+    def log_count(self, text):
+        return self.wifi_log().count(text)
+
+    def pixel0(self):
+        with open(self.led) as fh:
+            lines = [l for l in fh.read().split("\n") if l]
+        return lines[-1][:6] if lines else ""
+
+    def test_setup_mode_serves_a_page_and_saves_a_network(self):
+        """WIFI SETUP (the USB form of the editor's button) opens GlowGrid-Setup with a catch-all DNS and the setup page; the page lists the
+        scan, saves a network, and the board then closes the setup network and joins it. The API is not served on the setup network."""
+        self.scan_env = ";".join(["Home Net|-42|1", "Cafe Open|-60|0"])
+        self.start(wifi=True)
+        self.board.put(self.write_gg("alpha", sample_frames(31, 1)))
+        self.board.wifi_set("Old Net", "password1")
+        self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "joining the old network")
+        api = self.http_base()
+        self.assertEqual(self.http("GET", "/ping", base=api)[2], b"PONG\n")
+        self.assertEqual(self.log_count("softap GlowGrid-Setup"), 0, "setup mode does not start by itself in this test")
+        self.board.send("WIFI SETUP")
+        self.assertIn("OK setup mode starts", self.board.expect(["OK"]))
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "the setup network")
+        self.assertIn("dns start", self.wifi_log())
+        self.assertIn("wifi=setup ip=-", self.board.simple("INFO"))
+        base = self.setup_base()
+        # the page: the real one, at / and at any other address (a phone's "is there internet" check lands on it)
+        for path in ("/", "/generate_204", "/hotspot-detect.html"):
+            st, hd, body = self.http("GET", path, base=base)
+            self.assertEqual(st, 200, path)
+            self.assertTrue(hd["Content-Type"].startswith("text/html"))
+            self.assertIn(b"Glow Grid Wi-Fi setup", body)
+        self.assertLess(len(body), 5000, "the setup page stays small")
+        # the scan the page shows, in the same text form WIFI SCAN uses (name as hex)
+        st, _, scan = self.http("GET", "/scan", base=base)
+        self.assertEqual(st, 200)
+        self.assertEqual(scan.decode().splitlines(), ["NET " + b"Home Net".hex() + " -42 1", "NET " + b"Cafe Open".hex() + " -60 0", "OK networks=2"])
+        # the API is not on the setup network, and the old API port no longer answers
+        self.assertEqual(self.http("GET", "/list", base=base)[2].count(b"Glow Grid Wi-Fi setup"), 1, "/list on the setup network is just the page")
+        import urllib.error
+        with self.assertRaises(Exception):
+            self.http("GET", "/ping", base=api)
+        # the panel shows the pulse on LED 0 (blue only, dim) while the sprite carries on
+        time.sleep(0.4)
+        p0 = self.pixel0()
+        self.assertTrue(p0.startswith("0000") and 3 <= int(p0[4:], 16) <= 43, p0)
+        # a bad password is refused with the board's words and nothing is stored
+        form = {"Content-Type": "application/x-www-form-urlencoded"}
+        st, _, body = self.http("POST", "/save", ("s=" + b"Home Net".hex() + "&p=" + b"short".hex()).encode(), form, base=base)
+        self.assertEqual(st, 400)
+        self.assertIn(b"password must be 8 to 63", body)
+        self.assertNotIn("begin Home Net", self.wifi_log())
+        # a good one: stored, then the setup network goes away and the board joins it
+        st, _, body = self.http("POST", "/save", ("s=" + b"Home Net".hex() + "&p=" + "p@ss word 1".encode().hex()).encode(), form, base=base)
+        self.assertEqual((st, body), (200, b"OK saved\n"))
+        self.wait_for(lambda: "softap off" in self.wifi_log() and "dns stop" in self.wifi_log(), "setup mode to close")
+        self.wait_for(lambda: "begin Home Net p@ss word 1" in self.wifi_log(), "joining the new network")
+        st = self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "connected")
+        self.assertTrue(st.endswith("ssid=Home Net"))
+        self.assertEqual(self.http("GET", "/ping", base=self.http_base())[2], b"PONG\n", "the API is back")
+        self.assertEqual([f[0] for f in self.board.list()[0]], ["alpha"], "the sprites were not touched")
+        time.sleep(0.4)
+        self.assertEqual(self.pixel0(), self.led_of(sample_frames(31, 1))[0][:6], "LED 0 is the sprite's again")
+        # an open network goes through with "-" as the password; and a second WIFI SETUP while on says so
+        self.board.send("WIFI SETUP"); self.board.expect(["OK"])
+        self.wait_for(lambda: self.log_count("softap GlowGrid-Setup") == 2, "setup mode again")
+        self.board.send("WIFI SETUP")
+        self.assertIn("already on", self.board.expect(["OK"]))
+
+    def test_the_editor_button_starts_setup_over_http(self):
+        """POST /setup (the editor's 'Change the board's Wi-Fi') answers first and starts setup mode a moment later."""
+        self.start(wifi=True)
+        self.board.wifi_set("Net", "password1")
+        api = self.http_base()
+        st, hd, body = self.http("POST", "/setup", b"", base=api)
+        self.assertEqual(st, 200)
+        self.assertIn(b"OK setup mode starts", body)
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "*")
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode")
+        self.assertIn("wifi=setup", self.board.simple("INFO"))
+        self.assertEqual(self.http("GET", "/", base=self.setup_base())[0], 200)
+
+    def test_setup_mode_times_out_and_returns_to_the_saved_network(self):
+        """No saved network: setup opens by itself at power-up and ends after 5 minutes (time sped up 50x here) with Wi-Fi left off."""
+        self.extra_env = {"GG_SETUP_AUTO": "1", "GG_TIME_SCALE": "50"}
+        self.start()
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode at power-up with nothing saved")
+        self.assertIn("wifi=setup", self.board.simple("INFO"))
+        self.wait_for(lambda: "softap off" in self.wifi_log(), "the 5-minute timeout", timeout=12)
+        self.assertIn("wifi=off", self.board.simple("INFO"))
+        time.sleep(1.0)
+        self.assertEqual(self.log_count("softap GlowGrid-Setup"), 1, "it does not open again by itself")
+        self.assertNotIn("begin", self.wifi_log(), "nothing saved, nothing to join")
+
+    def test_setup_mode_opens_when_the_saved_network_will_not_join(self):
+        """A saved network that has not joined 90 s after power-up opens setup once; after its timeout the saved network is tried again
+        and kept. A newly saved network that does not join in 30 s opens setup again. A network that joins never opens it."""
+        self.start(wifi=True)
+        self.board.wifi_set("Home Net", "password1")
+        self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "joining")
+        # power-up with the network joining: no setup
+        self.extra_env = {"GG_SETUP_AUTO": "1", "GG_TIME_SCALE": "50"}
+        os.remove(self.fs + "_wifi.log")
+        board = self.restart()
+        self.wait_for(lambda: "wifi=connected" in board.wifi_status() and board.wifi_status(), "rejoining")
+        time.sleep(3.0)                                         # well past 90 s of sped-up time
+        self.assertNotIn("softap", self.wifi_log())
+        # power-up with the network out of reach: setup opens after the 90 s, then ends after 5 minutes and the saved network is tried again
+        self.wifi_sim = False
+        os.remove(self.fs + "_wifi.log")
+        board = self.restart()
+        self.assertIn("begin Home Net password1", self.wifi_log())
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup after the failed join", timeout=8)
+        self.wait_for(lambda: "softap off" in self.wifi_log(), "setup timeout", timeout=12)
+        self.wait_for(lambda: self.log_count("begin Home Net password1") == 2, "the saved network tried again")
+        self.assertEqual(board.simple("INFO").count("wifi=connecting"), 1, "still saved, still trying")
+        time.sleep(1.5)
+        self.assertEqual(self.log_count("softap GlowGrid-Setup"), 1, "automatic setup runs once per power-up")
+        # new credentials that do not join (this board never joins here): setup opens again after 30 s
+        board.wifi_set("Wrong Net", "password2")
+        self.wait_for(lambda: self.log_count("softap GlowGrid-Setup") == 2, "setup after a network that does not join", timeout=6)
+        self.assertIn("wifi=setup", board.simple("INFO"))
+
+    def test_nothing_opens_setup_without_the_test_switch(self):
+        """The other tests rely on this: with the stub's switch off, a board with no network or one that never joins stays as before."""
+        self.start()
+        time.sleep(1.0)
+        self.assertNotIn("softap", self.wifi_log())
+        self.assertIn("wifi=off", self.board.simple("INFO"))
 
 
 class Base64(unittest.TestCase):
