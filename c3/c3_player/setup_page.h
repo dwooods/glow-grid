@@ -34,7 +34,8 @@ static const char SETUP_PAGE[] =
   " say('Saving...');\n"
   " try{const r=await fetch('/save',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'s='+hex(s)+'&p='+(p?hex(p):'-')});\n"
   "  const t=(await r.text()).trim();\n"
-  "  say(r.ok?'Saved. The board is joining '+s+' and this setup network is closing. Reconnect your phone to your home Wi-Fi, then open http://glowgrid.local/ . If the panel is still pulsing blue after about 30 seconds, the name or password was wrong: join GlowGrid-Setup again and retry.':t.replace(/^ERR\\s*/,''))}\n"
+  "  if(!r.ok){say(t.replace(/^ERR\\s*/,''));return}\n"
+  "  let n=8;const tick=()=>{say(n>0?'Saved. This setup network closes in '+n+' s and the board joins '+s+'. When it closes, reconnect your phone to your home Wi-Fi and open http://glowgrid.local/ . If the panel is still pulsing blue about 30 seconds later, the name or password was wrong: join GlowGrid-Setup again and retry.':'Closed. Reconnect your phone to your home Wi-Fi and open http://glowgrid.local/ . If the panel is still pulsing blue after about 30 seconds, the name or password was wrong: join GlowGrid-Setup again and retry.');if(n-->0)setTimeout(tick,1000)};tick()}\n"
   " catch(e){say('The connection dropped. If you had just pressed Save it went through: reconnect to your home Wi-Fi and open http://glowgrid.local/')}};\n"
   "scan(0);\n"
   "</script>";
