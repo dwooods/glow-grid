@@ -497,6 +497,7 @@ if (boardServedBy()) {             // loaded from the board: say so, and connect
 }
 if (!boardSupported()) {            // Firefox, Safari, iPhone: no Web Serial. USB is greyed out with the reason; Wi-Fi still works.
   $('boardUnsupported').hidden = false;
+  if (!window.isSecureContext || window.__ggBoardOrigin) $('boardUnsupportedWhy').textContent = 'USB does not work on a page loaded over plain http, which is how the board serves this editor. For USB, open the https editor (dwooods.github.io/glow-grid) in Chrome or Edge on a computer;';
   $('boardConnectBtn').disabled = true;
   $('boardConnectBtn').title = 'USB needs Chrome or Edge on a computer';
 }
