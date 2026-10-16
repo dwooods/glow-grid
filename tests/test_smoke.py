@@ -26,6 +26,7 @@ STUB = """() => { window.__w = []; window.__calls = 0;
 # with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
 FAKE_BOARD = """() => {
   window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0;
+  window.__fakeWifi = { state: 'off', ip: '-', ssid: '', polls: 0 };
   window.__fakeChunks = []; window.__fakeBreak = null; window.__fakeFw = 7;     // 'full': PUT refused after READY; 'mute': no replies at all
   window.__ggFakeSerial = () => {
     const t = { onLine: null, onClose: null, closed: false, pending: null };
@@ -58,7 +59,7 @@ FAKE_BOARD = """() => {
           { const b = window.__fakeStore.get(a1); const out = b.slice(); if (window.__fakeBreak === 'badget') out[20] ^= 1;
             for (let i = 0; i < out.length; i += 48) say('D ' + Array.from(out.subarray(i, i + 48), (v) => v.toString(16).padStart(2, '0')).join(''));
             return say('OK crc=' + crc32(b).toString(16).padStart(8, '0') + ' size=' + b.length); }
-        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate);
+        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
         case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
           if (!window.__fakeStore.has(a1) && window.__fakeStore.size >= 64) return say('ERR board holds 64 sprites; delete one first');
@@ -66,6 +67,15 @@ FAKE_BOARD = """() => {
         case 'SHOW': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeCurrent = a1; window.__fakePanel = 'on'; return say('OK showing ' + a1);
         case 'DEL': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeStore.delete(a1);
           if (window.__fakeCurrent === a1) window.__fakeCurrent = names()[0] || '-'; return say('OK deleted ' + a1);
+        case 'WIFI': { const w = window.__fakeWifi;
+          if (window.__fakeFw < 9) return say('ERR unknown command');
+          if (a1 === 'STATUS') { if (w.state === 'connecting' && ++w.polls >= 2) { w.state = 'connected'; w.ip = '192.168.50.6'; }
+            return say('OK wifi=' + w.state + ' ip=' + w.ip + ' rssi=-40 host=glowgrid.local ssid=' + w.ssid); }
+          if (a1 === 'CLEAR') { window.__fakeWifi = { state: 'off', ip: '-', ssid: '', polls: 0 }; return say('OK wifi cleared'); }
+          if (a1 === 'SET' && a2) { const dec = (h) => h === '-' ? '' : new TextDecoder().decode(Uint8Array.from(h.match(/../g), (x) => parseInt(x, 16)));
+            window.__fakeWifiSet = { ssid: dec(a2), pass: dec(a3 || '-') }; window.__fakeWifi = { state: 'connecting', ip: '-', ssid: dec(a2), polls: 0 };
+            return say('OK wifi saved; joining. Check with WIFI STATUS (2.4 GHz networks only)'); }
+          return say('ERR usage: WIFI STATUS | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR'); }
         case 'OFF': window.__fakePanel = 'off'; return say('OK panel off');
         case 'ON': window.__fakePanel = 'on'; return say('OK panel on');
         default: return say('ERR unknown command');
@@ -591,15 +601,14 @@ class Smoke(unittest.TestCase):
 
     def test_board_card_without_web_serial(self):
         # Firefox, Safari and every iPhone browser have no navigator.serial; headless Chromium does, so remove it.
-        # The card stays visible but greyed out, with the reason, and the Help says where it works.
+        # USB is greyed out with the reason, Wi-Fi stays available, and the Help says where each works.
         self.fresh_page('delete Navigator.prototype.serial')
         self.assertFalse(self.pg.evaluate("document.getElementById('boardCard').hidden"))
-        self.assertTrue(self.pg.evaluate("document.getElementById('boardCard').classList.contains('unsupported')"))
-        self.assertTrue(self.pg.evaluate("document.getElementById('boardConnectBtn').disabled"))
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardConnectBtn').disabled"), 'USB is greyed out')
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardWifiBtn').disabled"), 'Wi-Fi still works')
         self.assertFalse(self.pg.evaluate("document.getElementById('boardUnsupported').hidden"))
-        self.assertIn('Not supported in this browser', self.pg.evaluate("document.getElementById('boardUnsupported').textContent"))
-        self.assertEqual(self.pg.evaluate("getComputedStyle(document.querySelector('#boardCard .board-purpose')).opacity"), '0.5')
-        self.assertEqual(self.pg.evaluate("getComputedStyle(document.getElementById('boardUnsupported')).opacity"), '1')
+        self.assertIn('USB is not supported in this browser', self.pg.evaluate("document.getElementById('boardUnsupported').textContent"))
+        self.assertIn('Connect over Wi-Fi', self.pg.evaluate("document.getElementById('boardUnsupported').textContent"))
         self.pg.click('#helpBtn'); self.pg.wait_for_timeout(200)
         help_text = self.pg.evaluate("document.getElementById('helpBody').textContent")
         for want in ('Where the card works', 'Chrome, Edge', 'Safari', 'Firefox', 'iPhone'):
