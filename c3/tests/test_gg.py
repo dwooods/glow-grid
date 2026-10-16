@@ -1128,6 +1128,7 @@ class Board(unittest.TestCase):
             self.assertTrue(hd["Content-Type"].startswith("text/html"))
             self.assertIn(b"Glow Grid Wi-Fi setup", body)
         self.assertLess(len(body), 5000, "the setup page stays small")
+        self.assertIn(b"closes in", body, "the page counts the close down after Save")
         # the scan the page shows, in the same text form WIFI SCAN uses (name as hex)
         st, _, scan = self.http("GET", "/scan", base=base)
         self.assertEqual(st, 200)
@@ -1150,7 +1151,11 @@ class Board(unittest.TestCase):
         # a good one: stored, then the setup network goes away and the board joins it
         st, _, body = self.http("POST", "/save", ("s=" + b"Home Net".hex() + "&p=" + "p@ss word 1".encode().hex()).encode(), form, base=base)
         self.assertEqual((st, body), (200, b"OK saved\n"))
-        self.wait_for(lambda: "softap off" in self.wifi_log() and "dns stop" in self.wifi_log(), "setup mode to close")
+        # the setup network stays up for 8 s after Save so the page can count down; it is still there after 3 s
+        time.sleep(3.0)
+        self.assertNotIn("softap off", self.wifi_log(), "the setup network must not close within 3 s of Save")
+        self.assertNotIn("begin Home Net", self.wifi_log(), "joining waits for the setup network to close")
+        self.wait_for(lambda: "softap off" in self.wifi_log() and "dns stop" in self.wifi_log(), "setup mode to close", timeout=12)
         self.wait_for(lambda: "begin Home Net p@ss word 1" in self.wifi_log(), "joining the new network")
         st = self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "connected")
         self.assertTrue(st.endswith("ssid=Home Net"))
@@ -1176,6 +1181,45 @@ class Board(unittest.TestCase):
         self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode")
         self.assertIn("wifi=setup", self.board.simple("INFO"))
         self.assertEqual(self.http("GET", "/", base=self.setup_base())[0], 200)
+
+    def test_a_save_just_before_the_timeout_still_gets_the_join_watch(self):
+        """Save 6 s (sped-up) before the 5-minute timeout: the 8 s close delay runs past it. The save must still finish through the join
+        watch, so a network that does not join reopens setup, instead of the timeout ending setup with nothing watching."""
+        self.extra_env = {"GG_SETUP_AUTO": "1", "GG_TIME_SCALE": "20"}
+        self.start()
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode at power-up with nothing saved")
+        t0 = time.time()
+        base = self.setup_base()
+        time.sleep(max(0.0, 14.7 - (time.time() - t0)))          # 294 s of sped-up time; the timeout is at 300 s
+        form = {"Content-Type": "application/x-www-form-urlencoded"}
+        st, _, body = self.http("POST", "/save", ("s=" + b"Late Net".hex() + "&p=" + "password3".encode().hex()).encode(), form, base=base)
+        self.assertEqual((st, body), (200, b"OK saved\n"))
+        self.wait_for(lambda: "softap off" in self.wifi_log(), "setup mode to close", timeout=6)
+        self.wait_for(lambda: "begin Late Net password3" in self.wifi_log(), "joining the saved network")
+        self.wait_for(lambda: self.log_count("softap GlowGrid-Setup") == 2, "setup reopening because it did not join", timeout=8)
+
+    def test_a_second_save_replaces_the_first_and_a_bad_one_changes_nothing(self):
+        """Two good Saves inside the 8 s window: only the second network is joined, and the close waits 8 s from the second. A refused
+        Save in between (400) neither cancels nor restarts the close."""
+        self.extra_env = {"GG_SETUP_AUTO": "1"}
+        self.start()
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode at power-up with nothing saved")
+        base = self.setup_base()
+        form = {"Content-Type": "application/x-www-form-urlencoded"}
+        def save(name, pw):
+            return self.http("POST", "/save", ("s=" + name.encode().hex() + "&p=" + pw.encode().hex()).encode(), form, base=base)[0]
+        self.assertEqual(save("First Net", "password1"), 200)
+        time.sleep(2.0)
+        self.assertEqual(save("Second Net", "password2"), 200)
+        t2 = time.time()
+        time.sleep(1.0)
+        self.assertEqual(save("Third Net", "short"), 400)
+        self.assertNotIn("softap off", self.wifi_log())
+        self.wait_for(lambda: "softap off" in self.wifi_log(), "setup mode to close", timeout=12)
+        self.assertGreaterEqual(time.time() - t2, 7.0, "the close waits 8 s from the second Save, not the first")
+        self.wait_for(lambda: "begin Second Net password2" in self.wifi_log(), "joining the second network")
+        self.assertNotIn("begin First Net", self.wifi_log())
+        self.assertNotIn("begin Third Net", self.wifi_log())
 
     def test_setup_mode_times_out_and_returns_to_the_saved_network(self):
         """No saved network: setup opens by itself at power-up and ends after 5 minutes (time sped up 50x here) with Wi-Fi left off."""
