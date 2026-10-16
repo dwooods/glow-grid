@@ -4,7 +4,7 @@ import struct
 COLS = ROWS = 16
 HEADER_SIZE = 12
 FRAME_BYTES = COLS * ROWS * 3
-MAX_FRAMES = 64
+MAX_FRAMES = 16
 
 
 def pack(frames, fps, brightness, gamma):

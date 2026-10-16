@@ -25,7 +25,7 @@
 #define GG_ROWS 16
 #define GG_PIXELS (GG_COLS * GG_ROWS)
 #define GG_FRAME_BYTES (GG_PIXELS * 3)
-#define GG_MAX_FRAMES 64
+#define GG_MAX_FRAMES 16        // a 16x16 panel plays simple loops; a cap keeps sprites small (12,300 bytes at most)
 #define GG_MAX_FILE (GG_HEADER_SIZE + GG_MAX_FRAMES * GG_FRAME_BYTES)
 #define GG_MAX_BRIGHT_PCT 40   // same safety cap as MAX_BRIGHTNESS 0.4 on the Pi
 
