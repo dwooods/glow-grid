@@ -12,8 +12,10 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `c3_player/gg_core.h` | the parts with no Arduino dependency: the `.gg` file check, the wiring map, the brightness/gamma table (same maths as `grid_common.py`), CRC-32 |
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
 | `tools/gg_tool.py` | `list`, `put`, `get`, `show`, `del`, `off`, `on`, `rotate`, `info` on the board over USB, or over Wi-Fi with `--host`; `wifi scan/set/status/clear` over USB (the firmware also answers `CRC <name>`: the checksum and size of a stored file, which the editor's Remove examples uses; and `GET <name>`: the file as `D <hex>` lines then `OK crc=… size=…`, fw 8, which `gg_tool.py get` and the editor's Load button use) |
+| `c3_player/site_data.h`, `site_b64_0.h`, `site_b64_1.h` | generated and git-ignored: the editor as one gzipped page (base64 text) that the firmware serves at `/` (firmware 12). Run `python3 tools/build_site.py` before flashing; without them the sketch still builds and `/` says the editor is not built in |
+| `tools/build_site.py` | packs `../web` into that page and writes the three files above (`--check` says whether they are missing or out of date) |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
-| `tests/` | 39 tests; see below |
+| `tests/` | 42 tests; see below |
 
 ## The `.gg` sprite file
 
@@ -78,6 +80,17 @@ HTTP API (all replies are the same `OK ...` / `ERR ...` text as USB, with status
 
 Uploads must be multipart: the ESP32 web server hands a raw POST body over as a text string that stops at the first zero byte (the probe cut a 49,164-byte sprite to 231 bytes), and multipart is binary-safe and is a plain "simple" request, so the browser sends no pre-flight. While a file is being received or stored the board is busy for a fraction of a second, so the animation may hitch; `INFO` reports `gap_ms`, the longest the main loop stalled since the last `INFO`.
 
+## The editor on the board (firmware 12)
+
+Open `http://glowgrid.local/` (or the board's address) in any browser on your network and the board serves the Glow Grid editor itself: one gzipped page, about 58 KB, decoded from base64 text in the firmware while it is sent. Why: iPhone Safari refuses an https page (the GitHub Pages site) calling a plain-http board, but a page the board serves shares the board's origin, so there is nothing to refuse. The editor sees it was loaded from a non-local http address, fills the Network box with that address and connects at once. Build and flash:
+
+```
+python3 tools/build_site.py            # writes c3_player/site_data.h and site_b64_*.h from ../web (git-ignored; run before flashing, and again after any change under web/)
+python3 tools/build_site.py --check    # exit 1 if they are missing or out of date
+```
+
+then flash `c3_player.ino` as usual. The board's copy is only as new as the last build and flash; the GitHub Pages site updates on its own. The page carries `<meta name="gg-site" content="glow-grid-vNN">` (the service worker cache name it was built from). No service worker or PWA install over plain http, and the page is not cached (`Cache-Control: no-store`), so each load is about 58 KB over your Wi-Fi; the animation may hitch for a moment while it is sent. Tests: the page's exact bytes, length and CRC through the loopback server, the base64 decoder against Python's, a build with no generated files, and a browser smoke test (`tests/test_smoke_wifi.py`) of an editor served by the board connecting to it.
+
 ## Tests
 
 ```
@@ -98,8 +111,8 @@ Set `GLOWGRID_REPO=/path/to/glow-grid` if this folder is not inside the repo (th
 
 Two deliberate breaks (wrong wiring default; checksum not checked) each made the suite fail. The first real IDE compile failed on an Arduino quirk the PC build could not see then (auto-generated prototypes above a struct); fixed by moving the struct into `gg_core.h`, and the IDE build test now covers it. The serial-line test found that an over-long line used to run its tail as a command; fixed.
 
-**Not tested:** `WIFI SCAN` on the real board (how long the panel pauses, hidden and duplicate names), mDNS after a router reconnect (a power cycle is tested), Safari, Firefox, Android and iPhone talking to the board, NeoPixel timing with 256 LEDs, serial throughput on the real USB port, Bluetooth.
+**Not tested:** the board-served editor on a real board (firmware 12) and from iPhone Safari, how long `WIFI SCAN` pauses the panel and what it does with hidden and duplicate names on the real board, mDNS after a router reconnect (a power cycle is tested), Safari, Firefox, Android and iPhone talking to the board, NeoPixel timing with 256 LEDs, serial throughput on the real USB port, Bluetooth.
 
 ## Next
 
-**Step 2, Wi-Fi:** firmware, tool and the editor (Network button, Connect over Wi-Fi in the Board card) are done; the editor over Wi-Fi works from Chrome on Windows (tab and installed app), while Safari on an iPhone is untested, and the network scan is PC-tested only. **Step 3, Bluetooth:** the same messages over a BLE service for the Capacitor phone app (Web Bluetooth is absent from iOS Safari, which is why Wi-Fi comes first).
+**Step 2, Wi-Fi:** firmware, tool and the editor (Network button, Connect over Wi-Fi in the Board card) are done; the editor over Wi-Fi works from Chrome on Windows (tab and installed app), while on an iPhone (2026-10-16) the board answers `/ping` when opened directly in Safari but the https editor's Connect over Wi-Fi fails (Safari blocking an https page from calling a plain-http address is the likely cause), which is why firmware 12 serves the editor itself. The network scan has run on the real board (6 networks found). **Step 3, Bluetooth:** the same messages over a BLE service for the Capacitor phone app (Web Bluetooth is absent from iOS Safari, which is why Wi-Fi comes first).
