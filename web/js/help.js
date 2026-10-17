@@ -12,7 +12,7 @@ $('helpBody').innerHTML = `
               <text x="200" y="30">Paint · Fill · Erase · Pick</text>
               <text x="200" y="72">Colour wheel · Shade · Hex · Palette</text>
               <text x="200" y="114">Frames: [1] [2] [3]  + Duplicate</text>
-              <text x="200" y="156">Move ↑←→↓ · One part only</text>
+              <text x="200" y="156">Move ↑←→↓ · All frames</text>
               <g class="af"><circle cx="186" cy="25" r="9"/><circle cx="186" cy="67" r="9"/><circle cx="186" cy="109" r="9"/><circle cx="186" cy="151" r="9"/></g>
               <g class="ink" text-anchor="middle"><text x="186" y="29">1</text><text x="186" y="71">2</text><text x="186" y="113">3</text><text x="186" y="155">4</text></g>
             </svg>
@@ -26,22 +26,22 @@ $('helpBody').innerHTML = `
             <li><strong>Move.</strong> The arrows under <em>Move and layers</em>, or Shift+arrow keys, shift the current frame by one pixel. Duplicate, nudge, repeat: that makes a bounce or a slide.</li>
             <li><strong>Play.</strong> <em>Play</em> previews the loop; <em>FPS</em> (1 to 30) sets the speed. Then save it: see Guide: saving.</li>
           </ol>
-          <p class="hint"><strong>Changing every frame at once.</strong> There is no paint-on-all-frames or move-all-frames button: tools and arrows act on the current frame only. The way to change something in every frame is the still part:</p>
+          <p class="hint"><strong>Changing every frame at once.</strong> Tools and arrows act on the current frame only, unless you turn on <em>Edit all frames at once</em>. That is the way to repaint or move something every frame shares (a background, a body), and also to animate just one part:</p>
           <figure class="help-fig">
-            <svg viewBox="0 0 420 110" role="img" aria-label="Three frames: the body is the same in each (the still part); only the arm changes">
+            <svg viewBox="0 0 420 110" role="img" aria-label="Three frames: the body is the same in each (the shared layer); only the arm changes">
               <g class="b"><rect x="10" y="10" width="80" height="80" rx="4"/><rect x="170" y="10" width="80" height="80" rx="4"/><rect x="330" y="10" width="80" height="80" rx="4"/></g>
               <g class="still"><rect x="34" y="30" width="32" height="40"/><rect x="194" y="30" width="32" height="40"/><rect x="354" y="30" width="32" height="40"/></g>
               <g class="af"><rect x="66" y="30" width="14" height="8"/><rect x="226" y="40" width="14" height="8"/><rect x="386" y="52" width="14" height="8"/></g>
               <g class="a"><path d="M96 50h68M256 50h68M158 44l6 6-6 6M318 44l6 6-6 6"/></g>
               <text x="50" y="106" text-anchor="middle" class="d">frame 1</text><text x="210" y="106" text-anchor="middle" class="d">frame 2</text><text x="370" y="106" text-anchor="middle" class="d">frame 3</text>
-              <text x="130" y="72" text-anchor="middle" class="d">grey = still</text>
+              <text x="130" y="72" text-anchor="middle" class="d">grey = shared</text>
             </svg>
           </figure>
           <ol>
             <li>Draw the whole character on one frame, then <em>+ Duplicate</em> it once per extra frame.</li>
-            <li>Tick <em>Animate one part only</em>. Whatever is identical in every frame becomes the still part; each frame keeps only what differs.</li>
-            <li>Under the tick box choose <strong>Still part (all frames)</strong> to paint or move something that appears in every frame (the body, a background). Choose <strong>Moving part (this frame)</strong> to change just the current frame (the arm).</li>
-            <li>To recolour a moving part in every frame, repaint it frame by frame. There is no shortcut yet.</li>
+            <li>Tick <em>Edit all frames at once</em> (it needs two or more frames). Whatever is identical in every frame becomes one shared layer; each frame keeps only what differs.</li>
+            <li>The two buttons under it are greyed out until the box is ticked. <strong>All frames</strong> paints or moves the shared layer, so the change shows in every frame (recolour the body, shift the whole picture, change the background). <strong>This frame only</strong> changes just the current frame (the arm).</li>
+            <li>To recolour something that differs in each frame, repaint it frame by frame. There is no shortcut yet.</li>
           </ol>
           <h3>Guide: Wi-Fi setup</h3>
           <figure class="help-fig">
@@ -108,7 +108,7 @@ $('helpBody').innerHTML = `
           <h3>Animating one part: move and still part</h3>
           <ul>
             <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift this frame one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide.</li>
-            <li><strong>Animate one part only:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes the still part, leaving each frame with only what changes (hand, legs, eyes, mouth). Paint just those bits per frame. Black on a frame is see-through. Untick to join it back.</li>
+            <li><strong>Edit all frames at once:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes one shared layer, leaving each frame with only what changes (hand, legs, eyes, mouth). Choose <em>All frames</em> to paint or move the shared layer for every frame at once, or <em>This frame only</em> to paint those changing bits per frame. Black on a frame is see-through. Untick to join the layers back.</li>
             <li><strong>Saved files</strong> always combine the layers, so the Pi and the sprite sheet need nothing new.</li>
           </ul>
           <h3>Drawing tools</h3>
