@@ -134,17 +134,7 @@
           <label>Rows <input id="rowsInput" type="number" min="1" max="64" value="16"></label>
           <button id="resizeBtn" class="btn btn-quiet" type="button">Apply size</button>
         </div>
-        <div class="guide"><details>
-          <summary class="hint">What these settings mean</summary>
-        <ul style="margin-top:8px" class="hint-list">
-          <li><strong>LED brightness:</strong> how bright the LEDs run, from 0.05 to 1. The Pi caps it at <code>MAX_BRIGHTNESS</code> (0.4 by default, about 6 A for full white), so anything higher plays at 0.4.</li>
-          <li><strong>Gamma:</strong> corrects for how eyes see light. LEDs get brighter in even steps, but we notice dark shades more than bright ones, so without correction mid-tones look washed out. Gamma darkens the middle of the range to compensate. 2.2 is the usual value. Raise it for more contrast and deeper colors (very dark shades can drop to off), lower it toward 1 for a flatter, brighter look.</li>
-          <li><strong>PSU amps:</strong> your power supply's rating. It only sets the limit on the Peak meter under the grid.</li>
-          <li><strong>Cols and Rows:</strong> the panel's width and height in LEDs. The Pi program is built for 16×16. Saved files record the grid size, and the Pi menu flags a file made for a different size instead of squashing it silently. Making the grid smaller crops every frame; Undo reverts.</li>
-          <li>Saved PNGs remember brightness and gamma, and <code>play.py</code> on the Pi uses them for that image, so the panel matches what you see here.</li>
-          <li>The Panel check uses the same rounding and "keep non-black pixels lit" rule as the Pi, so its warnings match what the panel will do. The grid itself shows your colors as drawn, not as the LEDs will glow.</li>
-        </ul>
-        </details></div>
+        <p class="hint">What do these do? <button id="settingsHelp" class="help-badge" type="button" aria-label="Help: what the panel settings mean" title="Help: panel settings">?</button></p>
         <hr class="sub-rule">
         <details class="check-details" id="diagDetails"><summary class="sub-h"><span class="check-label">Panel Check</span><span class="diag-sum" id="diagSum">0.00 A · no flags</span></summary>
         <div class="diag">
@@ -242,8 +232,11 @@
     <div class="photo-body export-body">
       <label>Board address <input id="netHost" type="text" value="glowgrid.local" spellcheck="false" autocapitalize="off" autocomplete="off" inputmode="url"></label>
       <button id="netConnectBtn" class="btn" type="button">Connect over Wi-Fi</button>
-      <p class="hint">Use <code>glowgrid.local</code>, or the IP address if that does not work. The board and this device must be on the same network. If the browser refuses (Safari on an iPhone always does from this https page), open the board's own address in that browser instead, <code>http://glowgrid.local/</code> or <code>http://</code> and its IP address: firmware 12 and later serve this editor itself and it connects on its own. Chrome on a computer may ask once whether this page may reach devices on your network: choose Allow.</p>
-      <p class="hint board-status" id="netStatus" role="status"></p>
+      <p class="hint">Use <code>glowgrid.local</code>, or the board's IP address. Same network as this device. Trouble connecting? See Help ▸ Network.</p>
+      <hr class="sub-rule">
+      <h3>Saved network</h3>
+      <p class="hint" id="netSaved"></p>
+      <div class="btn-row"><button id="netClearBtn" class="btn btn-quiet" type="button">Forget saved network</button></div>
       <hr class="sub-rule">
       <h3>Set up the board's Wi-Fi</h3>
       <p class="hint" id="netSetupHint"></p>
@@ -252,14 +245,14 @@
         <div class="btn-row"><button id="netScanBtn" class="btn" type="button">Scan for networks</button></div>
         <label>Networks found <select id="netPick" aria-label="Networks the board found"><option value="">Press Scan first</option></select></label>
         <p class="hint" id="netScanHint"></p>
-        <p class="hint">Not in the list? The board only hears 2.4 GHz Wi-Fi, so a 5 GHz-only network never appears. It may also be hidden or too far away. Move the board closer and scan again, or type the name below.</p>
+        <p class="hint">Not listed? 2.4 GHz only. Or type the name below.</p>
       </div>
       <label>Network name <input id="netSsid" type="text" spellcheck="false" autocapitalize="off" autocomplete="off"></label>
       <label>Password <input id="netPass" type="password" autocomplete="new-password"></label>
       <div class="btn-row">
         <button id="netSaveBtn" class="btn" type="button">Save to board</button>
-        <button id="netClearBtn" class="btn btn-quiet" type="button">Forget saved network</button>
       </div>
+      <p class="hint board-status net-status" id="netStatus" role="status"></p>
     </div>
   </div>
 </dialog>
