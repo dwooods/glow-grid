@@ -9,6 +9,7 @@
     python3 gg_tool.py off                                # panel dark, board keeps running
     python3 gg_tool.py on
     python3 gg_tool.py rotate 300                       # next sprite every 5 minutes; 0 = stay on one
+    python3 gg_tool.py shuffle 1                        # rotation picks a random sprite (0 = list order; firmware 16)
     python3 gg_tool.py info
     python3 gg_tool.py --port COM3 list                   # name the port if it is not found automatically
 
@@ -234,6 +235,8 @@ class HttpBoard:
             return self._call("POST", "/" + verb.lower())
         if verb == "ROTATE":
             return self._call("POST", "/rotate?s=" + q)
+        if verb == "SHUFFLE":
+            return self._call("POST", "/shuffle?on=" + q)
         raise ValueError("not available over Wi-Fi: " + command)
 
     def list(self):
@@ -292,6 +295,8 @@ def main():
     sub.add_parser("on")
     r = sub.add_parser("rotate")
     r.add_argument("seconds", type=int)
+    sh = sub.add_parser("shuffle")
+    sh.add_argument("on", type=int, choices=[0, 1])
     p = sub.add_parser("put")
     p.add_argument("files", nargs="+")
     w = sub.add_parser("wifi")
@@ -347,6 +352,8 @@ def main():
             print(board.simple(a.cmd.upper()))
         elif a.cmd == "rotate":
             print(board.simple(f"ROTATE {a.seconds}"))
+        elif a.cmd == "shuffle":
+            print(board.simple(f"SHUFFLE {a.on}"))
     except (RuntimeError, TimeoutError, ValueError) as e:
         raise SystemExit(f"error: {e}")
     finally:
