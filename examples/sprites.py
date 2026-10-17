@@ -37,6 +37,11 @@ PALETTE = {
     # fish
     "A": (40, 200, 255),   # aqua
     "a": (20, 120, 220),   # stripe blue
+    # bat
+    "U": (150, 70, 255),   # violet
+    "u": (96, 36, 200),    # violet shadow
+    # chest
+    "w": (150, 72, 18),    # dark wood
 }
 
 _KNIGHT = [
@@ -564,6 +569,347 @@ def lantern_frames():
     for fl in _FLAMES:
         mid = ["....s" + r + "s...." for r in fl]
         frames.append(_LANTERN_TOP + mid + _LANTERN_BOTTOM)
+    return frames
+
+
+# ---- six more originals, a bunny flip and a rainbow burst (all generated or drawn as text) ----
+
+def _mirror(half):
+    """Rows hold the left half of a left-right symmetric 16-wide picture."""
+    return [r + r[::-1] for r in half]
+
+
+def _put(g, x, y, c):
+    if 0 <= y < len(g) and 0 <= x < len(g[0]):
+        g[y][x] = c
+
+
+def _grid():
+    return [["."] * 16 for _ in range(16)]
+
+
+def _rows(g):
+    return ["".join(r) for r in g]
+
+
+# ---- mushroom ----
+_MUSHROOM_CAP = [
+    "......RRRR",
+    "....RRRRWW",
+    "...RRWWRRW",
+    "..RRWWWRRR",
+    ".RRRWWRRRR",
+    ".RRRRRRRRR",
+    "RRRRRRRWWR",
+    "rrrrrrrrrr",
+]
+_MUSHROOM_STEM = [
+    "......TTTT",
+    "......TTTT",
+    ".....TTTTT",
+    ".....TTTTT",
+    ".....TTTTT",
+    "....TTTTTT",
+]
+
+
+def mushroom_frames():
+    """4 frames: the cap bobs down and up, and spores drift off it."""
+    cap, stem = _mirror(_MUSHROOM_CAP), _mirror(_MUSHROOM_STEM)
+    frames = []
+    for dy, spores in ((0, []), (1, []), (0, [(5, 3), (11, 2)]), (-1, [(4, 1), (11, 0), (8, 2)])):
+        top = 3 + dy                      # row where the cap starts
+        g = _grid()
+        for i, r in enumerate(cap):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, top + i, c)
+        for i, r in enumerate(stem):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, 3 + len(cap) + i, c)
+        for x, y in spores:
+            _put(g, x, y, "Y")
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- sword ----
+def sword_frames():
+    """4 frames: a diagonal sword with a glint that runs up the blade."""
+    frames = []
+    for glint in (3, 5, 7, 9):
+        g = _grid()
+        for i in range(10):               # blade, bottom-left to top-right
+            x, y = 5 + i, 10 - i
+            _put(g, x, y, "S")
+            _put(g, x, y + 1, "s")
+        _put(g, 14, 0, "W"); _put(g, 15, 0, "S")        # tip
+        for i in range(-2, 3):            # cross-guard, perpendicular to the blade
+            _put(g, 4 + i, 11 + i, "G"); _put(g, 5 + i, 11 + i, "G")
+        for i in range(3):                # grip and pommel
+            _put(g, 3 - i, 12 + i, "L"); _put(g, 2 - i, 12 + i, "L")
+        _put(g, 0, 15, "G"); _put(g, 1, 15, "G")
+        x, y = 5 + glint, 10 - glint
+        _put(g, x, y, "W")
+        if glint in (7, 9):
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                if g[y + dy][x + dx] == ".":
+                    _put(g, x + dx, y + dy, "Y")
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- treasure chest ----
+def chest_frames():
+    """4 frames: closed, cracked, open with gold, cracked again."""
+    lid_closed = _mirror(["..wwwwww", ".wLLLLLL", ".wLLLLLL", ".wGGGGGG"])
+    # closed lid sits on rows 5-8; open lid stands up behind (rows 1-4)
+    base = _mirror(["..LLLLLL", ".wLLGGGG", ".wLLGGGG", ".wLLLLLL", ".wLLLLLL", ".woooooo"])
+    frames = []
+    for state in (0, 1, 2, 1):
+        g = _grid()
+        for i, r in enumerate(base):                      # box on rows 9-14
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, 9 + i, c)
+        if state == 0:
+            for i, r in enumerate(lid_closed):
+                for x, c in enumerate(r):
+                    if c != ".":
+                        _put(g, x, 5 + i, c)
+        elif state == 1:                                   # lid tipped up a little, a slit of gold
+            for i, r in enumerate(lid_closed):
+                for x, c in enumerate(r):
+                    if c != ".":
+                        _put(g, x, 4 + i, c)
+            for x in range(3, 13):
+                _put(g, x, 8, "Y")
+        else:                                              # lid standing open behind, gold heaped on top
+            lid = _mirror(["..wwwwww", ".wLLLLLL", ".wLLLLLL", ".wGGGGGG"])
+            for i, r in enumerate(lid):
+                for x, c in enumerate(r):
+                    if c != ".":
+                        _put(g, x, 1 + i, c)
+            for x in range(2, 14):
+                _put(g, x, 8, "G")
+            for x in range(3, 13):
+                _put(g, x, 7, "Y")
+            for x in range(5, 11):
+                _put(g, x, 6, "Y")
+            _put(g, 7, 5, "W"); _put(g, 4, 6, "W"); _put(g, 11, 7, "W")
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- bat ----
+_BAT_UP = [
+    "U.....U.",
+    "UU....U.",
+    "UUU..UUU",
+    "UUUUURUU",
+    "uUUUUUUU",
+    ".uUUUUUU",
+    "..uuUUUU",
+    "....uUUU",
+    ".....UUW",
+    "......UU",
+]
+_BAT_MID = [
+    "......U.",
+    "......U.",
+    ".....UUU",
+    "UUUUURUU",
+    "UUUUUUUU",
+    "uUuUUUUU",
+    ".u.uUUUU",
+    ".....UUW",
+    "......UU",
+]
+_BAT_DOWN = [
+    "......U.",
+    "......U.",
+    ".....UUU",
+    "U....URU",
+    "UU..UUUU",
+    "UUUUUUUU",
+    "uUUUUUUU",
+    ".uUUUUUU",
+    "..uuUUUW",
+    "....uUUU",
+]
+
+
+def bat_frames():
+    """4 frames: wings up, level, down, level."""
+    frames = []
+    for half in (_BAT_UP, _BAT_MID, _BAT_DOWN, _BAT_MID):
+        g = _grid()
+        for i, r in enumerate(_mirror(half)):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, 3 + i, c)
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- rocket ----
+_ROCKET = [
+    ".......R",
+    "......RR",
+    "......RR",
+    ".....RRR",
+    ".....SSS",
+    ".....SVV",
+    ".....SVV",
+    ".....SSS",
+    ".....SSS",
+    "....sSSS",
+    "....RRSS",
+    "...RRRSS",
+]
+_FLAME_ROWS = [["....OOYY", "....OYYY", "......YY"], ["....OOYY", ".....OYY", ".....YYY", "......YY"],
+               ["....OOYY", "....OYYY", "....OYYY", ".....OYY"], ["....OOYY", ".....OYY", "......YY"]]
+
+
+def rocket_frames():
+    """4 frames: the flame flickers and the stars drift past, so it looks like it is climbing."""
+    stars = [(1, 2), (13, 5), (2, 10), (14, 12)]
+    frames = []
+    for t, fl in enumerate(_FLAME_ROWS):
+        g = _grid()
+        for x, y in stars:
+            _put(g, x, (y + 3 * t) % 16, "W" if (x + y) % 2 else "A")
+        body = _mirror(_ROCKET)
+        for i, r in enumerate(body):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, 1 + i, c)
+        for i, r in enumerate(_mirror(fl)):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, 13 + i, c)
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- candle ----
+_CANDLE_BODY = [
+    "......s.........",
+    ".....TTTT.......",
+    ".....TWTT.......",
+    ".....TWTT.......",
+    ".....TWTTT......",
+    ".....TTTT.......",
+    ".....TTTT.......",
+]
+_CANDLE_DISH = [
+    "...GGGGGGGGGG...",
+    "..GYYYYYYYYYYG..",
+]
+_CANDLE_FLAMES = [
+    ["..Y.", ".YY.", "YOOY", ".OO."],
+    [".Y..", ".YY.", "YOOY", ".OO."],
+    ["..Y.", ".YYY", "YOOY", ".OO."],
+    ["...Y", ".YY.", "YOOY", ".OO."],
+]
+
+
+def candle_frames():
+    """4 frames: the flame sways left, upright, right and flares."""
+    frames = []
+    for fl in _CANDLE_FLAMES:
+        g = _grid()
+        for i, r in enumerate(fl):
+            for j, c in enumerate(r):
+                if c != ".":
+                    _put(g, 5 + j, 3 + i, c)
+        for i, r in enumerate(_CANDLE_BODY):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x + 1, 7 + i, c)
+        for i, r in enumerate(_CANDLE_DISH):
+            for x, c in enumerate(r):
+                if c != ".":
+                    _put(g, x, 14 + i, c)
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- bunny: jump and forward flip ----
+_BUNNY = [          # 8x8, facing right; rotated a quarter turn at a time for the flip, so no pixel is smeared
+    "..LL.LL.",
+    "..LT.LT.",
+    "..LT.LT.",
+    ".LLLLLLL",
+    "LLLLLELP",
+    "LLLLLLLL",
+    "TTLLLLLL",
+    ".LL..LL.",
+]
+
+
+def _rot(rows):
+    """One quarter turn clockwise (a forward flip when the bunny faces right)."""
+    n = len(rows)
+    return ["".join(rows[n - 1 - y][x] for y in range(n)) for x in range(n)]
+
+
+def bunny_frames():
+    """10 frames: crouch, launch, a full forward flip in the air, land, settle."""
+    base = _BUNNY
+    turns = [base]
+    for _ in range(3):
+        turns.append(_rot(turns[-1]))
+    squash = base[:3] + base[5:]                       # 6 rows tall: crouched
+    stretch = base[:4] + [base[4]] + base[4:]           # 9 rows tall: reaching up
+    ground = 15
+    seq = [               # (picture, x of left edge, y of top row)
+        (squash, 4, ground - 6),
+        (stretch, 4, ground - 9 - 1),
+        (turns[0], 4, 3),
+        (turns[1], 4, 1),
+        (turns[2], 4, 1),
+        (turns[3], 4, 3),
+        (turns[0], 4, 5),
+        (stretch, 4, ground - 9),
+        (squash, 4, ground - 6),
+        (base, 4, ground - 8),
+    ]
+    frames = []
+    for pic, x0, y0 in seq:
+        g = _grid()
+        for x in range(16):
+            _put(g, x, 15, "n" if x % 2 == 0 else ".")
+        for i, r in enumerate(pic):
+            for j, c in enumerate(r):
+                if c != ".":
+                    _put(g, x0 + j, y0 + i, c)
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- rainbow star burst ----
+_RAINBOW = "ROYNAEUM"      # red, orange, yellow, green, aqua, blue, violet, magenta
+
+
+def burst_frames():
+    """8 frames: a four-point star of rainbow rings pours out of the middle and flashes white at the heart."""
+    frames = []
+    for t in range(8):
+        g = _grid()
+        for y in range(16):
+            for x in range(16):
+                dx, dy = abs(x - 7.5), abs(y - 7.5)
+                d = (dx ** 0.6 + dy ** 0.6) ** (1 / 0.6)     # a concave four-point star: rings keep its shape
+                ring = int(d * 0.9)
+                if ring > 9 - (t % 2):                       # the whole star breathes in and out, so it flashes
+                    continue
+                g[y][x] = _RAINBOW[(ring - t) % 8]
+        if t % 2 == 0:
+            for x, y in ((7, 7), (8, 7), (7, 8), (8, 8)):
+                g[y][x] = "W"
+        frames.append(_rows(g))
     return frames
 
 
