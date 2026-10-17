@@ -25,12 +25,14 @@
 //   OFF / ON                   -> OK panel off / OK panel on (same as the On/off button; off is kept across a power cycle)
 //   ROTATE <seconds>           -> OK rotate <seconds>; 0 = off. Cycles the stored sprites in list order, kept across
 //                                 a power cycle; each sprite keeps animating for the whole interval (David, 2026-10-15)
+//   SHUFFLE <0|1>              -> OK shuffle <0|1>. With 1, rotation picks a random sprite (never the one already playing)
+//                                 instead of the next in list order; kept across a power cycle (fw 16). The Next button stays in list order.
 //   CRC <name>                 -> OK crc=<8 hex> size=<bytes> of the stored file, so the editor can tell an unchanged
 //                                 example from one you replaced (fw 7); ERR no such sprite
 //   GET <name>                 -> D <96 hex digits> lines (48 bytes each) with the stored file, then
 //                                 OK crc=<8 hex> size=<bytes>; ERR no such sprite. Lets the editor load a sprite
 //                                 back into the grid (fw 8). The panel pauses on its current frame while it runs.
-//   INFO                       -> OK fw=<n> current=<name> ... rotate=<seconds> wifi=<off|connecting|connected> ip=<address or -> gap_ms=<n>
+//   INFO                       -> OK fw=<n> current=<name> ... rotate=<seconds> shuffle=<0|1> wifi=<off|connecting|connected> ip=<address or -> gap_ms=<n>
 //                                 (gap_ms: the longest the main loop went without running since the last INFO; fw 9)
 //   WIFI SET <ssid hex> <password hex, or -> for none>  -> OK wifi saved; joining. Stored in the chip's NVS, joined at every start (fw 9).
 //                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
@@ -59,7 +61,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 15          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 16          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the open network the board hosts in setup mode
 #define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
@@ -90,11 +92,13 @@ bool setupOn = false;        // setup mode is running: the board hosts GlowGrid-
 bool dirty = true;           // a still needs drawing
 uint32_t rotateSec = 0;      // 0 = stay on one sprite; else move to the next one every rotateSec seconds
 uint32_t rotateAt = 0;       // millis() at which the next sprite is due
+bool shuffleOn = false;      // rotation picks a random sprite instead of the next in list order
 #define ROTATE_MAX 86400UL
 
 String pathOf(const String& name) { return "/" + name + ".gg"; }
 const char* OFF_MARK = "/panel.off";   // exists while the panel is off, so OFF survives a power cycle (David, 2026-10-15)
 const char* ROTATE_PATH = "/rotate.txt"; // the rotate interval in seconds, absent or 0 = off
+const char* SHUFFLE_MARK = "/shuffle.txt"; // exists while rotation is random
 String wifiSsid, wifiPass;   // from NVS (not the sprite flash); empty ssid = Wi-Fi not set up
 uint32_t gapMaxMs = 0;       // longest main-loop gap since the last INFO
 
@@ -113,6 +117,12 @@ void loadRotate() {
   if (rotateSec > ROTATE_MAX) rotateSec = 0;
   rotateReset();
 }
+void saveShuffle() {
+  if (!shuffleOn) { LittleFS.remove(SHUFFLE_MARK); return; }
+  File f = LittleFS.open(SHUFFLE_MARK, "w");
+  if (f) { f.print((uint32_t)1); f.close(); }
+}
+void loadShuffle() { shuffleOn = LittleFS.exists(SHUFFLE_MARK); }
 
 // Keeps the off state in flash. Written only when it changes.
 void rememberPanel() {
@@ -214,9 +224,16 @@ void render(int frame) {
   strip.show();
 }
 
+// The sprite rotation moves to next: the following one in list order, or (shuffle) a random one other than the current.
+int rotateNext() {
+  if (!shuffleOn || nSprites < 3) return (cur + 1) % nSprites;   // with two sprites the only other one is also the next one
+  int r = (int)random(nSprites - 1);                              // 0..n-2, skipping over the current index
+  return r >= cur ? r + 1 : r;
+}
+
 void rotateTick() {
   if (!rotateSec || !panelOn || nSprites < 2) return;
-  if ((int32_t)(millis() - rotateAt) >= 0) selectIndex((cur + 1) % nSprites);
+  if ((int32_t)(millis() - rotateAt) >= 0) selectIndex(rotateNext());
 }
 
 void playTick() {
@@ -316,10 +333,10 @@ String infoText() {
   uint32_t gap = gapMaxMs;
   gapMaxMs = 0;                      // gap_ms = the longest the main loop went without running since the last INFO
   String ip = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("-");
-  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu wifi=%s ip=%s gap_ms=%lu",
+  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu shuffle=%d wifi=%s ip=%s gap_ms=%lu",
               GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
               data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
-              (unsigned)freeBytes(), (unsigned long)rotateSec, wifiState().c_str(), ip.c_str(), (unsigned long)gap);
+              (unsigned)freeBytes(), (unsigned long)rotateSec, shuffleOn ? 1 : 0, wifiState().c_str(), ip.c_str(), (unsigned long)gap);
 }
 
 String opShow(const String& name) {
@@ -351,6 +368,13 @@ String opRotate(const char* arg) {
   saveRotate();
   rotateReset();
   return sfmt("OK rotate %lu", (unsigned long)rotateSec);
+}
+
+String opShuffle(const char* arg) {
+  if (!arg || (strcmp(arg, "0") != 0 && strcmp(arg, "1") != 0)) return String("ERR usage: SHUFFLE <0|1> (1 = random order)");
+  shuffleOn = arg[0] == '1';
+  saveShuffle();
+  return sfmt("OK shuffle %d", shuffleOn ? 1 : 0);
 }
 
 String opCrc(const String& name) {
@@ -531,7 +555,7 @@ String opWifi(const char* rest) {
 // ---- HTTP API ----
 //   GET  /ping /info /list            same text as PING, INFO, LIST
 //   GET  /crc?name=X   GET /get?name=X (the file's bytes)
-//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N
+//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N  /shuffle?on=0|1
 //   POST /setup                       leave this network and open setup mode (fw 13)
 //   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
 //                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
@@ -660,6 +684,7 @@ void httpBegin() {
   server.on("/off", HTTP_POST, []() { httpReply(opPower(false)); });
   server.on("/on", HTTP_POST, []() { httpReply(opPower(true)); });
   server.on("/rotate", HTTP_POST, []() { httpReply(opRotate(server.arg("s").c_str())); });
+  server.on("/shuffle", HTTP_POST, []() { httpReply(opShuffle(server.arg("on").c_str())); });
   server.on("/put", HTTP_POST, httpPutDone, httpPutData);
   server.on("/setup", HTTP_POST, []() { httpReply(opSetup()); });
   server.onNotFound(httpNotFound);
@@ -868,6 +893,8 @@ void doCommand(char* line) {
     say(opPower(true));
   } else if (c == "ROTATE") {
     say(opRotate(n >= 2 ? a1 : NULL));
+  } else if (c == "SHUFFLE") {
+    say(opShuffle(n >= 2 ? a1 : NULL));
   } else if (c == "CRC") {
     say(n < 2 ? String("ERR no such sprite") : opCrc(String(a1)));
   } else if (c == "GET") {
@@ -931,6 +958,7 @@ void setup() {
   }
   LittleFS.remove(TMP_PATH);         // an upload cut off by a power loss leaves this behind
   loadRotate();
+  loadShuffle();
   wifiLoad();                        // joins the saved network in the background; nothing waits for it
   scanSprites();
   Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
