@@ -112,12 +112,12 @@
             <button id="nudgeDown" class="btn btn-quiet n-down" type="button" aria-label="Move down one pixel" title="Move down (Shift+Down arrow)">↓</button>
           </div>
           <div class="move-ctl">
-            <label class="check" title="Draw the whole picture and duplicate it once per extra frame, then tick this. Whatever is identical in every frame becomes one shared layer, so you can paint or move it once for all frames."><input id="stillOn" type="checkbox"> Edit all frames at once (the part that is the same in every frame)</label>
+            <label class="check" title="Draw the whole picture and duplicate it once per extra frame, then tick this. Whatever is identical in every frame becomes one shared layer, so you can paint or move it once for all frames."><input id="stillOn" type="checkbox"> Edit all frames at once (same in every frame)</label>
             <div class="tool-row" id="layerRow" role="group" aria-label="What your drawing and moves apply to">
               <button class="tool-btn" id="targetShared" type="button" aria-pressed="false" disabled>All frames</button>
               <button class="tool-btn active" id="targetFrame" type="button" aria-pressed="true" disabled>This frame only</button>
             </div>
-            <p class="hint" id="layerHint"></p>
+            <p class="hint" id="layerHint" hidden></p>
           </div>
         </div>
       </section>

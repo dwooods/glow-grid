@@ -9,9 +9,10 @@ function updateLayerUI() {
   $('targetFrame').classList.toggle('active', !sh); $('targetFrame').setAttribute('aria-pressed', String(!sh));
   $('targetShared').classList.toggle('active', sh); $('targetShared').setAttribute('aria-pressed', String(sh));
   deviceEl.classList.toggle('edit-shared', sh);
-  $('layerHint').textContent = has
+  const hint = has
     ? 'All frames paints or moves what every frame shares, such as a body or background. This frame only changes just this frame. Black on a frame is see-through. Details are in Help.'
-    : (state.frames.length < 2 ? 'Add a second frame first (+ Duplicate), then tick the box to edit what is the same in every frame once.' : 'Tick the box to edit what is the same in every frame once, for all frames.');
+    : (state.frames.length < 2 ? 'Add a second frame first (+ Duplicate) to use this.' : '');
+  $('layerHint').textContent = hint; $('layerHint').hidden = !hint;
 }
 function shiftArr(arr, dx, dy, wrap) {
   const { cols, rows } = state, out = new Array(arr.length).fill('#000000');
