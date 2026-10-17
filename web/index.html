@@ -124,31 +124,37 @@
 
       <section class="card" id="panelCard">
         <h2>Panel settings</h2>
-        <div class="form-row">
-          <label>LED brightness <input id="brightInput" type="number" min="0.05" max="1" step="0.05" value="0.3"></label>
-          <label>Gamma <input id="gammaInput" type="number" min="1" max="3" step="0.1" value="2.2"></label>
-          <label>PSU amps <input id="psuInput" type="number" min="1" max="60" step="1" value="6"></label>
-        </div>
-        <div class="form-row">
-          <label>Cols <input id="colsInput" type="number" min="1" max="64" value="16"></label>
-          <label>Rows <input id="rowsInput" type="number" min="1" max="64" value="16"></label>
-          <button id="resizeBtn" class="btn btn-quiet" type="button">Apply size</button>
-        </div>
         <p class="hint">What do these do? <button id="settingsHelp" class="help-badge" type="button" aria-label="Help: what the panel settings mean" title="Help: panel settings">?</button></p>
+        <div class="panel-top">
+          <div class="panel-forms">
+            <div class="form-row">
+              <label>LED brightness <input id="brightInput" type="number" min="0.05" max="1" step="0.05" value="0.3"></label>
+              <label>Gamma <input id="gammaInput" type="number" min="1" max="3" step="0.1" value="2.2"></label>
+              <label>PSU amps <input id="psuInput" type="number" min="1" max="60" step="1" value="6"></label>
+            </div>
+            <div class="form-row">
+              <label>Cols <input id="colsInput" type="number" min="1" max="64" value="16"></label>
+              <label>Rows <input id="rowsInput" type="number" min="1" max="64" value="16"></label>
+              <button id="resizeBtn" class="btn btn-quiet" type="button">Apply size</button>
+            </div>
+          </div>
+          <div class="panel-amps">
+            <div>
+              <div class="metric-label">Est. draw, this frame</div>
+              <div class="metric" id="ampNow">0.00 A</div>
+            </div>
+            <div>
+              <div class="metric-label">Peak, all frames</div>
+              <div class="metric" id="ampPeak">0.00 A <small>of 6 A</small></div>
+            </div>
+            <div class="meter" id="ampMeter"><span></span></div>
+          </div>
+        </div>
         <hr class="sub-rule">
-        <details class="check-details" id="diagDetails"><summary class="sub-h"><span class="check-label">Panel Check</span><span class="diag-sum" id="diagSum">0.00 A · no flags</span></summary>
+        <details class="check-details" id="diagDetails"><summary class="sub-h"><span class="check-label">Panel Check</span><span class="diag-sum" id="diagSum">all clear</span></summary>
         <div class="diag">
           <div>
-            <div class="metric-label">Est. draw, this frame</div>
-            <div class="metric" id="ampNow">0.00 A</div>
-          </div>
-          <div>
-            <div class="metric-label">Peak, all frames</div>
-            <div class="metric" id="ampPeak">0.00 A <small>of 6 A</small></div>
-          </div>
-          <div class="full"><div class="meter" id="ampMeter"><span></span></div></div>
-          <div>
-            <span class="chip faint"><i></i> Barely lit</span>
+            <span class="chip faint"><i></i> Almost black</span>
             <div class="metric" id="faintCount">0</div>
           </div>
           <div>
@@ -156,8 +162,8 @@
             <div class="metric" id="shiftCount">0</div>
           </div>
         </div>
-        <p class="hint" id="diagHint">Barely lit means the pixel isn't black but ends up at 1–3 out of 255 on the LED, so it reads as off or a faint smudge. Use pure black for "off", or brighten it.</p>
-        <label class="check"><input id="flagsToggle" type="checkbox" checked> Outline flagged pixels</label>
+        <p class="hint" id="diagHint"><strong>Almost black:</strong> not pure black, but the LED lights it at only 1 to 3 out of 255, so it shows as a faint smudge. Fill it with pure black (#000000) to turn it off, or make it brighter. <strong>Color shifts:</strong> at this brightness and gamma the LED shows a different hue than you drew. Change the color or the settings.</p>
+        <label class="check"><input id="flagsToggle" type="checkbox" checked> Show them on the grid (dashed outlines)</label>
         </details>
       </section>
     </aside>
