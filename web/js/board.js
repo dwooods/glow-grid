@@ -13,6 +13,7 @@ const BOARD_PAGE = 5;                // rows per page in the list
 const BOARD_MAX_SPRITES = 64;        // the firmware's MAX_SPRITES
 const BOARD_CRC_FW = 7;              // the first firmware with the CRC command (Remove examples needs it)
 const BOARD_GET_FW = 8;              // the first firmware with the GET command (Load needs it)
+const BOARD_SHUFFLE_FW = 16;         // the first firmware with the SHUFFLE command (random rotation)
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
 class SerialTransport {
@@ -125,6 +126,7 @@ class GgBoard {
   async off() { return this.cmd('OFF', ['OK']); }
   async on() { return this.cmd('ON', ['OK']); }
   async rotate(sec) { return this.cmd(`ROTATE ${sec}`, ['OK']); }
+  async shuffle(on) { return this.cmd(`SHUFFLE ${on ? 1 : 0}`, ['OK']); }
   async crc(name) {                   // checksum and size of the file stored under `name` (firmware 7 and later)
     const line = await this.cmd(`CRC ${name}`, ['OK']);
     const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
@@ -220,6 +222,7 @@ class HttpBoard {
   async off() { return this.call('POST', '/off'); }
   async on() { return this.call('POST', '/on'); }
   async rotate(sec) { return this.call('POST', `/rotate?s=${encodeURIComponent(sec)}`); }
+  async shuffle(on) { return this.call('POST', `/shuffle?on=${on ? 1 : 0}`); }
   async setup() { return this.call('POST', '/setup'); }              // firmware 13: leave this network and open GlowGrid-Setup
   async crc(name) {
     const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
@@ -295,6 +298,11 @@ function boardShowRotate(sec) {       // the select shows the board's own settin
   sel.value = v;
   sel.disabled = false;
 }
+function boardShowShuffle(info) {       // the checkbox shows the board's own setting; a board without the field cannot do it
+  const cb = $('boardShuffle'), can = info.shuffle !== undefined;
+  cb.checked = info.shuffle === '1'; cb.disabled = !can;
+  $('boardShuffleLbl').title = can ? 'Rotation picks a random sprite each time, never the one already playing, instead of the next in the list.' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+}
 function boardLinkUpdate() {           // "· Wi-Fi glowgrid.local", or "· USB" plus the board's address once it has joined a network
   const ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
   $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' + (ip ? ` · address ${ip}` : '') : '';
@@ -313,6 +321,7 @@ async function boardRefresh(showName) {            // showName: jump to the page
   $('boardOnBtn').disabled = info.panel !== 'off';
   $('boardOffBtn').disabled = info.panel === 'off';
   boardShowRotate(info.rotate);
+  boardShowShuffle(info);
 }
 function boardRenderList() {
   const files = boardFiles;
@@ -422,7 +431,7 @@ async function boardSend() {
   try {
     boardSay(`Sending ${name}…`, '');
     await board.put(name, bytes, (done, total) => boardSay(`Sending ${name}… ${Math.round(100 * done / total)}%`, ''));
-    boardSay(`Sent ${name} (${n} frame${n === 1 ? '' : 's'}, ${bytes.length.toLocaleString()} bytes). It is playing now.`, 'ok');
+    boardSay(`Sent ${name} (${n} frame${n === 1 ? '' : 's'}${n > 1 ? `, ${state.fps} fps` : ''}, brightness ${sim.brightness}, gamma ${sim.gamma}, ${bytes.length.toLocaleString()} bytes). It is playing now.`, 'ok');
     await boardRefresh(name);
   } catch (err) { if (board) boardSay(`Board said: ${err.message}`, 'err'); }   // after an unplug the card already says so
   finally { btn.disabled = false; }
@@ -492,6 +501,10 @@ $('boardRotate').addEventListener('change', () => {
   const sec = Number($('boardRotate').value);
   const label = $('boardRotate').selectedOptions[0].textContent;
   boardAct(() => board.rotate(sec), sec ? `Rotating ${label}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
+});
+$('boardShuffle').addEventListener('change', () => {
+  const on = $('boardShuffle').checked;
+  boardAct(() => board.shuffle(on), on ? 'Random order on: each rotation picks a random sprite. The board remembers this after a power cycle.' : 'Random order off: rotation follows the list.');
 });
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);
