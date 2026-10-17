@@ -238,8 +238,8 @@ input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
 .dock-history { display: flex; gap: 6px; flex: none; }
 .dock-history:empty { display: none; }
 .phone-dock #undoBtn, .phone-dock #redoBtn { font-size: 0; width: var(--tap); padding: 0; }
-.phone-dock #undoBtn::before { content: "\\21B6"; font-size: 1.3rem; }
-.phone-dock #redoBtn::before { content: "\\21B7"; font-size: 1.3rem; }
+.phone-dock #undoBtn::before { content: "\21B6"; font-size: 1.3rem; }
+.phone-dock #redoBtn::before { content: "\21B7"; font-size: 1.3rem; }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) 2px var(--s-2); background: var(--bg); font-family: var(--font-display); font-weight: 600; }
 .phone-dock { --dock-h: 150px; --sheet-top: 440px; }
 .phone-dock .page { padding-block: var(--s-2) calc(var(--dock-h) + var(--s-3)); padding-inline: max(8px, env(safe-area-inset-left), env(safe-area-inset-right)); gap: var(--s-2); }
