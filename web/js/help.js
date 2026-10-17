@@ -2,6 +2,93 @@
 // Plain HTML inside a template literal: write \\ for a backslash, and avoid backticks and ${ in the text.
 $('helpBody').innerHTML = `
           <p class="hint">Glow Grid is for drawing pixel art and checking what survives the Pi's brightness cap and gamma curve (the dashed outlines and the Panel check) before it goes near the panel. The Pi fits any image to the grid and plays it. How good it looks depends on what you give it.</p>
+          <h3>Guide: build a sprite</h3>
+          <figure class="help-fig">
+            <svg viewBox="0 0 450 190" role="img" aria-label="The editor: the grid on the left; tools, colour, frames and move controls on the right, numbered like the steps">
+              <g class="b"><rect x="10" y="10" width="136" height="136" rx="4"/></g>
+              <g class="af" opacity=".85"><rect x="44" y="44" width="17" height="17"/><rect x="61" y="44" width="17" height="17"/><rect x="78" y="44" width="17" height="17"/><rect x="44" y="61" width="17" height="17"/><rect x="95" y="61" width="17" height="17"/><rect x="44" y="78" width="17" height="17"/><rect x="61" y="95" width="17" height="17"/><rect x="78" y="95" width="17" height="17"/><rect x="95" y="95" width="17" height="17"/></g>
+              <text x="78" y="164" text-anchor="middle" class="d">the grid</text>
+              <g class="b"><rect x="170" y="10" width="272" height="30" rx="6"/><rect x="170" y="52" width="272" height="30" rx="6"/><rect x="170" y="94" width="272" height="30" rx="6"/><rect x="170" y="136" width="272" height="30" rx="6"/></g>
+              <text x="200" y="30">Paint · Fill · Erase · Pick</text>
+              <text x="200" y="72">Colour wheel · Shade · Hex · Palette</text>
+              <text x="200" y="114">Frames: [1] [2] [3]  + Duplicate</text>
+              <text x="200" y="156">Move ↑←→↓ · One part only</text>
+              <g class="af"><circle cx="186" cy="25" r="9"/><circle cx="186" cy="67" r="9"/><circle cx="186" cy="109" r="9"/><circle cx="186" cy="151" r="9"/></g>
+              <g class="ink" text-anchor="middle"><text x="186" y="29">1</text><text x="186" y="71">2</text><text x="186" y="113">3</text><text x="186" y="155">4</text></g>
+            </svg>
+            <figcaption class="hint">The numbers match the steps below.</figcaption>
+          </figure>
+          <ol>
+            <li><strong>Pick a tool.</strong> <em>Paint</em> colours a pixel (drag to keep going). <em>Fill</em> floods the connected pixels of one colour. <em>Erase</em> sets a pixel to black, which is off on the panel. <em>Pick</em> (or Alt+click while painting) copies the colour under the cursor and returns to Paint.</li>
+            <li><strong>Pick a colour.</strong> Click the wheel (round = hue, outward = saturation), drag <em>Shade</em> to darken it, type a hex code, or tap a palette swatch. Colours already in your picture are under <em>In this picture</em>.</li>
+            <li><strong>Draw the first frame.</strong> Undo and Redo are Ctrl+Z and Ctrl+Y. <em>Clear frame</em> blanks the current frame; <em>Start over</em> resets everything. Both can be undone.</li>
+            <li><strong>Add frames.</strong> <em>+ Duplicate</em> copies the current frame (the quickest way to make motion: copy, then change a little). <em>+ Blank</em> adds an empty one. Up to 16 frames. Click a frame in the strip to edit it; <em>Delete frame</em> removes the current one. Closed the page by mistake? <em>Restore last session</em> appears after a reload.</li>
+            <li><strong>Move.</strong> The arrows under <em>Move and layers</em>, or Shift+arrow keys, shift the current frame by one pixel. Duplicate, nudge, repeat: that makes a bounce or a slide.</li>
+            <li><strong>Play.</strong> <em>Play</em> previews the loop; <em>FPS</em> (1 to 30) sets the speed. Then save it: see Guide: saving.</li>
+          </ol>
+          <p class="hint"><strong>Changing every frame at once.</strong> There is no paint-on-all-frames or move-all-frames button: tools and arrows act on the current frame only. The way to change something in every frame is the still part:</p>
+          <figure class="help-fig">
+            <svg viewBox="0 0 420 110" role="img" aria-label="Three frames: the body is the same in each (the still part); only the arm changes">
+              <g class="b"><rect x="10" y="10" width="80" height="80" rx="4"/><rect x="170" y="10" width="80" height="80" rx="4"/><rect x="330" y="10" width="80" height="80" rx="4"/></g>
+              <g class="still"><rect x="34" y="30" width="32" height="40"/><rect x="194" y="30" width="32" height="40"/><rect x="354" y="30" width="32" height="40"/></g>
+              <g class="af"><rect x="66" y="30" width="14" height="8"/><rect x="226" y="40" width="14" height="8"/><rect x="386" y="52" width="14" height="8"/></g>
+              <g class="a"><path d="M96 50h68M256 50h68M158 44l6 6-6 6M318 44l6 6-6 6"/></g>
+              <text x="50" y="106" text-anchor="middle" class="d">frame 1</text><text x="210" y="106" text-anchor="middle" class="d">frame 2</text><text x="370" y="106" text-anchor="middle" class="d">frame 3</text>
+              <text x="130" y="72" text-anchor="middle" class="d">grey = still</text>
+            </svg>
+          </figure>
+          <ol>
+            <li>Draw the whole character on one frame, then <em>+ Duplicate</em> it once per extra frame.</li>
+            <li>Tick <em>Animate one part only</em>. Whatever is identical in every frame becomes the still part; each frame keeps only what differs.</li>
+            <li>Under the tick box choose <strong>Still part (all frames)</strong> to paint or move something that appears in every frame (the body, a background). Choose <strong>Moving part (this frame)</strong> to change just the current frame (the arm).</li>
+            <li>To recolour a moving part in every frame, repaint it frame by frame. There is no shortcut yet.</li>
+          </ol>
+          <h3>Guide: Wi-Fi setup</h3>
+          <figure class="help-fig">
+            <svg viewBox="0 0 420 100" role="img" aria-label="Steps: save the network over USB, unplug USB and power the board, connect over Wi-Fi">
+              <g class="b"><rect x="6" y="14" width="116" height="60" rx="8"/><rect x="152" y="14" width="116" height="60" rx="8"/><rect x="298" y="14" width="116" height="60" rx="8"/></g>
+              <g class="a"><path d="M124 44h26M270 44h26"/><path d="M144 38l6 6-6 6M290 38l6 6-6 6"/></g>
+              <text x="64" y="38" text-anchor="middle">1 USB</text><text x="64" y="56" text-anchor="middle" class="d">Save to board</text>
+              <text x="210" y="38" text-anchor="middle">2 Unplug USB</text><text x="210" y="56" text-anchor="middle" class="d">power the board</text>
+              <text x="356" y="38" text-anchor="middle">3 Wi-Fi</text><text x="356" y="56" text-anchor="middle" class="d">Connect over Wi-Fi</text>
+              <text x="210" y="94" text-anchor="middle" class="d">the board joins your 2.4 GHz network by itself</text>
+            </svg>
+          </figure>
+          <p class="hint"><strong>First time, with a computer</strong> (Chrome or Edge, board on USB):</p>
+          <ol>
+            <li>In the Board card press <em>Connect over USB</em>. Close the Arduino Serial Monitor first.</li>
+            <li>Press <strong>Network</strong> at the top, then <em>Scan for networks</em> (the panel pauses a few seconds). Pick yours, or type its name. The board hears <strong>2.4 GHz only</strong>: a 5 GHz-only network never shows.</li>
+            <li>Type the password (8 to 63 characters; empty for an open network) and press <em>Save to board</em>. The dialog says "Joined" and shows the board's address.</li>
+            <li><strong>Unplug USB and power the board</strong> from its supply. It joins the saved network on its own.</li>
+            <li>Open <strong>Network</strong>, check the address (<code>glowgrid.local</code>, or the IP if your device cannot find that name) and press <em>Connect over Wi-Fi</em>. Chrome may ask once to allow access to devices on your network: choose <em>Allow</em>.</li>
+          </ol>
+          <p class="hint"><strong>Saved network.</strong> With the board on USB, the <em>Saved network</em> section shows the network the board has stored and its address. <em>Forget saved network</em> removes it; the board then opens GlowGrid-Setup after its next power-up.</p>
+          <p class="hint"><strong>Changing the network, or no computer.</strong> The board opens its own network, <code>GlowGrid-Setup</code> (no password), by itself when it has no saved network or has not joined one 90 seconds after power-up. To open it on purpose, press <em>Change the board's Wi-Fi…</em> while connected over Wi-Fi, or <em>Forget saved network</em> and power-cycle.</p>
+          <ol>
+            <li>On your phone, join the Wi-Fi network <code>GlowGrid-Setup</code>. The setup page opens; if it does not, go to <code>http://192.168.4.1/</code>.</li>
+            <li>Pick your network, type the password and press Save. The page counts down a few seconds while the board joins.</li>
+            <li>The setup network closes after 5 minutes. A wrong password or name brings it back, so you can try again.</li>
+          </ol>
+          <p class="hint"><strong>iPhone and Safari</strong> cannot reach the board from this https page. Open the board's own address in Safari instead, <code>http://glowgrid.local/</code> (or <code>http://</code> and its IP): the board serves this same editor. Only USB and the Wi-Fi setup need a computer.</p>
+          <h3>Guide: saving, and why</h3>
+          <figure class="help-fig">
+            <svg viewBox="0 0 420 170" role="img" aria-label="One drawing exports three ways: Raspberry Pi PNG, enlarged PNG to view or share, and a .gg file for the ESP32-C3">
+              <g class="b"><rect x="6" y="56" width="90" height="48" rx="8"/><rect x="190" y="8" width="224" height="40" rx="8"/><rect x="190" y="64" width="224" height="40" rx="8"/><rect x="190" y="120" width="224" height="40" rx="8"/></g>
+              <text x="51" y="84" text-anchor="middle">Drawing</text><text x="51" y="98" text-anchor="middle" class="d">File ▸ Export</text>
+              <g class="a"><path d="M98 80C140 80 140 28 186 28M98 80H186M98 80C140 80 140 140 186 140"/></g>
+              <text x="200" y="26">Raspberry Pi</text><text x="200" y="41" class="d">PNG, 1 pixel per LED</text>
+              <text x="200" y="82">View or share</text><text x="200" y="97" class="d">PNG, enlarged ×8/×16/×32</text>
+              <text x="200" y="138">ESP32-C3</text><text x="200" y="153" class="d">.gg file, 16×16, up to 16 frames</text>
+            </svg>
+          </figure>
+          <p class="hint">Open <strong>File ▸ Export…</strong>, type a <em>Name</em>, choose <em>Export for</em> and press <em>Save</em>. One frame saves a still; two or more save an animation.</p>
+          <ul>
+            <li><strong>Raspberry Pi:</strong> a PNG with exactly one pixel per LED, so the Pi plays it pixel for pixel. Brightness, gamma, grid size, frame count and fps are stored inside, so the file name can be anything. Copy it to <code>~/glow-grid/images/</code> (see <em>Getting a picture onto the panel</em>). Use this as your keeper file too: <strong>File ▸ Import image</strong> brings it back as separate frames.</li>
+            <li><strong>View or share (PNG):</strong> an enlarged, sharp copy (<code>_x16</code> in the name) for looking at, a blog or a message. Pick the <em>Scale</em>. Do not put it on the Pi: an enlarged animation plays there as one squashed still.</li>
+            <li><strong>ESP32-C3 (.gg):</strong> a small file for the C3 player, 16×16 and up to 16 frames only. Pixels stay as drawn; the board applies the wiring, gamma and brightness cap itself. Reopen one with <strong>File ▸ Open .gg sprite</strong>.</li>
+            <li><strong>Straight to the board:</strong> with the Board card connected (USB or Wi-Fi), <em>Send to board</em> stores the current drawing under the Export name and plays it, with no file to copy. <em>Load</em> in the board's list brings a stored sprite back into the editor.</li>
+            <li><strong>Where it goes:</strong> Chrome and Edge ask where to save; other browsers put the file in Downloads.</li>
+          </ul>
           <h3>Works well</h3>
           <ul>
             <li><strong>Pixel art at or near grid size</strong> (drawn here, in Piskel, or the examples) comes out pixel-perfect.</li>
@@ -70,7 +157,7 @@ $('helpBody').innerHTML = `
 // The text above is untouched; the h3s stay (inside the fold's summary), so anything that reads them still works.
 (function () {
   const body = $('helpBody');
-  const short = { 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Animating one part: move and still part': 'One part',
+  const short = { 'Guide: build a sprite': 'Guide: draw', 'Guide: Wi-Fi setup': 'Guide: Wi-Fi', 'Guide: saving, and why': 'Guide: saving', 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Animating one part: move and still part': 'One part',
     'Drawing tools': 'Drawing', 'Drawing on a phone': 'Phone', 'Getting a picture onto the panel': 'To the panel', 'Watch out for': 'Watch out' };
   const chips = document.createElement('nav');
   chips.className = 'help-chips'; chips.setAttribute('aria-label', 'Help sections');
