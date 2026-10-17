@@ -25,7 +25,7 @@ STUB = """() => { window.__w = []; window.__calls = 0;
 # A fake ESP32-C3 behind the Board card's transport interface: the same line protocol c3/c3_player.ino speaks,
 # with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
 FAKE_BOARD = """() => {
-  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0;
+  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0; window.__fakeShuffle = 0;
   window.__fakeWifi = { state: 'off', ip: '-', ssid: '', polls: 0 };
   window.__fakeChunks = []; window.__fakeBreak = null; window.__fakeFw = 7;     // 'full': PUT refused after READY; 'mute': no replies at all
   window.__ggFakeSerial = () => {
@@ -59,7 +59,8 @@ FAKE_BOARD = """() => {
           { const b = window.__fakeStore.get(a1); const out = b.slice(); if (window.__fakeBreak === 'badget') out[20] ^= 1;
             for (let i = 0; i < out.length; i += 48) say('D ' + Array.from(out.subarray(i, i + 48), (v) => v.toString(16).padStart(2, '0')).join(''));
             return say('OK crc=' + crc32(b).toString(16).padStart(8, '0') + ' size=' + b.length); }
-        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
+        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 16 ? ' shuffle=' + window.__fakeShuffle : '') + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
+        case 'SHUFFLE': if (window.__fakeFw < 16) return say('ERR unknown command'); if (!/^[01]$/.test(a1 || '')) return say('ERR usage: SHUFFLE <0|1> (1 = random order)'); window.__fakeShuffle = Number(a1); return say('OK shuffle ' + a1);
         case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
           if (!window.__fakeStore.has(a1) && window.__fakeStore.size >= 64) return say('ERR board holds 64 sprites; delete one first');
@@ -194,6 +195,37 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("(() => { try { ggDecode(ggBytes(Array.from({length: 16}, () => new Array(256).fill('#112233')), 16, 16, 6, 0.3, 2.2)); return 'ok'; } catch (e) { return e.message; } })()"), 'ok')
         self.assertIn('limit is 16', self.pg.evaluate("(() => { const b = ggBytes(Array.from({length: 16}, () => new Array(256).fill('#112233')), 16, 16, 6, 0.3, 2.2); b[6] = 17; b[7] = 0; try { ggDecode(b); return ''; } catch (e) { return e.message; } })()"))
 
+    def test_sprite_names_never_double_the_tail_and_fit_the_board(self):
+        names = self.pg.evaluate("""() => ['red_ghost_sprite (2).png', 'cat_sprite_sprite.png', 'cat_sprite_8fps (3).png', 'my pic_x16.png', 'a'.repeat(60) + '.png', '___.png']
+            .map((n) => spriteNameFor({ name: n }))""")
+        self.assertEqual(names[:4], ['red_ghost_sprite', 'cat_sprite', 'cat_sprite', 'my_pic_sprite'])
+        self.assertEqual(names[5], 'sprite_sprite')
+        self.assertEqual(len(names[4]), 31); self.assertTrue(names[4].endswith('_sprite'))
+        for n in names: self.assertRegex(n, r'^[A-Za-z0-9_-]{1,31}$')
+        self.assertEqual(self.pg.evaluate("document.getElementById('nameInput').maxLength"), 31)
+
+    def test_ai_prompt_recipe_loads_here(self):
+        """The Help prompt tells an AI to write a one-row PNG with a glow-grid text chunk; that exact file must import."""
+        import json
+        from PIL.PngImagePlugin import PngInfo
+        def make(path, frames, cols, rows, fps=None, bright=0.35, gamma=2.4):
+            sheet = Image.new('RGB', (cols * len(frames), rows))
+            for i, c in enumerate(frames): sheet.paste(Image.new('RGB', (cols, rows), c), (i * cols, 0))
+            meta = {'brightness': bright, 'gamma': gamma, 'cols': cols, 'rows': rows}
+            if len(frames) > 1: meta['frames'], meta['fps'] = len(frames), fps
+            info = PngInfo(); info.add_text('glow-grid', json.dumps(meta, separators=(',', ':'))); sheet.save(path, pnginfo=info)
+        t = self.tmp.name
+        sheet = os.path.join(t, 'zap_8fps.png'); make(sheet, [(255, 0, 0), (0, 255, 0), (0, 0, 255)], 16, 16, 8)
+        self.import_file(sheet)
+        self.assertEqual(self.pg.evaluate('[state.frames.length, state.fps, sim.brightness, sim.gamma, state.name]'), [3, 8, 0.35, 2.4, 'zap_sprite'])
+        still = os.path.join(t, 'dot.png'); make(still, [(255, 128, 0)], 16, 16)
+        self.import_file(still)
+        self.assertEqual(self.pg.evaluate('[state.frames[state.currentFrame][0], state.name]'), ['#ff8000', 'dot_sprite'])
+        self.pg.evaluate("() => { document.getElementById('colsInput').value = 8; document.getElementById('rowsInput').value = 32; document.getElementById('resizeBtn').click(); }")
+        tall = os.path.join(t, 'tower_5fps.png'); make(tall, [(255, 0, 0), (0, 0, 255)], 8, 32, 5)
+        self.import_file(tall)
+        self.assertEqual(self.pg.evaluate('[state.cols, state.rows, state.frames.length, state.fps, state.frames[1][0]]'), [8, 32, 2, 5, '#0000ff'])
+
     def test_sheet_by_filename_and_no_double_suffix(self):
         self.import_file(self.walk)
         self.assertEqual(self.name(), 'walk_sprite')
@@ -290,7 +322,7 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#0000ff')];
             state.currentFrame = 0; state.fps = 5; afterFrameChange(); }""")
         self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
-        self.assertIn('Sent flower (2 frames, 1,548 bytes)', status())
+        self.assertIn('Sent flower (2 frames, 5 fps, brightness 0.3, gamma 2.2, 1,548 bytes)', status())
         self.assertEqual(rows(), ['flower'])
         stored = self.pg.evaluate("Array.from(window.__fakeStore.get('flower'))")
         want = self.pg.evaluate("Array.from(ggBytes(state.frames.map(flatten), 16, 16, state.fps, sim.brightness, sim.gamma))")
@@ -320,6 +352,19 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').selectedOptions[0].textContent"), 'every 45 s')
         self.pg.select_option('#boardRotate', '0'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakeRotate'), 0); self.assertIn('Rotation off', status())
+        # random order: greyed out on a board before firmware 16 (the INFO line has no shuffle field), then a checkbox that sends SHUFFLE and follows the board
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardShuffle').disabled"))
+        self.assertIn('firmware 16', self.pg.evaluate("document.getElementById('boardShuffleLbl').title"))
+        self.pg.evaluate('window.__fakeFw = 16'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').disabled"))
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').checked"))
+        self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeShuffle'), 1); self.assertIn('Random order on', status())
+        self.pg.evaluate('window.__fakeShuffle = 0'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').checked"), 'follows what the board reports')
+        self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400); self.pg.uncheck('#boardShuffle'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeShuffle'), 0); self.assertIn('Random order off', status())
+        self.pg.evaluate('window.__fakeFw = 7')
         self.pg.on('dialog', lambda d: d.accept())
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
         self.assertEqual(rows(), ['flower'])
@@ -393,7 +438,7 @@ class Smoke(unittest.TestCase):
         answer = {'ok': True}
         self.pg.on('dialog', lambda d: d.accept() if answer['ok'] else d.dismiss())
         total = self.pg.evaluate('GG_EXAMPLES.length')
-        self.assertEqual(total, 15)
+        self.assertEqual(total, 23)
         self.assertTrue(self.pg.evaluate("document.getElementById('boardExamples').hidden"), 'hidden until connected')
         self.connect(['mine'])
         self.assertFalse(self.pg.evaluate("document.getElementById('boardExamples').hidden"))
@@ -401,12 +446,12 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(300)
         self.assertEqual(self.status(), 'No examples are on the board.')
         # add: every example lands byte-for-byte as Export would write it; the sprite that was playing keeps playing
-        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)
         self.assertEqual(self.status(), f'Added {total} examples.')
         self.assertEqual(len(self.store()), total + 1)
         self.assertEqual(self.pg.evaluate("GG_EXAMPLES.every((e) => { const b = window.__fakeStore.get(e.name); const w = ggExampleBytes(e); return b && b.length === w.length && b.every((v, i) => v === w[i]); })"), True)
         self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
-        self.assertEqual(self.pager()['info'], '1–5 of 16', 'the examples page like everything else')
+        self.assertEqual(self.pager()['info'], '1–5 of 24', 'the examples page like everything else')
         # add again: nothing is sent
         before = self.puts()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
@@ -419,14 +464,14 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(300)
         self.assertEqual(self.status(), 'Nothing removed.'); self.assertEqual(len(self.store()), total + 1)
         answer['ok'] = True
-        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(3000)
+        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(5000)
         kept = self.pg.evaluate('[GG_EXAMPLES[0].name, GG_EXAMPLES[1].name]')
         self.assertEqual(self.store(), sorted(['mine'] + kept))
         self.assertEqual(self.status(), f'Removed {total - 2} examples. Kept 2 you changed: {kept[0]}, {kept[1]}.')
         self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
         # add never replaces: the two changed ones stay as they are
         edited = self.pg.evaluate("Array.from(window.__fakeStore.get(GG_EXAMPLES[0].name))")
-        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)
         self.assertEqual(self.status(), f'Added {total - 2} examples; 2 already on the board were left alone.')
         self.assertEqual(self.pg.evaluate("Array.from(window.__fakeStore.get(GG_EXAMPLES[0].name))"), edited)
 
@@ -526,8 +571,8 @@ class Smoke(unittest.TestCase):
         # firmware before 7 has no CRC: Add still works, Remove refuses rather than guess, and deletes nothing
         self.pg.evaluate('window.__fakeFw = 6')
         self.connect()
-        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(4000)
-        n = len(self.store()); self.assertEqual(n, 15)
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)
+        n = len(self.store()); self.assertEqual(n, 23)
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(400)
         self.assertIn('firmware 7', self.status()); self.assertEqual(len(self.store()), n)
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('CRC') || l.startsWith('DEL')).length"), 0)
@@ -544,7 +589,7 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate("() => { window.__fakeStore.clear(); window.__fakeBreak = 'full'; }")
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(800)
-        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 15', self.status())
+        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 23', self.status())
         self.assertFalse(self.pg.evaluate("document.getElementById('boardAddExBtn').disabled"), 'buttons come back after an error')
         self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
 
@@ -560,7 +605,7 @@ class Smoke(unittest.TestCase):
         # a 4-frame sprite is 3,084 bytes: four chunks, three acks, bytes intact
         self.set_name('walk'); frames(4)
         self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(1000)
-        self.assertIn('Sent walk (4 frames, 3,084 bytes)', status())
+        self.assertIn('Sent walk (4 frames, 8 fps, brightness 0.3, gamma 2.2, 3,084 bytes)', status())
         self.assertEqual(self.pg.evaluate('window.__fakeChunks'), [1024, 1024, 1024, 12])
         self.assertEqual(self.pg.evaluate("Array.from(window.__fakeStore.get('walk'))"),
                          self.pg.evaluate("Array.from(ggBytes(state.frames.map(flatten), 16, 16, state.fps, sim.brightness, sim.gamma))"))
