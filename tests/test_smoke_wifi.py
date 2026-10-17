@@ -45,7 +45,7 @@ class FakeHttpBoard:
             self.reply(route, 404 if 'no such' in text else 400, 'ERR ' + text)
         if u.path == '/ping': return self.reply(route, 200, 'PONG\n')
         if u.path == '/list':
-            lines = [f'FILE {n} {len(b)}' for n, b in sorted(self.store.items())] + [f'OK {len(self.store)} files, 1400000 bytes free']
+            lines = [f'FILE {n} {len(b)}' + (f' {b[6] | b[7] << 8} {b[8] | b[9] << 8} {b[10]} {b[11]}' if self.fw >= 17 and len(b) >= 12 and b[10] else '') for n, b in sorted(self.store.items())] + [f'OK {len(self.store)} files, 1400000 bytes free']
             return self.reply(route, 200, '\n'.join(lines) + '\n')
         if u.path == '/info':
             return self.reply(route, 200, f'OK fw={self.fw} current={self.current} sprites={len(self.store)} panel={self.panel} rotate={self.rotate}' + (f' shuffle={self.shuffle}' if self.fw >= 16 else '') + f' wifi=connected ip=192.168.50.6 gap_ms=3\n')
@@ -173,6 +173,8 @@ class SmokeWifi(unittest.TestCase):
         hb.fw = 16; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400); self.assertEqual(hb.shuffle, 1)
         self.pg.uncheck('#boardShuffle'); self.pg.wait_for_timeout(400); self.assertEqual(hb.shuffle, 0)
+        hb.fw = 17; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.rows(), ['flower (2 frames, 5 fps, brightness 0.3, gamma 2.2)', 'owl (2 frames, 5 fps, brightness 0.3, gamma 2.2)'], 'fw 17 lists each sprite\'s settings over Wi-Fi too')
         hb.fw = 9
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
         self.assertEqual(self.rows(), ['flower']); self.assertEqual(sorted(hb.store), ['flower'])
