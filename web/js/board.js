@@ -517,15 +517,18 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
   $('netScanBtn').disabled = !canScan;
   $('netPick').disabled = !canScan || $('netPick').options.length < 2;
   $('netScanRow').hidden = !fw9;
-  $('netScanHint').textContent = fw9 && !canScan ? `Scanning needs firmware ${BOARD_SCAN_FW} (this board has ${boardFw}). Type the name below, or re-flash c3_player.ino.` : '';
+  $('netScanHint').textContent = fw9 && !canScan ? `Scan needs firmware ${BOARD_SCAN_FW}+ (board has ${boardFw}). Type the name below.` : '';
   $('netConnectBtn').disabled = !!board && boardVia === 'wifi';
+  const w = boardInfo.wifi && !['-', 'off'].includes(boardInfo.wifi) ? boardInfo.wifi : '', ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
+  $('netSaved').textContent = !usb ? 'Connect the board over USB to see or forget its saved network.' : !fw9 ? 'This board is too old to store a network.' : w ? `${w}${ip ? `, address ${ip}` : ', not joined'}` : 'None saved.';
+  $('netClearBtn').hidden = !usb || !fw9 || !w;
   const canSetup = !!board && boardVia === 'wifi' && Number(boardFw) >= BOARD_SETUP_FW;
   $('netSetupBtn').hidden = !canSetup;
-  $('netSetupHint').textContent = !board ? 'Connect the board over USB first (the Board card, Connect over USB). Then its Wi-Fi can be set here.'
-    : boardVia === 'wifi' ? (canSetup ? 'The board is connected over Wi-Fi. To move it to another network without USB, press Change the board\'s Wi-Fi.'
-      : 'The board is connected over Wi-Fi. To change its network, disconnect and connect it over USB.')
-    : !fw9 ? `Wi-Fi needs firmware ${BOARD_WIFI_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`
-    : '2.4 GHz networks only. The name and password are stored on the board, not in this page.';
+  $('netSetupHint').textContent = !board ? 'Connect the board over USB first (Board card).'
+    : boardVia === 'wifi' ? (canSetup ? 'Connected over Wi-Fi. To change network, press Change the board\'s Wi-Fi.'
+      : 'Connected over Wi-Fi. To change network, reconnect over USB.')
+    : !fw9 ? `Needs firmware ${BOARD_WIFI_FW}+ (board has ${boardFw || 'older'}). Re-flash.`
+    : '2.4 GHz only. Stored on the board.';
 }
 function netResetForm() {             // blank name and password, and drop the scan list, so nothing stale is shown
   $('netSsid').value = ''; $('netPass').value = ''; $('netPass').placeholder = '';
@@ -536,12 +539,11 @@ function netOpen() {
   netResetForm();
   netSay('', '');
   netSync();
-  if (board && boardVia === 'usb' && boardInfo.wifi) netSay(`Board Wi-Fi: ${boardInfo.wifi}` + (boardInfo.ip && boardInfo.ip !== '-' ? `, address ${boardInfo.ip}` : '') + '.', '');
   if (netDlg.showModal) netDlg.showModal(); else netDlg.setAttribute('open', '');
 }
 async function netConnect() {
   const host = boardCleanHost($('netHost').value);
-  if (!host) { netSay('That does not look like an address. Use glowgrid.local or the IP address, like 192.168.1.50.', 'err'); return; }
+  if (!host) { netSay('Not an address. Try glowgrid.local or 192.168.1.50.', 'err'); return; }
   $('netConnectBtn').disabled = true;
   netSay(`Looking for the board at ${host}…`, '');
   const ok = await boardConnectWifi(host);
@@ -552,13 +554,14 @@ async function netSave() {
   const ssid = $('netSsid').value, pass = $('netPass').value;
   const n = new TextEncoder().encode(ssid).length;
   if (n < 1 || n > 32) { netSay('The network name must be 1 to 32 characters.', 'err'); return; }
-  if (pass && (pass.length < 8 || pass.length > 63)) { netSay('A password is 8 to 63 characters. Leave it empty for an open network.', 'err'); return; }
+  if (pass && (pass.length < 8 || pass.length > 63)) { netSay('Password: 8 to 63 characters, or empty for open.', 'err'); return; }
   if (!board || boardVia !== 'usb') { netSay('The board is not connected over USB.', 'err'); return; }
   const b = board;
   $('netSaveBtn').disabled = true;
   try {
     netSay(`Saving ${ssid} to the board…`, '');
     await b.wifiSet(ssid, pass);
+    boardInfo.wifi = ssid; boardInfo.ip = '';
     $('netPass').value = '';
     let st = { state: '', ip: '' };
     for (let i = 0; i < 12 && board === b; i++) {
@@ -568,8 +571,8 @@ async function netSave() {
     }
     if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); }
     if (st.state === 'connected') netResetForm();
-    if (st.state === 'connected') netSay(`Joined ${ssid}. The board's address is ${st.ip} (or glowgrid.local). You can unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
-    else netSay(`Saved, but the board has not joined yet (${st.state || 'no answer'}). Check the name and password, and that it is a 2.4 GHz network.`, 'err');
+    if (st.state === 'connected') netSay(`Joined ${ssid}, address ${st.ip}. Unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
+    else netSay(`Saved, not joined (${st.state || 'no answer'}). Check name, password, 2.4 GHz.`, 'err');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
 }
@@ -586,7 +589,7 @@ async function netScan() {
       o.dataset.secure = n.secure ? '1' : '0';
       pick.append(o);
     }
-    netSay(nets.length ? `${nets.length} network${nets.length === 1 ? '' : 's'} found, strongest first. Only 2.4 GHz networks show up. A hidden network is not listed: type its name below.` : 'The board heard no networks. Type the name below, or move the board closer to the router.', nets.length ? 'ok' : 'err');
+    netSay(nets.length ? `${nets.length} network${nets.length === 1 ? '' : 's'} found, strongest first. Hidden networks: type the name below.` : 'No networks heard. Type the name, or move the board closer.', nets.length ? 'ok' : 'err');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
 }
@@ -605,19 +608,19 @@ async function netClear() {
   try {
     await b.wifiClear();
     netResetForm(); boardInfo.wifi = ''; boardInfo.ip = '';
-    netSay(`Forgot ${was ? `"${was}"` : 'the saved network'}. The board will not join Wi-Fi until you save a network again here over USB. After a power-up it opens its own setup network, GlowGrid-Setup, for 5 minutes.`, 'ok');
+    netSay(`Forgot ${was ? `"${was}"` : 'the saved network'}. Save a network here over USB, or power-cycle the board to open GlowGrid-Setup.`, 'ok');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
 }
 async function netSetup() {            // firmware 13: the board leaves this network and hosts GlowGrid-Setup, where its Wi-Fi can be changed from any phone
   if (!board || boardVia !== 'wifi') return;
-  if (!confirm('The board will leave your Wi-Fi network and open its own setup network, GlowGrid-Setup, for 5 minutes. This page loses its connection to the board. Continue?')) return;
+  if (!confirm('The board will leave your Wi-Fi and open GlowGrid-Setup for 5 minutes. Continue?')) return;
   const b = board;
   $('netSetupBtn').disabled = true;
   try {
     await b.setup();
     await b.close();                     // the link ends now; the card clears itself
-    const msg = 'The board is opening its setup network. On this device, join the Wi-Fi network GlowGrid-Setup (no password); if its page does not appear by itself, open http://192.168.4.1/ . It closes after 5 minutes and the board then goes back to its saved network.';
+    const msg = 'Join the Wi-Fi network GlowGrid-Setup (no password). If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.';
     netSay(msg, 'ok'); boardSay(msg, 'ok');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { $('netSetupBtn').disabled = false; netSync(); }
