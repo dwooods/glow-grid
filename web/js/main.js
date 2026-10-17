@@ -17,6 +17,7 @@ if (onWeb) {
 /* ---------- help dialog ---------- */
 const helpDlg = $('helpDlg');
 $('helpBtn').addEventListener('click', () => { if (helpDlg.showModal) helpDlg.showModal(); else helpDlg.setAttribute('open', ''); });
+$('settingsHelp').addEventListener('click', () => { if (helpDlg.showModal) helpDlg.showModal(); else helpDlg.setAttribute('open', ''); const d = $('helpSettings').closest('details'); d.open = true; d.scrollIntoView(); });
 $('helpClose').addEventListener('click', () => helpDlg.close());
 helpDlg.addEventListener('click', (e) => { if (e.target === helpDlg) helpDlg.close(); });
 
