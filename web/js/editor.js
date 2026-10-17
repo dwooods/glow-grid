@@ -59,10 +59,10 @@ function renderDiagnostics() {
   meter.classList.toggle('hot', pct > 0.6 && pct <= 0.85);
   meter.classList.toggle('over', pct > 0.85);
   const fc = $('faintCount'), sc = $('shiftCount');
-  fc.textContent = now.faint + ' px'; fc.classList.toggle('zero', !now.faint);
-  sc.textContent = now.shift + ' px'; sc.classList.toggle('zero', !now.shift);
+  fc.textContent = now.faint + ' px'; fc.classList.toggle('zero', !now.faint); fc.classList.toggle('faint', !!now.faint);
+  sc.textContent = now.shift + ' px'; sc.classList.toggle('zero', !now.shift); sc.classList.toggle('shift', !!now.shift);
   const flagged = now.faint + now.shift, ds = $('diagSum');
-  ds.textContent = now.amps.toFixed(2) + ' A · ' + (flagged ? flagged + ' px flagged' : 'no flags');
+  ds.textContent = flagged ? flagged + ' px to fix' : 'all clear';
   ds.classList.toggle('warn', flagged > 0 || pct > 0.85);
 }
 function renderFrame() { for (let i = 0; i < cellEls.length; i++) updateCell(i); renderDiagnostics(); }
