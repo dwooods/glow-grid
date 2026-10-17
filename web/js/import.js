@@ -51,7 +51,7 @@ function spriteNameFor(file) {
   base = base.replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, BOARD_NAME_MAX - SPRITE_TAIL.length).replace(/_+$/, '');
   return (base || 'sprite') + SPRITE_TAIL;
 }
-function setSpriteName(file) { state.name = spriteNameFor(file); $('nameInput').value = state.name; saveState(); }
+function setSpriteName(file) { setNameField(spriteNameFor(file)); saveState(); }
 // One import path. Sprite sheets (and single frames saved from here) load straight in; everything else opens the crop dialog.
 $('imageInput').addEventListener('change', async (e) => {
   const file = e.target.files[0]; e.target.value = ''; if (!file) return;
