@@ -238,8 +238,8 @@ input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
 .dock-history { display: flex; gap: 6px; flex: none; }
 .dock-history:empty { display: none; }
 .phone-dock #undoBtn, .phone-dock #redoBtn { font-size: 0; width: var(--tap); padding: 0; }
-.phone-dock #undoBtn::before { content: "\21B6"; font-size: 1.3rem; }
-.phone-dock #redoBtn::before { content: "\21B7"; font-size: 1.3rem; }
+.phone-dock #undoBtn::before { content: "\\21B6"; font-size: 1.3rem; }
+.phone-dock #redoBtn::before { content: "\\21B7"; font-size: 1.3rem; }
 .sheet-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; padding: var(--s-3) 2px var(--s-2); background: var(--bg); font-family: var(--font-display); font-weight: 600; }
 .phone-dock { --dock-h: 150px; --sheet-top: 440px; }
 .phone-dock .page { padding-block: var(--s-2) calc(var(--dock-h) + var(--s-3)); padding-inline: max(8px, env(safe-area-inset-left), env(safe-area-inset-right)); gap: var(--s-2); }
@@ -394,6 +394,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .board-pager[hidden] { display: none; }
 .board-status[data-kind="err"] { color: #f08c7a; }
 .board-status[data-kind="ok"] { color: var(--text); }
+.net-status { position: sticky; bottom: 0; margin: 0; padding: var(--s-2) 0; background: var(--panel); border-top: 1px solid var(--border); }
+.net-status:empty { display: none; }
 
 /* Board card runs the full width under both columns. */
 #boardCard { flex: 1 1 100%; box-sizing: border-box; }
@@ -403,3 +405,6 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 /* "Panel Check": capital P and C only, not the all-caps of the other small headings. */
 .check-label { text-transform: none; letter-spacing: 0; }
 .export-body h3 { margin: var(--s-1) 0 0; font-size: var(--fs-sm); font-weight: 600; color: var(--text); }
+
+.help-badge { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); color: var(--accent, #4fd1c5); font: inherit; font-weight: 600; cursor: pointer; vertical-align: middle; }
+.help-badge:hover { border-color: var(--accent, #4fd1c5); }
