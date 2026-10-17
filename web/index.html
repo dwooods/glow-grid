@@ -239,7 +239,9 @@
       <hr class="sub-rule">
       <h3>Set up the board's Wi-Fi</h3>
       <p class="hint" id="netSetupHint"></p>
-      <div class="btn-row"><button id="netSetupBtn" class="btn btn-quiet" type="button" hidden title="Firmware 13: the board leaves this network and opens GlowGrid-Setup for 5 minutes">Change the board's Wi-Fi…</button></div>
+      <label id="netKeyRow" hidden>Setup key (on the board's label) <input id="netKey" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" maxlength="24"></label>
+      <div class="btn-row"><button id="netSetupBtn" class="btn btn-quiet" type="button" hidden title="Firmware 13: the board leaves this network and opens GlowGrid-Setup for 5 minutes">Change the board's Wi-Fi…</button>
+        <button id="netKeyShowBtn" class="btn btn-quiet" type="button" hidden title="Firmware 18, over USB: shows the key that is the password of GlowGrid-Setup">Show setup key</button></div>
       <div id="netScanRow">
         <div class="btn-row"><button id="netScanBtn" class="btn" type="button">Scan for networks</button></div>
         <label>Networks found <select id="netPick" aria-label="Networks the board found"><option value="">Press Scan first</option></select></label>

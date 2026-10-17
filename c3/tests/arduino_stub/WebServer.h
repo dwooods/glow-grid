@@ -36,6 +36,8 @@ class WebServer {
   bool responded = false;
   long fixedLen = -1;
   HTTPUpload up;
+  std::vector<std::string> keep;                          // request headers asked for with collectHeaders(); the real core drops the rest
+  std::map<std::string, std::string> kept;
 
   static std::string urldecode(const std::string& s) {
     std::string o;
@@ -132,6 +134,9 @@ class WebServer {
     if (pf) { FILE* f = fopen(pf, "w"); if (f) { fprintf(f, "%d", ntohs(a.sin_port)); fclose(f); } }
   }
 
+  // Like the real core: header(name) only knows the headers listed in collectHeaders() (Origin and Host, for the sketch's guard).
+  void collectHeaders(const char* keys[], size_t n) { keep.clear(); for (size_t i = 0; i < n; i++) keep.push_back(lower(keys[i])); }
+  String header(const char* name) { auto it = kept.find(lower(name)); return String(it == kept.end() ? "" : it->second.c_str()); }
   String arg(const char* name) { auto it = args.find(name); return String(it == args.end() ? "" : it->second.c_str()); }
   bool hasArg(const char* name) { return args.count(name) > 0; }
   HTTPMethod method() { return curMethod; }
@@ -187,6 +192,8 @@ class WebServer {
       if (c != std::string::npos) { std::string v = l.substr(c + 1); while (!v.empty() && v[0] == ' ') v.erase(0, 1); hd[lower(l.substr(0, c))] = v; }
       p = q;
     }
+    kept.clear();
+    for (auto& k : keep) if (hd.count(k)) kept[k] = hd[k];
     size_t clen = hd.count("content-length") ? (size_t)atol(hd["content-length"].c_str()) : 0;
     while (body.size() < clen) {
       ssize_t n = recv(cfd, buf, sizeof buf, 0);

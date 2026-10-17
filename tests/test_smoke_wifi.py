@@ -28,12 +28,13 @@ class FakeHttpBoard:
         self.fail_put = None                      # an ERR text to answer a /put with
         self.damage_get = False
         self.setups = 0                           # POST /setup calls (firmware 13)
+        self.key = 'k7m2xq9p4d'                   # the setup key (firmware 18): POST /setup needs ?key=
 
     def install(self, ctx, host=None):
         ctx.route(f'http://{host or self.HOST}/**', self.handle)
 
     def reply(self, route, status, body, ctype='text/plain'):
-        route.fulfill(status=status, body=body, content_type=ctype, headers={'access-control-allow-origin': '*'})
+        route.fulfill(status=status, body=body, content_type=ctype, headers={'access-control-allow-origin': route.request.headers.get('origin', '*'), 'vary': 'Origin'})
 
     def handle(self, route):
         import re, urllib.parse, zlib
@@ -67,6 +68,8 @@ class FakeHttpBoard:
         if u.path in ('/off', '/on'):
             self.panel = u.path[1:]; return self.reply(route, 200, f'OK panel {self.panel}\n')
         if u.path == '/setup' and self.fw >= 13:
+            if self.fw >= 18 and q.get('key', '').lower().replace('-', '').replace(' ', '') != self.key:
+                return self.reply(route, 403, 'ERR wrong setup key')
             self.setups += 1; return self.reply(route, 200, 'OK setup mode starts in a moment: join the Wi-Fi network GlowGrid-Setup and open http://192.168.4.1/\n')
         if u.path == '/rotate': self.rotate = int(q['s']); return self.reply(route, 200, f'OK rotate {self.rotate}\n')
         if u.path == '/shuffle' and self.fw >= 16: self.shuffle = int(q['on']); return self.reply(route, 200, f'OK shuffle {self.shuffle}\n')
@@ -321,6 +324,40 @@ class SmokeWifi(unittest.TestCase):
         self.assertIn('GlowGrid-Setup', el('netStatus')); self.assertIn('192.168.4.1', el('netStatus'))
         self.assertIn('GlowGrid-Setup', self.status())
         self.assertTrue(el('netSetupBtn', 'hidden'))
+        self.assertEqual(self.errors, [])
+
+    def test_setup_key_is_asked_for_on_firmware_18(self):
+        """Firmware 17: the setup network is WPA2 and POST /setup needs the setup key. The editor asks for it before sending anything,
+        a wrong key is refused by the board and keeps the connection, the right one starts setup and the field is cleared."""
+        hb = FakeHttpBoard(fw=18)
+        self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
+        self.pg.wait_for_timeout(700)
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        dialogs = []
+        self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept()))
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertFalse(el('netKeyRow', 'hidden'), 'the key field shows on firmware 18')
+        self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(300)                   # no key typed: nothing is sent
+        self.assertEqual(hb.setups, 0); self.assertNotIn('POST /setup', hb.log); self.assertEqual(dialogs, [])
+        self.assertIn('setup key', el('netStatus'))
+        self.pg.fill('#netKey', 'wrongwrong1'); self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(hb.setups, 0); self.assertIn('wrong setup key', el('netStatus'))
+        self.assertFalse(el('boardTools', 'hidden'), 'a wrong key keeps the connection')
+        self.pg.fill('#netKey', 'K7M2-XQ9P-4D'); self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(hb.setups, 1); self.assertTrue(el('boardTools', 'hidden'))
+        self.assertIn('password', el('netStatus')); self.assertEqual(el('netKey', 'value'), '')
+        self.assertEqual(self.errors, [])
+
+    def test_show_setup_key_over_usb(self):
+        """Firmware 17 over USB: 'Show setup key' reads the key from the board (WIFI KEY) and shows it; older firmware has no button."""
+        self.fresh_page(f'({FAKE_BOARD})()', 'window.__ggNetPollMs = 30;'); self.board_helpers()
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        self.pg.evaluate('window.__fakeFw = 18')
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertFalse(el('netKeyShowBtn', 'hidden'))
+        self.pg.click('#netKeyShowBtn'); self.pg.wait_for_timeout(400)
+        self.assertIn('k7m2xq9p4d', el('netStatus'))
         self.assertEqual(self.errors, [])
 
     def test_send_is_refused_when_the_board_is_full(self):

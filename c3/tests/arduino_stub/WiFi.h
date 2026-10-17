@@ -38,7 +38,8 @@ class WiFiStub {
   bool setHostname(const char* h) { log("hostname", h); return true; }
   void setAutoReconnect(bool) {}
   // Access point: only logged ("softap <ssid>", "softap off") so the tests can see setup mode start and end.
-  bool softAP(const char* ssid, const char* = NULL) { log("softap", ssid); return true; }
+  // The password goes to the log too ("softap <ssid> <password>", or "(open)"), so the tests can check the setup network is WPA2.
+  bool softAP(const char* ssid, const char* pass = NULL) { log("softap", ssid, pass ? pass : "(open)"); return true; }
   bool softAPdisconnect(bool = false) { log("softap", "off"); return true; }
   IPAddress softAPIP() { return IPAddress(); }
   bool setTxPower(int) { return true; }

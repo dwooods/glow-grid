@@ -959,13 +959,19 @@ class Board(unittest.TestCase):
         base = self.http_base()
         st, hd, body = self.http("GET", "/ping")
         self.assertEqual((st, body), (200, b"PONG\n"))
-        # every reply is readable from the https editor page (CORS), and a private-network pre-flight is answered
-        self.assertEqual(hd["Access-Control-Allow-Origin"], "*")
+        self.assertIsNone(hd["Access-Control-Allow-Origin"], "no browser, no CORS headers")
+        # a reply is readable from the hosted editor page (CORS for that origin only, never "*"), and a private-network pre-flight is answered
+        editor = {"Origin": "https://dwooods.github.io"}
+        st, hd, body = self.http("GET", "/ping", headers=editor)
+        self.assertEqual((st, body), (200, b"PONG\n"))
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "https://dwooods.github.io")
+        self.assertEqual(hd["Vary"], "Origin")
         st, hd, body = self.http("OPTIONS", "/put?name=a", headers={"Origin": "https://dwooods.github.io", "Access-Control-Request-Method": "POST",
                                                                   "Access-Control-Request-Private-Network": "true"})
         self.assertEqual((st, body), (204, b""))
         self.assertEqual(hd["Access-Control-Allow-Private-Network"], "true")
-        self.assertEqual(hd["Access-Control-Allow-Origin"], "*")
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "https://dwooods.github.io")
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://localhost:8000"})[0], 200, "a developer's local server")
         st, _, body = self.http("GET", "/info")
         self.assertEqual(st, 200)
         self.assertIn(b"wifi=connected ip=127.0.0.1", body)
@@ -1037,6 +1043,111 @@ class Board(unittest.TestCase):
         # and the board still answers on USB afterwards
         self.board.send("PING")
         self.assertEqual(self.board.expect(["PONG"]), "PONG")
+
+    def test_other_sites_and_rebound_names_cannot_drive_the_board(self):
+        """Security review 2026-10-17. Before fw 18 the API answered every page on the internet (CORS "*", and the multipart /put and the
+        POST routes need no pre-flight). Now an Origin that is not the hosted editor, the board's own page or localhost is refused before any
+        route does anything, and so is a Host that is not the board's name or an IP address (DNS rebinding)."""
+        self.start(wifi=True)
+        self.board.wifi_set("Net", "password1")
+        base = self.http_base()
+        small = gg.pack(sample_frames(5, 2), 8, 0.3, 2.2)
+        body, h = self.multipart(small)
+        self.assertEqual(self.http("POST", "/put?name=keep", body, h)[2], b"OK saved keep\n")
+        evil = {"Origin": "https://evil.example"}
+        for origin in ("https://evil.example", "http://dwooods.github.io", "https://dwooods.github.io.evil.example", "null",
+                       "http://localhost.evil.example", "https://localhost", "http://192.168.50.77"):
+            hh = {"Origin": origin}
+            for method, path in [("GET", "/ping"), ("GET", "/list"), ("GET", "/get?name=keep"), ("GET", "/info"), ("GET", "/"), ("GET", "/nothing"),
+                                 ("POST", "/del?name=keep"), ("POST", "/off"), ("POST", "/rotate?s=5"), ("POST", "/shuffle?on=1"),
+                                 ("POST", "/show?name=keep"), ("POST", "/setup"), ("OPTIONS", "/put?name=a")]:
+                st, hd, out = self.http(method, path, b"" if method == "POST" else None, hh)
+                self.assertEqual((st, out), (403, b"ERR not allowed from this page or address\n"), (origin, method, path))
+                self.assertIsNone(hd["Access-Control-Allow-Origin"], "a refused page gets no CORS permission")
+        # a cross-site multipart upload (a form post: no pre-flight) stores nothing and replaces nothing
+        body, h = self.multipart(gg.pack(sample_frames(9, 1), 8, 0.3, 2.2))
+        h.update(evil)
+        st, _, out = self.http("POST", "/put?name=keep", body, h)
+        self.assertEqual((st, out), (403, b"ERR not allowed from this page or address\n"))
+        body, h = self.multipart(small)
+        h.update(evil)
+        self.assertEqual(self.http("POST", "/put?name=other", body, h)[0], 403)
+        self.assertEqual(sorted(os.listdir(self.fs)), ["keep.gg"], "no temp file, no new sprite")
+        self.assertEqual(open(os.path.join(self.fs, "keep.gg"), "rb").read(), small, "the sprite was not replaced")
+        self.assertIn("panel=on", self.board.simple("INFO"))
+        self.assertIn("rotate=0", self.board.simple("INFO"))
+        # DNS rebinding: the page's own name arrives in Host
+        for host in ("evil.example", "evil.example:80", "glowgrid.local.evil.example", "localhost", "[::1]", "a" * 60):
+            st, _, out = self.http("GET", "/list", headers={"Host": host})
+            self.assertEqual(st, 403, host)
+            self.assertEqual(self.http("POST", "/del?name=keep", b"", {"Host": host})[0], 403, host)
+        for host in ("glowgrid.local", "GlowGrid.local:80", "glowgrid", "192.168.50.6", "192.168.50.6:80"):
+            self.assertEqual(self.http("GET", "/ping", headers={"Host": host})[0], 200, host)
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "https://dwooods.github.io", "Host": "glowgrid.local"})[0], 200)
+        # the same Origin as the board's own page (the editor served by the board) works from any address the board has
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://192.168.50.6", "Host": "192.168.50.6"})[0], 200)
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://glowgrid.local", "Host": "glowgrid.local"})[0], 200)
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://192.168.50.6", "Host": "glowgrid.local"})[0], 403)
+        self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[0].split()[:3], ["FILE", "keep", str(len(small))], "and nothing changed")
+
+    def test_setup_key(self):
+        """The setup key (fw 18): made once at random, read over USB, the WPA2 password of GlowGrid-Setup, and the code POST /setup needs."""
+        self.start(wifi=True)
+        self.board.wifi_set("Net", "password1")
+        self.board.send("WIFI KEY")
+        key = self.board.expect(["OK key="]).split("=")[1]
+        self.assertRegex(key, r"^[a-km-np-z2-9]{10}$", "10 characters, no l or o, no 0 or 1, lower case")
+        self.assertNotIn(key, self.board.simple("INFO")); self.assertNotIn(key, self.board.wifi_status())
+        self.board.send("WIFI KEY"); self.assertEqual(self.board.expect(["OK key="]), "OK key=" + key, "it does not change by itself")
+        board = self.restart()
+        board.send("WIFI KEY"); self.assertEqual(board.expect(["OK key="]), "OK key=" + key, "and it survives a power cycle")
+        api = self.http_base()
+        # the editor's button: no key, a wrong key and a malformed one are refused (403) and open nothing
+        for q in ("", "?key=", "?key=" + key[:-1], "?key=" + key + "a"):          # 4 wrong in a row: not locked yet
+            st, _, out = self.http("POST", "/setup" + q, b"", base=api)
+            self.assertEqual((st, out), (403, b"ERR wrong setup key\n"), q)
+        time.sleep(1.2)
+        self.assertNotIn("softap", self.wifi_log(), "a wrong key does not open setup")
+        # five wrong in a row lock the check for a minute: even the right key is refused meanwhile
+        for _ in range(5):
+            self.http("POST", "/setup?key=wrongwrong", b"", base=api)
+        st, _, out = self.http("POST", "/setup?key=" + key, b"", base=api)
+        self.assertEqual((st, out), (403, b"ERR too many wrong setup keys; wait a minute\n"))
+        self.assertNotIn("softap", self.wifi_log())
+        # a restart clears the lock; the right key (typed in capitals, with a dash) opens setup, and the network's password is the key
+        board = self.restart()
+        api = self.http_base()
+        typed = (key[:5] + "-" + key[5:]).upper()
+        st, _, out = self.http("POST", "/setup?key=" + typed, b"", base=api)
+        self.assertEqual(st, 200)
+        self.assertIn(b"OK setup mode starts", out)
+        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode")
+        self.assertIn(f"softap GlowGrid-Setup {key}\n", self.wifi_log(), "WPA2, with the key as the password")
+        self.assertNotIn("(open)", self.wifi_log().split("softap GlowGrid-Setup")[1].split("\n")[0])
+        # the key cannot be changed while setup is using it; WIFI KEY NEW makes another one afterwards
+        board.send("WIFI KEY NEW"); self.assertIn("close setup mode first", self._err(board))
+        board.send("WIFI KEY NOPE"); self.assertIn("usage", self._err(board))
+        self.wait_for(lambda: "wifi=setup" in board.simple("INFO"), "setup state")
+        board.wifi_set("Net2", "password2")                         # saving closes setup (this also ends it for the test)
+        self.wait_for(lambda: "softap off" in self.wifi_log(), "setup to close", timeout=12)
+        board.send("WIFI KEY NEW")
+        key2 = board.expect(["OK key="]).split("=")[1]
+        self.assertRegex(key2, r"^[a-km-np-z2-9]{10}$")
+        self.assertNotEqual(key2, key)
+        board = self.restart()
+        board.send("WIFI KEY"); self.assertEqual(board.expect(["OK key="]), "OK key=" + key2)
+        # two boards do not share a key: the generator is not a constant
+        keys = set()
+        for _ in range(3):
+            board.send("WIFI KEY NEW"); keys.add(board.expect(["OK key="]))
+        self.assertEqual(len(keys), 3)
+
+    def _err(self, board):
+        try:
+            board.expect(["OK"])
+        except RuntimeError as e:
+            return str(e)
+        self.fail("expected an ERR")
 
     def test_http_tool_mode(self):
         """gg_tool.HttpBoard (the --host mode) does what the USB Board does, against the same firmware."""
@@ -1159,6 +1270,10 @@ class Board(unittest.TestCase):
         self.assertIn("OK setup mode starts", self.board.expect(["OK"]))
         self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "the setup network")
         self.assertIn("dns start", self.wifi_log())
+        self.board.send("WIFI KEY")
+        key = self.board.expect(["OK key="]).split("=")[1]
+        self.assertIn(f"softap GlowGrid-Setup {key}\n", self.wifi_log(), "the setup network is WPA2 and its password is the setup key")
+        self.assertNotIn("softap GlowGrid-Setup (open)", self.wifi_log())
         self.assertIn("wifi=setup ip=-", self.board.simple("INFO"))
         base = self.setup_base()
         # the page: the real one, at / and at any other address (a phone's "is there internet" check lands on it)
@@ -1214,10 +1329,13 @@ class Board(unittest.TestCase):
         self.start(wifi=True)
         self.board.wifi_set("Net", "password1")
         api = self.http_base()
-        st, hd, body = self.http("POST", "/setup", b"", base=api)
+        self.board.send("WIFI KEY")
+        key = self.board.expect(["OK key="]).split("=")[1]
+        self.assertEqual(self.http("POST", "/setup", b"", base=api)[0], 403, "no key, no setup")
+        st, hd, body = self.http("POST", "/setup?key=" + key, b"", headers={"Origin": "https://dwooods.github.io"}, base=api)
         self.assertEqual(st, 200)
         self.assertIn(b"OK setup mode starts", body)
-        self.assertEqual(hd["Access-Control-Allow-Origin"], "*")
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "https://dwooods.github.io")
         self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode")
         self.assertIn("wifi=setup", self.board.simple("INFO"))
         self.assertEqual(self.http("GET", "/", base=self.setup_base())[0], 200)
@@ -1273,33 +1391,31 @@ class Board(unittest.TestCase):
         self.assertEqual(self.log_count("softap GlowGrid-Setup"), 1, "it does not open again by itself")
         self.assertNotIn("begin", self.wifi_log(), "nothing saved, nothing to join")
 
-    def test_setup_mode_opens_when_the_saved_network_will_not_join(self):
-        """A saved network that has not joined 90 s after power-up opens setup once; after its timeout the saved network is tried again
-        and kept. A newly saved network that does not join in 30 s opens setup again. A network that joins never opens it."""
+    def test_a_saved_network_that_will_not_join_after_power_up_does_not_open_setup(self):
+        """Security review 2026-10-17: the old 90 s trigger is gone. A saved network that has not joined (router still starting after a
+        power cut) no longer takes the board off the network and opens setup; it keeps trying. A newly saved network that does not join
+        in 30 s still opens setup again (the person is there, and the network is WPA2). A network that joins never opens it."""
         self.start(wifi=True)
         self.board.wifi_set("Home Net", "password1")
         self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "joining")
-        # power-up with the network joining: no setup
         self.extra_env = {"GG_SETUP_AUTO": "1", "GG_TIME_SCALE": "50"}
         os.remove(self.fs + "_wifi.log")
         board = self.restart()
         self.wait_for(lambda: "wifi=connected" in board.wifi_status() and board.wifi_status(), "rejoining")
         time.sleep(3.0)                                         # well past 90 s of sped-up time
         self.assertNotIn("softap", self.wifi_log())
-        # power-up with the network out of reach: setup opens after the 90 s, then ends after 5 minutes and the saved network is tried again
+        # power-up with the network out of reach: 3 s is 150 s of sped-up time, five times the old trigger, and 15 s past 5 minutes with no setup
         self.wifi_sim = False
         os.remove(self.fs + "_wifi.log")
         board = self.restart()
         self.assertIn("begin Home Net password1", self.wifi_log())
-        self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup after the failed join", timeout=8)
-        self.wait_for(lambda: "softap off" in self.wifi_log(), "setup timeout", timeout=12)
-        self.wait_for(lambda: self.log_count("begin Home Net password1") == 2, "the saved network tried again")
+        time.sleep(7.0)                                         # 350 s sped up: longer than the old trigger plus the whole setup window
+        self.assertNotIn("softap", self.wifi_log(), "a saved network that will not join does not open setup by itself")
+        self.assertEqual(self.log_count("begin Home Net password1"), 1, "and the board does not leave and rejoin either")
         self.assertEqual(board.simple("INFO").count("wifi=connecting"), 1, "still saved, still trying")
-        time.sleep(1.5)
-        self.assertEqual(self.log_count("softap GlowGrid-Setup"), 1, "automatic setup runs once per power-up")
         # new credentials that do not join (this board never joins here): setup opens again after 30 s
         board.wifi_set("Wrong Net", "password2")
-        self.wait_for(lambda: self.log_count("softap GlowGrid-Setup") == 2, "setup after a network that does not join", timeout=6)
+        self.wait_for(lambda: self.log_count("softap GlowGrid-Setup") == 1, "setup after a network that does not join", timeout=6)
         self.assertIn("wifi=setup", board.simple("INFO"))
 
     def test_nothing_opens_setup_without_the_test_switch(self):

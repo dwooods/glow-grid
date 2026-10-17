@@ -39,6 +39,9 @@
 //   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid.local ssid=<name>   (never the password)
 //   WIFI CLEAR                 -> OK wifi cleared
 //   WIFI SETUP                 -> OK setup mode ...: the board leaves its network and opens "GlowGrid-Setup" for 5 minutes (fw 13)
+//   WIFI KEY                   -> OK key=<10 characters>: the board's setup key (fw 18). It is the WPA2 password of GlowGrid-Setup and the
+//                                 code POST /setup asks for. Made once, at random, on first use; print it on the label.
+//   WIFI KEY NEW               -> a new random key (refused while setup mode is open)
 //   WIFI SCAN                  -> NET <ssid hex> <rssi dBm> <1 if it needs a password, else 0> lines (strongest first, up to 20, one per name,
 //                                 hidden networks left out), then OK networks=<n> (fw 10). Takes 2 to 5 seconds; the animation stalls meanwhile.
 
@@ -49,6 +52,7 @@
 #include <ESPmDNS.h>
 #include <DNSServer.h>
 #include <Preferences.h>
+#include <esp_random.h>
 #include "gg_core.h"
 #include "setup_page.h"
 // The editor page for http://glowgrid.local/ comes from tools/build_site.py (git-ignored output). Without it the sketch still builds.
@@ -61,16 +65,18 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 17          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 18          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
-#define SETUP_SSID "GlowGrid-Setup"            // the open network the board hosts in setup mode
+#define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode (WPA2; the password is the setup key, fw 18)
+#define SETUP_KEY_LEN 10
 #define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
-#define JOIN_WAIT_BOOT_MS 90000UL              // after a power-up, a saved network gets this long before setup mode opens
-#define JOIN_WAIT_SAVE_MS 30000UL              // after new credentials are saved, this long
+#define JOIN_WAIT_SAVE_MS 30000UL              // after new credentials are saved, this long before setup mode opens again
 #define SETUP_SAVE_CLOSE_MS 8000UL             // after Save the setup network stays up this long, so the page can show its countdown and the phone is not dropped mid-reply
 #define SETUP_HOLD_MS 5000UL                   // holding the On/off button this long opens setup mode
-// Whether setup mode may open by itself (no saved network, or the saved one will not join). The PC test stub overrides this so that
-// only the tests that ask for it see it; on the board it is always on. Asking for setup (POST /setup, WIFI SETUP) always works.
+// Whether setup mode may open by itself (no saved network at power-up, or a network just saved from the setup page did not join). Since
+// fw 18 a saved network that merely fails to join after a power-up (router still starting) no longer opens it: that would drop the board
+// off the network for 5 minutes after every power cut. The PC test stub overrides this so that only the tests that ask for it see it; on
+// the board it is always on. Asking for setup (POST /setup with the key, WIFI SETUP, the button hold) always works.
 #ifndef GG_SETUP_AUTO_START
 #define GG_SETUP_AUTO_START() true
 #endif
@@ -429,7 +435,8 @@ const char* putCommit(const String& name, size_t size) {
 
 // ---- Wi-Fi (firmware 9): credentials in NVS, set over USB; the board then serves the HTTP API below ----
 // No password on the API for now (David, 2026-10-15): anyone on the home network can list, send and delete sprites. Add a token before
-// this goes beyond a home network.
+// this goes beyond a home network. What fw 18 adds (security review, 2026-10-17): a web page on another site cannot drive the board
+// (Origin and Host are checked on every route, see httpGuard) and the one route that opens a network, POST /setup, needs the setup key.
 #define HOSTNAME "glowgrid"
 WebServer server(80);
 Preferences prefs;
@@ -438,11 +445,12 @@ bool serverUp = false, mdnsUp = false, wifiWasUp = false;
 WebServer setupServer(80);
 DNSServer dnsServer;
 uint32_t setupAt = 0;                          // when setup mode started
-bool setupAutoDone = false;                    // the automatic start has happened once since power-up
 bool setupRequested = false; uint32_t setupReqAt = 0;     // POST /setup or WIFI SETUP: starts a moment after the reply went out
 bool setupSavePending = false; uint32_t setupSaveAt = 0;  // credentials saved from the page: join a moment after the reply went out
-bool joinWatch = false, joinWatchForce = false; uint32_t joinWatchAt = 0, joinWatchMs = 0;   // a network is joining; if it does not, setup opens
+bool joinWatch = false; uint32_t joinWatchAt = 0, joinWatchMs = 0;   // a network just saved is joining; if it does not, setup opens again
 String setupScanText;                          // the last scan, served to the setup page without scanning again
+String setupKey;                               // the WPA2 password of GlowGrid-Setup and the code POST /setup needs; NVS key "key"
+uint8_t keyFails = 0; uint32_t keyLockUntil = 0;   // wrong keys in a row; after 5 the check is locked for a minute
 
 void wifiBegin() {
   WiFi.mode(WIFI_STA);
@@ -457,7 +465,59 @@ void wifiLoad() {
   wifiSsid = prefs.getString("ssid", "");
   wifiPass = prefs.getString("pass", "");
   prefs.end();
-  if (wifiSsid.length()) { wifiBegin(); joinWatch = true; joinWatchForce = false; joinWatchAt = millis(); joinWatchMs = JOIN_WAIT_BOOT_MS; }
+  if (wifiSsid.length()) wifiBegin();            // joins in the background; WiFi.setAutoReconnect keeps trying (no setup mode for this, fw 18)
+}
+
+// ---- Setup key (firmware 18) ----
+// 10 characters from a 32-symbol alphabet (no l, o, 0, 1; lower case so a phone keyboard types it as printed): 50 bits, made once from the
+// hardware random number generator and kept in NVS. It is the WPA2 password of GlowGrid-Setup, and POST /setup (the editor's "Change the
+// board's Wi-Fi") must send it. Read it over USB with WIFI KEY and print it on the board's label. It is created on first use, not at
+// boot, so the radio is already on (the generator is only fully random while it runs).
+void keyMake() {
+  static const char ALPHA[] = "abcdefghijkmnpqrstuvwxyz23456789";
+  bool wasOff = (WiFi.getMode() == WIFI_OFF);
+  if (wasOff) WiFi.mode(WIFI_STA);
+  char k[SETUP_KEY_LEN + 1];
+  for (int i = 0; i < SETUP_KEY_LEN; i++) k[i] = ALPHA[esp_random() & 31];
+  k[SETUP_KEY_LEN] = 0;
+  if (wasOff) WiFi.mode(WIFI_OFF);
+  setupKey = String(k);
+  prefs.begin("gg", false);
+  prefs.putString("key", k);
+  prefs.end();
+}
+
+const String& keyGet() {
+  if (setupKey.length() != SETUP_KEY_LEN) {
+    prefs.begin("gg", true);
+    setupKey = prefs.getString("key", "");
+    prefs.end();
+    if (setupKey.length() != SETUP_KEY_LEN) keyMake();
+  }
+  return setupKey;
+}
+
+// Compares what was typed with the key (case, spaces and dashes ignored, same time for every wrong guess). "" = right, else the ERR text.
+String keyCheck(const String& typed) {
+  uint32_t now = millis();
+  if (keyLockUntil && (int32_t)(keyLockUntil - now) > 0) return String("ERR too many wrong setup keys; wait a minute");
+  const char* key = keyGet().c_str();
+  char t[SETUP_KEY_LEN + 1];
+  size_t n = 0;
+  bool good = true;
+  for (const char* s = typed.c_str(); *s; s++) {
+    char c = *s;
+    if (c == ' ' || c == '-') continue;
+    if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+    if (n >= SETUP_KEY_LEN) { good = false; break; }
+    t[n++] = c;
+  }
+  if (n != SETUP_KEY_LEN) good = false;
+  uint8_t diff = 0;
+  for (size_t i = 0; i < SETUP_KEY_LEN; i++) diff |= (uint8_t)((i < n ? t[i] : 0) ^ key[i]);
+  if (good && diff == 0) { keyFails = 0; return String(""); }
+  if (++keyFails >= 5) { keyFails = 0; keyLockUntil = now + 60000UL; if (keyLockUntil == 0) keyLockUntil = 1; }
+  return String("ERR wrong setup key");
 }
 
 void wifiStop() {
@@ -518,7 +578,7 @@ String wifiStore(const char* h1, const char* h2) {
 void wifiJoinNow(uint32_t watchMs) {
   wifiStop();
   wifiBegin();
-  joinWatch = true; joinWatchForce = true; joinWatchAt = millis(); joinWatchMs = watchMs;
+  joinWatch = true; joinWatchAt = millis(); joinWatchMs = watchMs;
 }
 
 void setupFinish();                            // defined with the setup code below
@@ -548,6 +608,16 @@ String opWifi(const char* rest) {
     return String("OK wifi cleared");
   }
   if (n >= 1 && s == "SETUP") return opSetup();
+  if (n >= 1 && s == "KEY") {
+    String a = String(n >= 2 ? h1 : "");
+    a.toUpperCase();
+    if (n >= 2) {
+      if (a != "NEW") return String("ERR usage: WIFI KEY | WIFI KEY NEW");
+      if (setupOn) return String("ERR close setup mode first: it is using the current key");
+      keyMake();
+    }
+    return sfmt("OK key=%s", keyGet().c_str());
+  }
   if (n >= 2 && s == "SET") {
     String e = wifiStore(h1, n >= 3 ? h2 : "");
     if (e.length()) return e;
@@ -555,7 +625,7 @@ String opWifi(const char* rest) {
     wifiJoinNow(JOIN_WAIT_SAVE_MS);
     return String("OK wifi saved; joining. Check with WIFI STATUS (2.4 GHz networks only)");
   }
-  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR | WIFI SETUP");
+  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR | WIFI SETUP | WIFI KEY [NEW]");
 }
 
 // ---- HTTP API ----
@@ -565,25 +635,72 @@ String opWifi(const char* rest) {
 //   POST /setup                       leave this network and open setup mode (fw 13)
 //   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
 //                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
-// Replies are the same "OK ..." / "ERR ..." text as USB. Every reply carries CORS headers, and the pre-flight a browser sends before a
-// request from the https editor page to a private address is answered (Access-Control-Allow-Private-Network).
+//   POST /setup?key=K                 the key is the board's setup key (fw 18)
+// Replies are the same "OK ..." / "ERR ..." text as USB. A reply to a browser page carries CORS headers for that page's own origin, and the
+// pre-flight a browser sends before a request from the https editor page to a private address is answered (Access-Control-Allow-Private-Network).
+//
+// Who may call (fw 18; before this every page on the internet could, with CORS "*" and a multipart POST that needs no pre-flight):
+//   * Host must be this board's name (glowgrid.local, glowgrid) or an IP address: a name an attacker controls that was re-pointed at the
+//     board (DNS rebinding) arrives with its own name in Host and is refused.
+//   * Origin, when a browser sends one, must be the hosted editor, this board's own page, or the developer's localhost. curl, gg_tool.py
+//     and a same-origin GET send none and pass. Checked before any POST does anything, so a cross-site form cannot delete or upload.
+bool httpHostOk() {
+  String h = server.header("Host");
+  if (h.length() == 0) return true;
+  const char* p = h.c_str();
+  size_t n = strcspn(p, ":");                    // the name without a port
+  char name[40];
+  if (n == 0 || n >= sizeof name) return false;
+  bool numeric = true;
+  for (size_t i = 0; i < n; i++) {
+    char c = p[i];
+    if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+    name[i] = c;
+    if (!((c >= '0' && c <= '9') || c == '.')) numeric = false;
+  }
+  name[n] = 0;
+  return numeric || strcmp(name, HOSTNAME ".local") == 0 || strcmp(name, HOSTNAME) == 0;
+}
+
+bool httpOriginOk(const String& o) {
+  if (o.length() == 0) return true;
+  const char* s = o.c_str();
+  if (strcmp(s, "https://dwooods.github.io") == 0) return true;      // the hosted editor (and the installed app)
+  if (strncmp(s, "http://", 7) != 0) return false;                   // also "null" (file:// pages, sandboxed frames)
+  s += 7;
+  size_t n = strcspn(s, ":");
+  if (n == 9 && (strncmp(s, "localhost", 9) == 0 || strncmp(s, "127.0.0.1", 9) == 0)) return true;   // a developer's own server
+  return strcmp(s, server.header("Host").c_str()) == 0;              // this board's own page (Host was checked first)
+}
+
+bool httpGuard() {
+  if (httpHostOk() && httpOriginOk(server.header("Origin"))) return true;
+  server.send(403, "text/plain", "ERR not allowed from this page or address\n");
+  return false;
+}
+
 void httpCors() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "*");
-  server.sendHeader("Access-Control-Allow-Private-Network", "true");
-  server.sendHeader("Access-Control-Max-Age", "600");
+  String o = server.header("Origin");            // only an origin httpGuard() let through gets here
+  if (o.length()) {
+    server.sendHeader("Access-Control-Allow-Origin", o);
+    server.sendHeader("Vary", "Origin");
+    server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.sendHeader("Access-Control-Allow-Private-Network", "true");
+    server.sendHeader("Access-Control-Max-Age", "600");
+  }
   server.sendHeader("Cache-Control", "no-store");
 }
 
 void httpReply(const String& msg) {
   int code = 200;
-  if (msg.startsWith("ERR")) code = (msg.indexOf("no such") >= 0) ? 404 : 400;
+  if (msg.startsWith("ERR")) code = (msg.indexOf("no such") >= 0) ? 404 : (msg.indexOf("setup key") >= 0) ? 403 : 400;
   httpCors();
   server.send(code, "text/plain", msg + "\n");
 }
 
 void httpGetFile() {
+  if (!httpGuard()) return;
   String name = server.arg("name");
   File f = gg_name_ok(name.c_str()) ? LittleFS.open(pathOf(name), "r") : File();
   if (!f) { httpReply("ERR no such sprite"); return; }
@@ -606,8 +723,9 @@ void httpPutData() {
     putGot = 0;
     putCrc = 0;
     putName = server.arg("name");
+    if (!(httpHostOk() && httpOriginOk(server.header("Origin")))) { putErr = "not allowed from this page or address"; return; }   // before any byte is written
     size_t want = (size_t)strtoul(server.arg("size").c_str(), NULL, 10);   // optional: lets the space check run before any byte is written
-    const char* e = putPrecheck(putName, want ? want : (size_t)(GG_HEADER_SIZE + GG_FRAME_BYTES));
+    const char* e = putPrecheck(putName, want ? want : (size_t)GG_MAX_FILE);   // no size given: room for the biggest sprite, so a full flash is caught here
     if (e) { putErr = e; return; }
     putFile = LittleFS.open(TMP_PATH, "w");
     if (!putFile) putErr = "cannot create file";
@@ -624,6 +742,7 @@ void httpPutData() {
 }
 
 void httpPutDone() {
+  if (!httpGuard()) { LittleFS.remove(TMP_PATH); putSeen = false; putErr = ""; return; }
   String msg;
   if (!putSeen) {
     msg = "ERR send the sprite as multipart/form-data with the file in a field named file";
@@ -646,6 +765,7 @@ void httpPutDone() {
 }
 
 void httpNotFound() {
+  if (!httpGuard()) return;
   httpCors();
   if (server.method() == HTTP_OPTIONS) { server.send(204); return; }   // the browser's pre-flight for the private-network and POST requests
   server.send(404, "text/plain", "ERR not found\n");
@@ -655,10 +775,12 @@ void httpNotFound() {
 // The page is gzip stored as base64; it is decoded 1024 characters at a time into a small buffer and sent with its exact length.
 #ifndef GG_HAS_SITE
 void httpSite() {
+  if (!httpGuard()) return;
   server.send(404, "text/plain", "The editor is not built into this firmware. Run c3/tools/build_site.py, then flash c3_player.ino again.");
 }
 #else
 void httpSite() {
+  if (!httpGuard()) return;
   server.sendHeader("Content-Encoding", "gzip");
   server.sendHeader("Cache-Control", "no-store");
   server.setContentLength(GG_SITE_LEN);
@@ -678,21 +800,27 @@ void httpBegin() {
   static bool routesAdded = false;              // the server can be stopped for setup mode and begun again; the routes stay
   if (routesAdded) { server.begin(); return; }
   routesAdded = true;
+  static const char* keepHeaders[] = {"Origin", "Host"};     // the core drops request headers it was not asked to keep
+  server.collectHeaders(keepHeaders, 2);
   server.on("/", HTTP_GET, httpSite);
   server.on("/index.html", HTTP_GET, httpSite);
-  server.on("/ping", HTTP_GET, []() { httpReply("PONG"); });
-  server.on("/info", HTTP_GET, []() { httpReply(infoText()); });
-  server.on("/list", HTTP_GET, []() { httpReply(listText()); });
-  server.on("/crc", HTTP_GET, []() { httpReply(opCrc(server.arg("name"))); });
+  server.on("/ping", HTTP_GET, []() { if (httpGuard()) httpReply("PONG"); });
+  server.on("/info", HTTP_GET, []() { if (httpGuard()) httpReply(infoText()); });
+  server.on("/list", HTTP_GET, []() { if (httpGuard()) httpReply(listText()); });
+  server.on("/crc", HTTP_GET, []() { if (httpGuard()) httpReply(opCrc(server.arg("name"))); });
   server.on("/get", HTTP_GET, httpGetFile);
-  server.on("/show", HTTP_POST, []() { httpReply(opShow(server.arg("name"))); });
-  server.on("/del", HTTP_POST, []() { httpReply(opDel(server.arg("name"))); });
-  server.on("/off", HTTP_POST, []() { httpReply(opPower(false)); });
-  server.on("/on", HTTP_POST, []() { httpReply(opPower(true)); });
-  server.on("/rotate", HTTP_POST, []() { httpReply(opRotate(server.arg("s").c_str())); });
-  server.on("/shuffle", HTTP_POST, []() { httpReply(opShuffle(server.arg("on").c_str())); });
+  server.on("/show", HTTP_POST, []() { if (httpGuard()) httpReply(opShow(server.arg("name"))); });
+  server.on("/del", HTTP_POST, []() { if (httpGuard()) httpReply(opDel(server.arg("name"))); });
+  server.on("/off", HTTP_POST, []() { if (httpGuard()) httpReply(opPower(false)); });
+  server.on("/on", HTTP_POST, []() { if (httpGuard()) httpReply(opPower(true)); });
+  server.on("/rotate", HTTP_POST, []() { if (httpGuard()) httpReply(opRotate(server.arg("s").c_str())); });
+  server.on("/shuffle", HTTP_POST, []() { if (httpGuard()) httpReply(opShuffle(server.arg("on").c_str())); });
   server.on("/put", HTTP_POST, httpPutDone, httpPutData);
-  server.on("/setup", HTTP_POST, []() { httpReply(opSetup()); });
+  server.on("/setup", HTTP_POST, []() {
+    if (!httpGuard()) return;
+    String e = keyCheck(server.arg("key"));
+    httpReply(e.length() ? e : opSetup());
+  });
   server.onNotFound(httpNotFound);
   server.begin();
 }
@@ -715,14 +843,18 @@ void wifiTick() {
 
 
 // ---- Setup mode (firmware 13) ----
-// Puts the board on a home network without USB. The board hosts the open network "GlowGrid-Setup" (and answers every DNS name with its own
-// address, so a phone opens the page by itself as a "sign in" screen) and serves one small page at http://192.168.4.1/: pick a network
-// from a scan, type the password, Save. LED 0 pulses dim blue while it runs. It starts when
-//   * there is no saved network at power-up, or a saved network has not joined 90 s after power-up (once per power-up),
+// Puts the board on a home network without USB. The board hosts the WPA2 network "GlowGrid-Setup" whose password is the board's setup key
+// (fw 18; before that it was open, so anyone in range during the 5 minutes could have pointed the board at their own network) and answers
+// every DNS name with its own address, so a phone opens the page by itself as a "sign in" screen. It serves one small page at
+// http://192.168.4.1/: pick a network from a scan, type the password, Save. LED 0 pulses dim blue while it runs. It starts when
+//   * there is no saved network at power-up,
 //   * a network just saved did not join within 30 s,
-//   * it is asked for: POST /setup (the editor's "Change the board's Wi-Fi" button) or the USB command WIFI SETUP.
+//   * it is asked for: POST /setup?key=<setup key> (the editor's "Change the board's Wi-Fi" button), the USB command WIFI SETUP, or a
+//     5-second hold of the On/off button.
+// A saved network that does not join after a power-up does NOT open it (fw 18): a router that is slow to start after a power cut would
+// take the board off the network for 5 minutes. Use the button hold or USB if the network really changed.
 // It ends after 5 minutes (the board goes back to the saved network, which is kept) or when a network is saved.
-// The API is not served on the setup network: it is open, so only this page and its scan and save are reachable.
+// The API is not served on the setup network: only this page and its scan and save are reachable.
 
 void setupPage() {
   setupServer.sendHeader("Cache-Control", "no-store");
@@ -755,7 +887,7 @@ void setupStart() {
   setupScanText = wifiScanText();                // scan first, while no phone is attached: the page then shows the list at once
   WiFi.mode(WIFI_AP_STA);
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
-  WiFi.softAP(SETUP_SSID);
+  WiFi.softAP(SETUP_SSID, keyGet().c_str());     // WPA2: the setup key is the password
   dnsServer.start(53, "*", WiFi.softAPIP());
   static bool routesAdded = false;
   if (!routesAdded) {
@@ -766,7 +898,7 @@ void setupStart() {
     setupServer.onNotFound(setupPage);           // every other address (the phone's "is there internet" checks) shows the page too
   }
   setupServer.begin();
-  Serial.println("setup mode: join the Wi-Fi network " SETUP_SSID " and open http://192.168.4.1/ (5 minutes)");
+  Serial.println("setup mode: join the Wi-Fi network " SETUP_SSID " (password: the setup key, see WIFI KEY) and open http://192.168.4.1/ (5 minutes)");
 }
 
 // Ends setup mode: the setup network and its server go away and the panel goes back to what it was showing.
@@ -787,14 +919,14 @@ void setupEnd() {
 // Ends setup mode and joins the network that was just saved; if it does not join in 30 s, setup mode opens again.
 void setupFinish() {
   setupEnd();
-  joinWatch = true; joinWatchForce = true; joinWatchAt = millis(); joinWatchMs = JOIN_WAIT_SAVE_MS;
+  joinWatch = true; joinWatchAt = millis(); joinWatchMs = JOIN_WAIT_SAVE_MS;
 }
 
 String opSetup() {
-  if (setupOn) return String("OK setup mode is already on: join the Wi-Fi network " SETUP_SSID " and open http://192.168.4.1/");
+  if (setupOn) return String("OK setup mode is already on: join the Wi-Fi network " SETUP_SSID " (password: the setup key) and open http://192.168.4.1/");
   setupRequested = true;
   setupReqAt = millis();
-  return String("OK setup mode starts in a moment: join the Wi-Fi network " SETUP_SSID " and open http://192.168.4.1/ (5 minutes; this connection ends)");
+  return String("OK setup mode starts in a moment: join the Wi-Fi network " SETUP_SSID " (password: the setup key on the board's label) and open http://192.168.4.1/ (5 minutes; this connection ends)");
 }
 
 // Called every pass of loop().
@@ -806,7 +938,7 @@ void setupTick() {
     if (WiFi.status() == WL_CONNECTED || wifiSsid.length() == 0) { joinWatch = false; return; }
     if (now - joinWatchAt < joinWatchMs) return;
     joinWatch = false;
-    if (GG_SETUP_AUTO_START() && (joinWatchForce || !setupAutoDone)) { setupAutoDone = true; setupStart(); }
+    if (GG_SETUP_AUTO_START()) setupStart();     // a network just saved did not join
     return;
   }
   dnsServer.processNextRequest();
@@ -972,7 +1104,7 @@ void setup() {
   bool wasOff = LittleFS.exists(OFF_MARK);
   if (nSprites > 0) selectIndex(0); else showEmpty();
   if (wasOff) { setPanel(false); Serial.println("panel off (as left)"); }
-  if (wifiSsid.length() == 0 && GG_SETUP_AUTO_START()) { setupAutoDone = true; setupStart(); }   // nothing saved: offer setup
+  if (wifiSsid.length() == 0 && GG_SETUP_AUTO_START()) setupStart();   // nothing saved: offer setup
 }
 
 void loop() {

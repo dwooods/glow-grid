@@ -177,6 +177,11 @@ class GgBoard {
     });
   }
   async wifiClear() { return this.cmd('WIFI CLEAR', ['OK']); }
+  async wifiKey() {                   // firmware 18 and later: the setup key (the password of GlowGrid-Setup), "OK key=<10 characters>"
+    const m = /key=(\S+)/.exec(await this.cmd('WIFI KEY', ['OK']));
+    if (!m) throw new Error('the board did not return a key');
+    return m[1];
+  }
   async close() { await this.t.close(); }
 }
 
@@ -235,7 +240,7 @@ class HttpBoard {
   async on() { return this.call('POST', '/on'); }
   async rotate(sec) { return this.call('POST', `/rotate?s=${encodeURIComponent(sec)}`); }
   async shuffle(on) { return this.call('POST', `/shuffle?on=${on ? 1 : 0}`); }
-  async setup() { return this.call('POST', '/setup'); }              // firmware 13: leave this network and open GlowGrid-Setup
+  async setup(key) { return this.call('POST', '/setup' + (key ? `?key=${encodeURIComponent(key)}` : '')); }   // firmware 13: leave this network and open GlowGrid-Setup; firmware 18 wants the setup key
   async crc(name) {
     const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
     const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
@@ -272,6 +277,7 @@ const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);     
 const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
 const BOARD_SCAN_FW = 10;          // the first firmware that can list nearby networks (WIFI SCAN)
 const BOARD_SETUP_FW = 13;         // the first firmware with setup mode (POST /setup: the board hosts its own Wi-Fi setup page)
+const BOARD_KEY_FW = 18;           // the first firmware with a setup key: GlowGrid-Setup is WPA2 and POST /setup needs the key
 const BOARD_HOST_KEY = 'ggBoardHost';
 const BOARD_HOST_DEFAULT = 'glowgrid.local';
 // The editor also runs from the board itself (firmware 12 serves it at http://glowgrid.local/ or its IP address). Then the page and the board
@@ -558,6 +564,8 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
   $('netClearBtn').hidden = !usb || !fw9 || !w;
   const canSetup = !!board && boardVia === 'wifi' && Number(boardFw) >= BOARD_SETUP_FW;
   $('netSetupBtn').hidden = !canSetup;
+  $('netKeyRow').hidden = !(canSetup && Number(boardFw) >= BOARD_KEY_FW);
+  $('netKeyShowBtn').hidden = !(usb && Number(boardFw) >= BOARD_KEY_FW);
   $('netSetupHint').textContent = !board ? 'Connect the board over USB first (Board card).'
     : boardVia === 'wifi' ? (canSetup ? 'Connected over Wi-Fi. To change network, press Change the board\'s Wi-Fi.'
       : 'Connected over Wi-Fi. To change network, reconnect over USB.')
@@ -648,16 +656,25 @@ async function netClear() {
 }
 async function netSetup() {            // firmware 13: the board leaves this network and hosts GlowGrid-Setup, where its Wi-Fi can be changed from any phone
   if (!board || boardVia !== 'wifi') return;
+  const needKey = Number(boardFw) >= BOARD_KEY_FW, key = $('netKey').value.trim();
+  if (needKey && !key) { netSay('Type the setup key first. It is on the board\'s label (or press Show setup key while the board is on USB).', 'err'); $('netKey').focus(); return; }
   if (!confirm('The board will leave your Wi-Fi and open GlowGrid-Setup for 5 minutes. Continue?')) return;
   const b = board;
   $('netSetupBtn').disabled = true;
   try {
-    await b.setup();
+    await b.setup(needKey ? key : '');
+    $('netKey').value = '';
     await b.close();                     // the link ends now; the card clears itself
-    const msg = 'Join the Wi-Fi network GlowGrid-Setup (no password). If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.';
+    const msg = needKey ? 'Join the Wi-Fi network GlowGrid-Setup. Its password is the same setup key. If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.'
+      : 'Join the Wi-Fi network GlowGrid-Setup (no password on this old firmware: update it). If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.';
     netSay(msg, 'ok'); boardSay(msg, 'ok');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { $('netSetupBtn').disabled = false; netSync(); }
+}
+async function netShowKey() {          // firmware 18, over USB: the setup key, to print on the board's label
+  if (!board || boardVia !== 'usb') return;
+  try { netSay(`Setup key: ${await board.wifiKey()}. Print it on the board's label. It is the password of GlowGrid-Setup and the code for Change the board's Wi-Fi.`, 'ok'); }
+  catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
 }
 const NET_POLL_MS = window.__ggNetPollMs || 1500;       // tests shorten the wait between Wi-Fi status checks
 $('netScanBtn').addEventListener('click', netScan);
@@ -669,4 +686,5 @@ $('netConnectBtn').addEventListener('click', netConnect);
 $('netSaveBtn').addEventListener('click', netSave);
 $('netClearBtn').addEventListener('click', netClear);
 $('netSetupBtn').addEventListener('click', netSetup);
+$('netKeyShowBtn').addEventListener('click', netShowKey);
 $('netHost').addEventListener('keydown', (e) => { if (e.key === 'Enter') netConnect(); });

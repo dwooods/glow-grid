@@ -20,7 +20,8 @@ Wi-Fi (firmware 9). Set it up once over USB, then the same commands work over th
     python3 gg_tool.py wifi clear
     python3 gg_tool.py --host glowgrid.local list            # or the board's address, e.g. --host 192.168.1.50
     python3 gg_tool.py --host glowgrid.local put lantern.gg  # every command except wifi works this way
-The network side has no password for now: anyone on your home network can change the sprites.
+    python3 gg_tool.py wifi key                               # the setup key: the password of the GlowGrid-Setup network (firmware 18); over USB only
+The network side has no password yet: anyone on your home network can change the sprites (other websites cannot, from firmware 18).
 
 Close the Arduino Serial Monitor first: only one program can use the port.
 Needs pyserial for USB:  pip install pyserial   (not needed with --host)
@@ -195,6 +196,10 @@ class Board:
     def wifi_clear(self):
         return self.simple("WIFI CLEAR")
 
+    def wifi_key(self, new=False):
+        """The board's setup key (the GlowGrid-Setup password; firmware 18). USB only. new=True makes a fresh one."""
+        return self.simple("WIFI KEY NEW" if new else "WIFI KEY")
+
 
 class HttpBoard:
     """The same operations as Board, over Wi-Fi (firmware 9). host is a name or address, optionally with :port."""
@@ -307,6 +312,8 @@ def main():
     ws.add_parser("status")
     ws.add_parser("scan")
     ws.add_parser("clear")
+    wk = ws.add_parser("key")
+    wk.add_argument("--new", action="store_true", help="make a new key (only while setup mode is off)")
     for c in ("show", "del", "get"):
         s = sub.add_parser(c)
         s.add_argument("name")
@@ -325,6 +332,8 @@ def main():
             elif a.wcmd == "scan":
                 for name, rssi, secure in board.wifi_scan():
                     print(f"  {name:<34} {rssi:>4} dBm  {'password' if secure else 'open'}")
+            elif a.wcmd == "key":
+                print(board.wifi_key(a.new))
             else:
                 print(board.wifi_status() if a.wcmd == "status" else board.wifi_clear())
         elif a.cmd == "list":
