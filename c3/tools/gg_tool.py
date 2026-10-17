@@ -124,8 +124,8 @@ class Board:
         while True:
             line = self.expect(["FILE", "OK"])
             if line.startswith("FILE"):
-                _, name, size = line.split()
-                files.append((name, int(size)))
+                parts = line.split()             # fw 17 adds frames, fps10, bright_pct, gamma10 after the size
+                files.append((parts[1], int(parts[2])))
             else:
                 return files, line
 
@@ -243,8 +243,8 @@ class HttpBoard:
         files, summary = [], ""
         for line in self._call("GET", "/list").splitlines():
             if line.startswith("FILE"):
-                _, name, size = line.split()
-                files.append((name, int(size)))
+                parts = line.split()             # fw 17 adds frames, fps10, bright_pct, gamma10 after the size
+                files.append((parts[1], int(parts[2])))
             elif line.startswith("OK"):
                 summary = line
         return files, summary

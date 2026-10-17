@@ -39,6 +39,16 @@ class WebExamples(unittest.TestCase):
         for d in self.data:
             self.assertRegex(d['name'], r'^[A-Za-z0-9_-]{1,31}$')
 
+    def test_every_frame_is_16_rows_of_16_pixels(self):  # a row typed one dot short must fail here, not on a panel
+        for name, (frames, fps) in me.EXAMPLES.items():
+            for i, f in enumerate(frames):
+                with self.subTest(name=name, frame=i):
+                    self.assertEqual(len(f), 16, 'rows')
+                    self.assertEqual([len(r) for r in f], [16] * 16, 'pixels per row')
+                    self.assertLessEqual(set(''.join(f)), set(PALETTE), 'every character is in the palette')
+        for d in self.data:
+            self.assertEqual(len(bytes.fromhex(d['hex'])), 12 + d['frames'] * 768, d['name'])
+
     def test_bytes_equal_the_python_packer(self):
         for d, (name, (frames, fps)) in zip(self.data, me.EXAMPLES.items()):
             with self.subTest(name=name):
