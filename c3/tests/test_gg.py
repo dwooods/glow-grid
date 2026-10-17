@@ -772,6 +772,43 @@ class Board(unittest.TestCase):
         board = self.restart()
         self.assertIn("rotate=0", board.simple("INFO"))
 
+    def test_shuffle_picks_random_sprites_never_the_current_one_and_survives_a_power_cycle(self):
+        self.start()
+        names = ["alpha", "beta", "gamma", "delta"]
+        for i, n in enumerate(names):
+            self.board.put(self.write_gg(n, sample_frames(70 + i, 1)))
+        self.board.simple("SHOW alpha")
+        self.assertIn("shuffle=0", self.board.simple("INFO"))
+        for bad in ("SHUFFLE", "SHUFFLE 2", "SHUFFLE x", "SHUFFLE -1"):
+            self.board.send(bad)
+            with self.assertRaisesRegex(RuntimeError, "usage"):
+                self.board.expect(["OK"])
+        self.assertEqual(self.board.simple("SHUFFLE 1"), "OK shuffle 1")
+        self.assertIn("shuffle=1", self.board.simple("INFO"))
+        self.assertEqual(self.board.simple("ROTATE 1"), "OK rotate 1")
+        seen = []
+        for _ in range(14):                                   # about one pick a second
+            time.sleep(1.05)
+            cur = re.search(r"current=(\S+)", self.board.simple("INFO")).group(1)
+            seen.append(cur)
+        self.assertTrue(set(seen) <= set(names))
+        previous = ["alpha"] + seen[:-1]
+        self.assertTrue(all(a != b for a, b in zip(previous, seen)), f"a pick never repeats the playing sprite: {seen}")
+        self.assertGreaterEqual(len(set(seen)), 3, f"the picks are not just one other sprite: {seen}")
+        order = sorted(names)                                 # the board lists sprites by name
+        self.assertNotEqual(seen, [order[(order.index(x) + 1) % 4] for x in previous], "not simply the next in list order")
+        # a power cycle keeps it
+        board = self.restart()
+        self.assertIn("shuffle=1", board.simple("INFO"))
+        self.assertEqual([f[0] for f in board.list()[0]], sorted(names), "the setting file is not a sprite")
+        # 0 goes back to list order, also across a restart
+        self.assertEqual(board.simple("SHUFFLE 0"), "OK shuffle 0")
+        board.simple("SHOW alpha")
+        time.sleep(1.3)
+        self.assertIn("current=beta", board.simple("INFO"), "list order again")
+        board = self.restart()
+        self.assertIn("shuffle=0", board.simple("INFO"))
+
     def test_off_survives_a_power_cycle(self):
         # Decided 2026-10-15: an unplugged-and-replugged board that was off comes back dark.
         self.start()
@@ -964,6 +1001,9 @@ class Board(unittest.TestCase):
         self.assertEqual(self.http("POST", "/rotate?s=30")[2], b"OK rotate 30\n")
         self.assertIn("rotate=30", self.board.simple("INFO"))
         self.assertEqual(self.http("POST", "/rotate?s=0")[2], b"OK rotate 0\n")
+        self.assertEqual(self.http("POST", "/shuffle?on=1")[2], b"OK shuffle 1\n")
+        self.assertIn("shuffle=1", self.board.simple("INFO"))
+        self.assertEqual(self.http("POST", "/shuffle?on=0")[2], b"OK shuffle 0\n")
         self.assertEqual(self.http("POST", "/del?name=big")[2], b"OK deleted big\n")
         self.assertFalse(os.path.exists(os.path.join(self.fs, "big.gg")))
         # errors come back as the same ERR text with a 4xx status, and leave the flash clean
