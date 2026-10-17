@@ -166,8 +166,10 @@
         <button id="boardWifiBtn" class="btn btn-quiet" type="button" title="Connect to a board on your Wi-Fi (the Network button at the top sets the address)">Connect over Wi-Fi</button>
         <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
       </div>
+      <p class="hint board-name-hint" id="boardNameHint" hidden></p>
       <div class="btn-row" id="boardTools" hidden>
-        <button id="boardSendBtn" class="btn" type="button" title="Store this drawing on the board, under the name in Export, and play it">Send to board</button>
+        <label class="field-inline" title="The name the sprite is stored under. A new name adds a sprite; a name already on the board replaces it (you are asked first). Same field as Name in Export.">Name <input id="boardName" type="text" value="sprite" spellcheck="false" maxlength="31" autocomplete="off" size="14"></label>
+        <button id="boardSendBtn" class="btn" type="button" title="Store this drawing on the board under the Name beside it, and play it">Send to board</button>
         <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
         <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
         <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>

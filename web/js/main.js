@@ -43,6 +43,6 @@ $('brightInput').value = sim.brightness; $('gammaInput').value = sim.gamma; $('p
 $('flagsToggle').checked = sim.flags; deviceEl.classList.toggle('flags-on', sim.flags);
 $('targetInput').value = exportTarget();
 $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
-$('fpsInput').value = state.fps; $('nameInput').value = state.name;
+$('fpsInput').value = state.fps; setNameField(state.name);
 buildLut(); buildGridDOM(); renderSwatches(); setColor(state.color, false); updateUndoBtns();
 afterFrameChange();

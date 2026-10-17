@@ -184,7 +184,14 @@ $('exportBtn').addEventListener('click', () => {
 });
 $('scaleInput').addEventListener('change', updateCmd);
 $('targetInput').addEventListener('change', (e) => { sim.target = e.target.value; saveSim(); updateCmd(); });
-$('nameInput').addEventListener('input', (e) => { state.name = e.target.value; updateCmd(); saveState(); });
+// Two fields show the sprite's name (Export and the Board card); every change goes through here so they never disagree.
+function setNameField(v, fromId) {
+  state.name = v;
+  for (const id of ['nameInput', 'boardName']) if (id !== fromId) $(id).value = v;
+  if (typeof boardNameHint === 'function') boardNameHint();
+}
+$('nameInput').addEventListener('input', (e) => { setNameField(e.target.value, 'nameInput'); updateCmd(); saveState(); });
+$('boardName').addEventListener('input', (e) => { setNameField(e.target.value, 'boardName'); updateCmd(); saveState(); });
 
 // Put a decoded sprite into the editor: frames, size, name, fps, and the file's own brightness and gamma. Undo brings the old drawing back.
 function loadGgSprite(d, name, from) {
@@ -193,7 +200,7 @@ function loadGgSprite(d, name, from) {
   state.cols = d.cols; state.rows = d.rows; state.frames = d.frames; state.currentFrame = 0; state.shared = null; state.target = 'frame';
   if (resized) { $('colsInput').value = state.cols; $('rowsInput').value = state.rows; buildGridDOM(); }
   state.fps = clamp(Math.round(d.fps), 1, 30); $('fpsInput').value = state.fps;
-  state.name = name; $('nameInput').value = name;
+  setNameField(name);
   $('brightInput').value = d.brightness; $('gammaInput').value = d.gamma;
   readLedSettings();
   afterFrameChange();
