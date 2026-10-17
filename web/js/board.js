@@ -13,6 +13,18 @@ const BOARD_PAGE = 5;                // rows per page in the list
 const BOARD_MAX_SPRITES = 64;        // the firmware's MAX_SPRITES
 const BOARD_CRC_FW = 7;              // the first firmware with the CRC command (Remove examples needs it)
 const BOARD_GET_FW = 8;              // the first firmware with the GET command (Load needs it)
+// "FILE name bytes [frames fps10 bright_pct gamma10]": the last four only from firmware 17 on (the list shows no settings on an older board), and only for a valid sprite.
+function boardFileLine(l) {
+  const [, name, size, fr, fps10, br, g10] = l.split(' ');
+  const f = { name, size: Number(size) };
+  if (g10 !== undefined) Object.assign(f, { frames: Number(fr), fps: Number(fps10) / 10, brightness: Number(br) / 100, gamma: Number(g10) / 10 });
+  return f;
+}
+// "(6 frames, 4 fps, brightness 0.3, gamma 2.2)"; one frame has no speed, so fps is left out like in the Sent message
+function boardLightText(f) {
+  if (f.gamma === undefined) return '';
+  return `(${f.frames > 1 ? `${f.frames} frames, ${f.fps} fps, ` : ''}brightness ${f.brightness}, gamma ${f.gamma})`;
+}
 const BOARD_SHUFFLE_FW = 16;         // the first firmware with the SHUFFLE command (random rotation)
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
@@ -101,7 +113,7 @@ class GgBoard {
     const files = [];
     const summary = await this.cmd('LIST', ['OK'], 4000, files);
     const m = /^OK (\d+) files?, (\d+) bytes free/.exec(summary);
-    return { files: files.filter((l) => l.startsWith('FILE ')).map((l) => { const [, name, size] = l.split(' '); return { name, size: Number(size) }; }), free: m ? Number(m[2]) : null };
+    return { files: files.filter((l) => l.startsWith('FILE ')).map((l) => { return boardFileLine(l); }), free: m ? Number(m[2]) : null };
   }
   async info() {
     const line = await this.cmd('INFO', ['OK']);
@@ -198,7 +210,7 @@ class HttpBoard {
   async list() {
     const files = []; let summary = '';
     for (const l of (await this.call('GET', '/list')).split('\n')) {
-      if (l.startsWith('FILE ')) { const [, name, size] = l.split(' '); files.push({ name, size: Number(size) }); }
+      if (l.startsWith('FILE ')) files.push(boardFileLine(l));
       else if (l.startsWith('OK')) summary = l;
     }
     const m = /^OK (\d+) files?, (\d+) bytes free/.exec(summary);
@@ -286,11 +298,17 @@ function boardUi(connected) {
   if (!connected) { boardVia = ''; boardInfo = {}; $('boardLink').textContent = ''; }
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
+  $('boardNameHint').hidden = !connected;
   $('boardExamples').hidden = !connected;
   $('boardList').hidden = !connected;
   if (!connected) { $('boardList').innerHTML = ''; boardNames = []; boardFiles = []; boardPage = 0; $('boardPager').hidden = true; $('boardFree').textContent = ''; }
 }
 function boardSendName() { return safeName().slice(0, 31); }
+function boardNameHint() {             // says what Send will do with the name in the field: add a sprite or replace one
+  const el = $('boardNameHint'), name = boardSendName();
+  if (!board) { el.textContent = ''; return; }
+  el.textContent = boardNames.includes(name) ? `Send replaces “${name}” on the board (you are asked first). Change the Name to keep it and add a new sprite.` : `Send adds “${name}” as a new sprite.`;
+}
 function boardShowRotate(sec) {       // the select shows the board's own setting; an unlisted value gets its own entry
   const sel = $('boardRotate');
   const v = String(parseInt(sec, 10) || 0);
@@ -322,6 +340,7 @@ async function boardRefresh(showName) {            // showName: jump to the page
   $('boardOffBtn').disabled = info.panel === 'off';
   boardShowRotate(info.rotate);
   boardShowShuffle(info);
+  boardNameHint();
 }
 function boardRenderList() {
   const files = boardFiles;
@@ -334,6 +353,8 @@ function boardRenderList() {
     const playing = boardCurrent === f.name;
     li.className = 'board-row' + (playing ? ' playing' : '');
     const nm = document.createElement('span'); nm.className = 'board-name'; nm.textContent = f.name;
+    const lt = boardLightText(f);
+    if (lt) { const m = document.createElement('small'); m.className = 'board-meta'; m.textContent = ' ' + lt; nm.appendChild(m); }
     const sz = document.createElement('small'); sz.textContent = `${(f.size / 1024).toFixed(1)} KB` + (playing ? ' · playing' : '');
     const load = document.createElement('button'); load.type = 'button'; load.className = 'btn btn-quiet'; load.textContent = 'Load';
     const canGet = Number(boardFw) >= BOARD_GET_FW;
@@ -361,7 +382,7 @@ async function boardLoad(name) {       // read the sprite back from the board in
     const d = ggDecode(await board.get(name));
     if (!needsReplaceOk()) { boardSay('Not loaded.', ''); return; }
     loadGgSprite(d, name, 'the board');
-    boardSay(`Loaded ${name} into the editor. Change it, then Send to board (the Export name is now “${name}”, so Send replaces it).`, 'ok');
+    boardSay(`Loaded ${name} into the editor. Change it, then Send to board. The Name beside Send is now “${name}”, so Send replaces it; type a new Name to keep both.`, 'ok');
   } catch (err) { if (board) boardSay(`Could not load ${name}: ${err.message}`, 'err'); }
   finally { boardBusy(false); }
 }
