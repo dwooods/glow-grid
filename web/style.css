@@ -418,3 +418,9 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .help-fig text.d { fill: var(--text-dim); }
 .help-fig .ink text { fill: var(--accent-ink); font-weight: 600; }
 .help-fig figcaption { margin: 2px 0 0; }
+.panel-top { display: flex; flex-wrap: wrap; gap: var(--s-3) var(--s-5); align-items: stretch; }
+.panel-forms { display: flex; flex-direction: column; gap: var(--s-3); flex: 0 0 auto; }
+.panel-amps { flex: 1 1 140px; min-width: 140px; display: flex; flex-direction: column; justify-content: space-between; gap: var(--s-2); }
+.panel-amps .meter { margin-bottom: 14px; }
+.metric.faint { color: var(--warn); }
+.metric.shift { color: var(--shift); }
