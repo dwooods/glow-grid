@@ -105,7 +105,7 @@ $('helpBody').innerHTML = `
             <li><strong>The Pi's speed order:</strong> the number you type, then the fps in the PNG, then <code>_Nfps</code> in the name, then 6.</li>
             <li><strong>Can lose the stored data:</strong> re-saving in another editor, and scaled exports (<code>_x8</code>, which play as stills). Copying with <code>scp</code> keeps it. Avoid spaces in names.</li>
           </ul>
-          <h3>Animating one part: move and still part</h3>
+          <h3>Edit all frames: move and shared layer</h3>
           <ul>
             <li><strong>Move:</strong> the arrows in <em>Move and layers</em> (or Shift+arrow keys) shift this frame one pixel. Duplicate a frame, nudge it, repeat: that makes a bob or a slide.</li>
             <li><strong>Edit all frames at once:</strong> draw the whole character and duplicate it for each frame, then tick the box. Everything identical in all frames becomes one shared layer, leaving each frame with only what changes (hand, legs, eyes, mouth). Choose <em>All frames</em> to paint or move the shared layer for every frame at once, or <em>This frame only</em> to paint those changing bits per frame. Black on a frame is see-through. Untick to join the layers back.</li>
@@ -157,7 +157,7 @@ $('helpBody').innerHTML = `
 // The text above is untouched; the h3s stay (inside the fold's summary), so anything that reads them still works.
 (function () {
   const body = $('helpBody');
-  const short = { 'Guide: build a sprite': 'Guide: draw', 'Guide: Wi-Fi setup': 'Guide: Wi-Fi', 'Guide: saving, and why': 'Guide: saving', 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Animating one part: move and still part': 'One part',
+  const short = { 'Guide: build a sprite': 'Guide: draw', 'Guide: Wi-Fi setup': 'Guide: Wi-Fi', 'Guide: saving, and why': 'Guide: saving', 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Edit all frames: move and shared layer': 'All frames',
     'Drawing tools': 'Drawing', 'Drawing on a phone': 'Phone', 'Getting a picture onto the panel': 'To the panel', 'Watch out for': 'Watch out' };
   const chips = document.createElement('nav');
   chips.className = 'help-chips'; chips.setAttribute('aria-label', 'Help sections');
