@@ -138,7 +138,7 @@ class SmokeWifi(unittest.TestCase):
         self.assertTrue(el('netSaveBtn', 'disabled')); self.assertIn('over USB first', el('netSetupHint'))
         # a bad address is refused without a request; an unreachable one says what to check
         self.pg.fill('#netHost', 'not an address!'); self.pg.click('#netConnectBtn'); self.pg.wait_for_timeout(200)
-        self.assertIn('does not look like an address', el('netStatus')); self.assertEqual(hb.log, [])
+        self.assertIn('Not an address', el('netStatus')); self.assertEqual(hb.log, [])
         self.ctx.route('http://nowhere.local/**', lambda r: r.abort())
         self.pg.fill('#netHost', 'http://nowhere.local/'); self.pg.click('#netConnectBtn'); self.pg.wait_for_timeout(500)
         self.assertIn('cannot reach the board at nowhere.local', el('netStatus')); self.assertTrue(el('boardList', 'hidden'), 'still not connected')
@@ -182,7 +182,7 @@ class SmokeWifi(unittest.TestCase):
         self.assertEqual(self.status(), 'Board said: not enough space'); self.assertFalse(el('boardSendBtn', 'disabled')); hb.fail_put = None
         # the Network dialog while connected over Wi-Fi: no second connection, and the setup form says why it is off
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
-        self.assertTrue(el('netConnectBtn', 'disabled')); self.assertIn('connected over Wi-Fi', el('netSetupHint'))
+        self.assertTrue(el('netConnectBtn', 'disabled')); self.assertIn('Connected over Wi-Fi', el('netSetupHint'))
         self.pg.click('#netClose')
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.assertEqual(self.status(), 'Board disconnected.'); self.assertTrue(el('boardTools', 'hidden')); self.assertEqual(el('boardLink'), '')
@@ -197,7 +197,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.assertEqual(self.status(), 'Connected. Firmware 9.'); self.assertIn('USB', el('boardLink'))
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
-        self.assertFalse(el('netSaveBtn', 'disabled')); self.assertIn('Board Wi-Fi: off', el('netStatus'))
+        self.assertFalse(el('netSaveBtn', 'disabled')); self.assertIn('None saved', el('netSaved')); self.assertTrue(el('netClearBtn', 'hidden'))
         self.assertIn('2.4 GHz', el('netSetupHint')); self.assertFalse(el('netConnectBtn', 'disabled'))
         # checks before anything is sent
         self.pg.click('#netSaveBtn'); self.assertIn('1 to 32', el('netStatus'))
@@ -210,12 +210,13 @@ class SmokeWifi(unittest.TestCase):
         line = self.pg.evaluate("window.__fakeLog.find((l) => l.startsWith('WIFI SET'))")
         self.assertRegex(line, r'^WIFI SET [0-9a-f]+ [0-9a-f]+$'); self.assertNotIn('p@ss', line)
         self.assertEqual(el('netPass', 'value'), '')
-        self.assertIn("Joined My Home Net. The board's address is 192.168.50.6", el('netStatus'))
+        self.assertIn("Joined My Home Net, address 192.168.50.6", el('netStatus'))
+        self.assertIn('My Home Net, address 192.168.50.6', el('netSaved')); self.assertFalse(el('netClearBtn', 'hidden'))
         # an open network sends "-" for the password; Forget network clears
         self.pg.fill('#netSsid', 'Cafe'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('WIFI SET')).pop().endsWith(' -')"), True)
         self.pg.click('#netClearBtn'); self.pg.wait_for_timeout(300)
-        self.assertIn('Forgot', el('netStatus')); self.assertEqual(self.pg.evaluate("window.__fakeWifi.state"), 'off')
+        self.assertIn('Forgot', el('netStatus')); self.assertIn('None saved', el('netSaved')); self.assertTrue(el('netClearBtn', 'hidden')); self.assertEqual(self.pg.evaluate("window.__fakeWifi.state"), 'off')
         self.assertEqual(el('netSsid', 'value'), ''); self.assertEqual(el('netClearBtn'), 'Forget saved network')
         # an older board: the form is off and says which firmware it needs
         self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
@@ -242,7 +243,7 @@ class SmokeWifi(unittest.TestCase):
         self.assertIn('Joined Home Net', el('netStatus'))
         self.assertEqual(el('netSsid', 'value'), ''); self.assertEqual(el('netPick', 'options.length'), 1)   # joined: the form is blank again
         self.assertIn('address 192.168.50.6', el('boardLink'))        # the card keeps the address after the dialog message is replaced
-        self.assertIn('5 GHz-only', self.pg.evaluate("document.getElementById('netScanRow').textContent"))
+        self.assertIn('Not listed', self.pg.evaluate("document.getElementById('netScanRow').textContent"))
         # an open network: the password box says so, and an empty password goes as "-"
         self.pg.click('#netScanBtn'); self.pg.wait_for_timeout(400)
         self.pg.select_option('#netPick', 'Cafe Open')
@@ -257,7 +258,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.fill('#netSsid', 'Hidden One'); self.pg.fill('#netPass', 'password123'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate('window.__fakeWifiSet.ssid'), 'Hidden One')
         self.pg.evaluate('window.__fakeScan = []'); self.pg.click('#netScanBtn'); self.pg.wait_for_timeout(300)
-        self.assertIn('heard no networks', el('netStatus')); self.assertTrue(el('netPick', 'disabled'))
+        self.assertIn('No networks heard', el('netStatus')); self.assertTrue(el('netPick', 'disabled'))
         # firmware 9: scanning is off and says which firmware it needs; the typed form still works
         self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.pg.evaluate('window.__fakeFw = 9'); self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
