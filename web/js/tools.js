@@ -4,11 +4,14 @@ function updateLayerUI() {
   const has = !!state.shared, sh = state.target === 'shared' && has;
   $('stillOn').checked = has;
   $('stillOn').disabled = !has && state.frames.length < 2;
-  $('layerRow').hidden = !has;
+  $('targetFrame').disabled = $('targetShared').disabled = !has;
+  $('layerRow').classList.toggle('off', !has);
   $('targetFrame').classList.toggle('active', !sh); $('targetFrame').setAttribute('aria-pressed', String(!sh));
   $('targetShared').classList.toggle('active', sh); $('targetShared').setAttribute('aria-pressed', String(sh));
   deviceEl.classList.toggle('edit-shared', sh);
-  $('layerHint').textContent = has ? 'Paint only what changes. Black on a frame is see-through. Details are in Help.' : '';
+  $('layerHint').textContent = has
+    ? 'All frames paints or moves what every frame shares, such as a body or background. This frame only changes just this frame. Black on a frame is see-through. Details are in Help.'
+    : (state.frames.length < 2 ? 'Add a second frame first (+ Duplicate), then tick the box to edit what is the same in every frame once.' : 'Tick the box to edit what is the same in every frame once, for all frames.');
 }
 function shiftArr(arr, dx, dy, wrap) {
   const { cols, rows } = state, out = new Array(arr.length).fill('#000000');
@@ -39,7 +42,7 @@ window.addEventListener('keydown', (e) => {
 function setTarget(t) {
   if (t === 'shared' && !state.shared) return;
   state.target = t; afterFrameChange();
-  setStatus(t === 'shared' ? 'Editing the still part: it sits under every frame.' : 'Editing the moving part of this frame only.');
+  setStatus(t === 'shared' ? 'Editing all frames: what you paint or move shows in every frame.' : 'Editing this frame only.');
 }
 $('targetFrame').addEventListener('click', () => setTarget('frame'));
 $('targetShared').addEventListener('click', () => setTarget('shared'));
