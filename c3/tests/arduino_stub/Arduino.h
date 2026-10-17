@@ -27,6 +27,7 @@ inline uint32_t millis() {
 }
 // Setup mode opens by itself on the board; here only when a test asks ($GG_SETUP_AUTO set), so the other tests see the old behaviour.
 #define GG_SETUP_AUTO_START() (getenv("GG_SETUP_AUTO") != NULL)
+inline long random(long m) { return m > 0 ? rand() % m : 0; }   // the real core uses the hardware RNG; tests only need it to vary
 inline void delay(uint32_t ms) { usleep(ms * 1000); }
 inline void pinMode(int, int) {}
 
