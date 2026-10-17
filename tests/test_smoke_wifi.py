@@ -24,7 +24,7 @@ class FakeHttpBoard:
 
     def __init__(self, fw=9):
         self.store, self.log, self.fw = {}, [], fw
-        self.panel, self.current, self.rotate = 'on', '-', 0
+        self.panel, self.current, self.rotate, self.shuffle = 'on', '-', 0, 0
         self.fail_put = None                      # an ERR text to answer a /put with
         self.damage_get = False
         self.setups = 0                           # POST /setup calls (firmware 13)
@@ -48,7 +48,7 @@ class FakeHttpBoard:
             lines = [f'FILE {n} {len(b)}' for n, b in sorted(self.store.items())] + [f'OK {len(self.store)} files, 1400000 bytes free']
             return self.reply(route, 200, '\n'.join(lines) + '\n')
         if u.path == '/info':
-            return self.reply(route, 200, f'OK fw={self.fw} current={self.current} sprites={len(self.store)} panel={self.panel} rotate={self.rotate} wifi=connected ip=192.168.50.6 gap_ms=3\n')
+            return self.reply(route, 200, f'OK fw={self.fw} current={self.current} sprites={len(self.store)} panel={self.panel} rotate={self.rotate}' + (f' shuffle={self.shuffle}' if self.fw >= 16 else '') + f' wifi=connected ip=192.168.50.6 gap_ms=3\n')
         if u.path == '/crc':
             if name not in self.store: return err('no such sprite')
             b = self.store[name]; return self.reply(route, 200, f'OK crc={zlib.crc32(b) & 0xffffffff:08x} size={len(b)}\n')
@@ -69,6 +69,7 @@ class FakeHttpBoard:
         if u.path == '/setup' and self.fw >= 13:
             self.setups += 1; return self.reply(route, 200, 'OK setup mode starts in a moment: join the Wi-Fi network GlowGrid-Setup and open http://192.168.4.1/\n')
         if u.path == '/rotate': self.rotate = int(q['s']); return self.reply(route, 200, f'OK rotate {self.rotate}\n')
+        if u.path == '/shuffle' and self.fw >= 16: self.shuffle = int(q['on']); return self.reply(route, 200, f'OK shuffle {self.shuffle}\n')
         if u.path == '/put':
             if self.fail_put: return err(self.fail_put)
             ct = req.headers.get('content-type', '')
@@ -154,7 +155,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#0000ff')];
             state.currentFrame = 0; state.fps = 5; afterFrameChange(); }""")
         self.set_name('flower'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
-        self.assertIn('Sent flower (2 frames, 1,548 bytes)', self.status()); self.assertEqual(self.rows(), ['flower'])
+        self.assertIn('Sent flower (2 frames, 5 fps, brightness 0.3, gamma 2.2, 1,548 bytes)', self.status()); self.assertEqual(self.rows(), ['flower'])
         want = bytes(self.pg.evaluate("Array.from(ggBytes(state.frames.map(flatten), 16, 16, state.fps, sim.brightness, sim.gamma))"))
         self.assertEqual(hb.store['flower'], want)
         self.assertTrue(self.pg.evaluate("document.querySelector('#boardList .board-row').classList.contains('playing')"))
@@ -168,6 +169,11 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#boardOffBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'off')
         self.pg.click('#boardOnBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'on')
         self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual(hb.rotate, 300)
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardShuffle').disabled"), 'firmware 9 has no random order')
+        hb.fw = 16; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400); self.assertEqual(hb.shuffle, 1)
+        self.pg.uncheck('#boardShuffle'); self.pg.wait_for_timeout(400); self.assertEqual(hb.shuffle, 0)
+        hb.fw = 9
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
         self.assertEqual(self.rows(), ['flower']); self.assertEqual(sorted(hb.store), ['flower'])
         # load reads the bytes back and checks them against the board's CRC; a damaged transfer is refused
