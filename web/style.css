@@ -148,7 +148,7 @@ button:focus-visible, .swatch:focus-visible, input:focus-visible, select:focus-v
 @media (hover: hover) {
   .btn:hover { background: #63e2cf; }
   .btn-quiet:hover { background: #2a303c; }
-  .tool-btn:hover:not(.active) { background: #2a303c; }
+  .tool-btn:hover:not(.active):not(:disabled) { background: #2a303c; }
   .tool-btn.active:hover { background: var(--accent); }
   .swatch:hover { transform: scale(1.1); }
 }
@@ -217,6 +217,8 @@ input[type=text], input[type=password] { width: 100%; box-sizing: border-box; }
 .move-block > .sub-rule, .move-block > .sub-h { grid-column: 1 / -1; }
 .move-ctl { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
 .move-ctl .tool-row { flex-direction: column; }
+.tool-btn:disabled, .tool-btn:disabled:active { opacity: .38; cursor: default; transform: none; box-shadow: none; }
+.tool-btn.active:disabled { background: var(--panel-3); color: var(--text); font-weight: 400; }
 .frame-more-top { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-dim); }
 .dock { position: fixed; z-index: 25; left: 0; right: 0; bottom: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: var(--s-2);
   padding: var(--s-2) max(10px, env(safe-area-inset-right)) max(var(--s-2), env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
