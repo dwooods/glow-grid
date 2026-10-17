@@ -59,7 +59,7 @@ function renderDiagnostics() {
   meter.classList.toggle('hot', pct > 0.6 && pct <= 0.85);
   meter.classList.toggle('over', pct > 0.85);
   const flagged = now.faint + now.shift, ds = $('diagSum');
-  ds.textContent = flagged ? flagged + ' px to fix' : 'all clear';
+  ds.textContent = flagged ? flagged + ' px flagged, open to fix' : 'all clear';
   ds.classList.toggle('warn', flagged > 0 || pct > 0.85);
 }
 function renderFrame() { for (let i = 0; i < cellEls.length; i++) updateCell(i); renderDiagnostics(); }
