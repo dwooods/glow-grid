@@ -1,5 +1,5 @@
-// Move, still part, playback. Classic script: shares one global scope with the other files in js/ (load order is in index.html).
-/* ---------- move and still part ---------- */
+// Move, shared layer (edit all frames), playback. Classic script: shares one global scope with the other files in js/ (load order is in index.html).
+/* ---------- move and shared layer ---------- */
 function updateLayerUI() {
   const has = !!state.shared, sh = state.target === 'shared' && has;
   $('stillOn').checked = has;
@@ -55,11 +55,11 @@ function separateStill() {
     const v = state.frames[0][i];
     if (!isOff(v) && state.frames.every((f) => f[i] === v)) { sh[i] = v; moved++; }
   }
-  if (!moved) { undoStack.pop(); updateUndoBtns(); setStatus('No pixel is the same in every frame, so there is no still part yet. Duplicate your picture into more frames first.'); return false; }
+  if (!moved) { undoStack.pop(); updateUndoBtns(); setStatus('No pixel is the same in every frame, so there is no shared layer yet. Duplicate your picture into more frames first.'); return false; }
   state.shared = sh; state.target = 'frame';
   state.frames = state.frames.map((f) => f.map((v, i) => (sh[i] !== '#000000' && v === sh[i]) ? '#000000' : v));
   afterFrameChange();
-  setStatus(`Moved ${moved} unchanging pixels into the still part. Each frame now holds only what moves. Undo reverts.`);
+  setStatus(`Moved ${moved} unchanging pixels into the shared layer. Each frame now holds only what changes. Undo reverts.`);
   return true;
 }
 function joinStill() {
@@ -68,7 +68,7 @@ function joinStill() {
   state.frames = state.frames.map((f) => flatten(f).slice());
   state.shared = null; state.target = 'frame';
   afterFrameChange();
-  setStatus('Joined the still part back into every frame. Undo reverts.');
+  setStatus('Joined the shared layer back into every frame. Undo reverts.');
 }
 $('stillOn').addEventListener('change', (e) => {
   if (e.target.checked) { if (!separateStill()) e.target.checked = false; }
