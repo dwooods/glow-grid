@@ -17,7 +17,7 @@
 //
 // Serial commands at 115200 baud, one per line (gg_tool.py sends these for you):
 //   PING                       -> PONG
-//   LIST                       -> FILE <name> <bytes> ..., then OK <n> files, <free> bytes free
+//   LIST                       -> FILE <name> <bytes> [<frames> <fps10> <bright_pct> <gamma10>] ..., then OK <n> files, <free> bytes free
 //   PUT <name> <bytes> <crc32> -> READY, then the file bytes (an "A" line after every 1024 bytes),
 //                                 then OK saved <name> or ERR <reason>
 //   DEL <name>                 -> OK deleted <name> or ERR <reason>
@@ -61,7 +61,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 16          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 17          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the open network the board hosts in setup mode
 #define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
@@ -322,7 +322,13 @@ String listText() {
   String out;
   for (int i = 0; i < nSprites; i++) {
     File f = LittleFS.open(pathOf(names[i]), "r");
-    out += sfmt("FILE %s %u\n", names[i].c_str(), (unsigned)(f ? f.size() : 0));
+    size_t sz = f ? f.size() : 0;
+    uint8_t hb[GG_HEADER_SIZE];
+    GGHeader lh;
+    // fw 17: a valid sprite adds "frames fps10 bright_pct gamma10" after the size (an editor that does not know them ignores them)
+    bool ok = f && f.read(hb, GG_HEADER_SIZE) == GG_HEADER_SIZE && gg_parse_header(hb, sz, &lh) == NULL;
+    if (ok) out += sfmt("FILE %s %u %u %u %u %u\n", names[i].c_str(), (unsigned)sz, (unsigned)lh.frames, (unsigned)lh.fps10, (unsigned)lh.bright_pct, (unsigned)lh.gamma10);
+    else out += sfmt("FILE %s %u\n", names[i].c_str(), (unsigned)sz);
     if (f) f.close();
   }
   out += sfmt("OK %d files, %u bytes free", nSprites, (unsigned)freeBytes());
