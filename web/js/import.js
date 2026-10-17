@@ -39,11 +39,17 @@ function put(out, x, y, d, i) {
 }
 // Export name after an import: the file's name (extension and our own light/fps/sheet/scale tags dropped) plus "_sprite".
 // The user can still edit it in the Export dialog. Never doubled: "cat_sprite.png" gives "cat_sprite".
+// A name is at most BOARD_NAME_MAX characters (the board's limit) including the "_sprite" tail, so the base is cut short if need be.
+// The browser's " (2)" on a repeated download is dropped first, so "cat_sprite (2).png" is "cat_sprite", not "cat_sprite_2_sprite".
+const SPRITE_TAIL = '_sprite', BOARD_NAME_MAX = 31;
 function spriteNameFor(file) {
-  const base = (file.name || '').replace(/\.[^.]+$/, '')
-    .replace(/_x\d+$/i, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '').replace(/_sprite$/i, '')
-    .replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '');
-  return (base || 'sprite') + '_sprite';
+  let base = (file.name || '').replace(/\.[^.]+$/, '').replace(/\s*\(\d+\)$/, '');
+  for (let prev = null; prev !== base;) {                                   // peel the tags we add, in any order, until none is left
+    prev = base;
+    base = base.replace(/_x\d+$/i, '').replace(/_bright\d+(\.\d+)?_gamma\d+(\.\d+)?$/i, '').replace(/_(\d+fps|sheet)$/i, '').replace(/_sprite$/i, '');
+  }
+  base = base.replace(/[^a-z0-9_-]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, BOARD_NAME_MAX - SPRITE_TAIL.length).replace(/_+$/, '');
+  return (base || 'sprite') + SPRITE_TAIL;
 }
 function setSpriteName(file) { state.name = spriteNameFor(file); $('nameInput').value = state.name; saveState(); }
 // One import path. Sprite sheets (and single frames saved from here) load straight in; everything else opens the crop dialog.
