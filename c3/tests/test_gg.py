@@ -986,7 +986,7 @@ class Board(unittest.TestCase):
         self.assertEqual(self.last_frames(2)[-1] in self.led_of(sample_frames(5, 2)), True, "an HTTP upload plays at once, like USB")
         files, _ = self.board.list()                         # USB and Wi-Fi see the same flash
         self.assertEqual(dict(files), {"big": 12300, "small": len(small)})
-        self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[:2], ["FILE big 12300", f"FILE small {len(small)}"])
+        self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[:2], ["FILE big 12300 16 120 30 22", f"FILE small {len(small)} 2 80 30 22"])
         # download byte for byte, with the board's own CRC
         st, hd, got = self.http("GET", "/get?name=big")
         self.assertEqual((st, got), (200, blob))
