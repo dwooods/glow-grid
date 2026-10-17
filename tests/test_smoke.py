@@ -52,7 +52,9 @@ FAKE_BOARD = """() => {
       const names = () => [...window.__fakeStore.keys()].sort();
       switch (cmd) {
         case 'PING': return say('PONG');
-        case 'LIST': for (const n of names()) say('FILE ' + n + ' ' + window.__fakeStore.get(n).length); return say('OK ' + names().length + ' files, 1400000 bytes free');
+        case 'LIST': for (const n of names()) { const b = window.__fakeStore.get(n);       // fw 17 adds frames fps10 bright_pct gamma10 for a real sprite
+            say('FILE ' + n + ' ' + b.length + (window.__fakeFw >= 17 && b.length >= 12 && b[10] ? ' ' + (b[6] | (b[7] << 8)) + ' ' + (b[8] | (b[9] << 8)) + ' ' + b[10] + ' ' + b[11] : '')); }
+           return say('OK ' + names().length + ' files, 1400000 bytes free');
         case 'CRC': if (window.__fakeFw < 7) return say('ERR unknown command'); if (!window.__fakeStore.has(a1)) return say('ERR no such sprite');
           return say('OK crc=' + crc32(window.__fakeStore.get(a1)).toString(16).padStart(8, '0') + ' size=' + window.__fakeStore.get(a1).length);
         case 'GET': if (window.__fakeFw < 8) return say('ERR unknown command'); if (!window.__fakeStore.has(a1)) return say('ERR no such sprite');
@@ -203,6 +205,7 @@ class Smoke(unittest.TestCase):
         self.assertEqual(len(names[4]), 31); self.assertTrue(names[4].endswith('_sprite'))
         for n in names: self.assertRegex(n, r'^[A-Za-z0-9_-]{1,31}$')
         self.assertEqual(self.pg.evaluate("document.getElementById('nameInput').maxLength"), 31)
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardName').maxLength"), 31)
 
     def test_ai_prompt_recipe_loads_here(self):
         """The Help prompt tells an AI to write a one-row PNG with a glow-grid text chunk; that exact file must import."""
@@ -394,6 +397,43 @@ class Smoke(unittest.TestCase):
     def connect(self, seed=()):
         self.pg.evaluate(self.SEED, list(seed))
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+
+    def test_board_name_field_saves_a_copy_or_replaces_and_the_list_shows_settings(self):
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        self.pg.on('dialog', lambda d: d.accept())
+        self.pg.evaluate("window.__fakeFw = 17")
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
+        val = lambda i: self.pg.evaluate(f"document.getElementById('{i}').value")
+        hint = lambda: self.pg.evaluate("document.getElementById('boardNameHint').textContent")
+        self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800'), new Array(n).fill('#0000ff')];
+            state.currentFrame = 0; state.fps = 5; afterFrameChange(); }""")
+        # one name, two fields: typing in either shows in the other
+        self.pg.fill('#boardName', 'x' * 40); self.assertEqual(len(val('boardName')), 31, 'cut at the most a board accepts')
+        self.pg.fill('#boardName', 'duck'); self.assertEqual(val('nameInput'), 'duck')
+        self.set_name('duck2'); self.assertEqual(val('boardName'), 'duck2')   # Export's field is in a closed dialog, so set through the page
+        self.pg.fill('#boardName', 'duck')
+        self.assertIn('adds “duck” as a new sprite', hint())
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(self.rows(), ['duck (2 frames, 5 fps, brightness 0.3, gamma 2.2)'], 'settings in ( ) after the name, from firmware 17')
+        self.assertIn('replaces “duck”', hint())
+        # same name asks first and replaces; a new name is the save-as path and keeps the old sprite
+        self.pg.fill('#boardName', 'duck_b')
+        self.assertIn('adds “duck_b”', hint())
+        self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(sorted(self.pg.evaluate('[...window.__fakeStore.keys()]')), ['duck', 'duck_b'])
+        self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('PUT')).length"), 2)
+        # one frame has no speed; an older board gives no settings, so the rows are plain names again
+        self.pg.evaluate("() => { state.frames = [new Array(256).fill('#ff0000')]; afterFrameChange(); }")
+        self.pg.fill('#boardName', 'dot'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)
+        self.assertIn('dot (brightness 0.3, gamma 2.2)', self.rows())
+        self.pg.evaluate('window.__fakeFw = 16'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.rows(), ['dot', 'duck', 'duck_b'])
+        # Load puts the name in both fields, and the hint says Send will replace that sprite
+        self.pg.evaluate('window.__fakeFw = 17'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Load')"); self.pg.wait_for_timeout(600)
+        self.assertEqual((val('boardName'), val('nameInput')), ('duck', 'duck'))
+        self.assertIn('replaces “duck”', hint())
+        self.assertEqual(self.errors, [])
 
     def test_board_list_pages_of_five(self):
         self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
