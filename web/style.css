@@ -408,3 +408,13 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 
 .help-badge { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); color: var(--accent, #4fd1c5); font: inherit; font-weight: 600; cursor: pointer; vertical-align: middle; }
 .help-badge:hover { border-color: var(--accent, #4fd1c5); }
+.help-fig { margin: var(--s-2) 0; }
+.help-fig svg { display: block; width: 100%; max-width: 440px; height: auto; }
+.help-fig .b rect { fill: var(--panel-2); stroke: var(--border-strong); }
+.help-fig .a { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.help-fig .af { fill: var(--accent); }
+.help-fig .still { fill: var(--text-dim); opacity: .55; }
+.help-fig text { fill: var(--text); font: 12px system-ui, 'Segoe UI', Roboto, sans-serif; }
+.help-fig text.d { fill: var(--text-dim); }
+.help-fig .ink text { fill: var(--accent-ink); font-weight: 600; }
+.help-fig figcaption { margin: 2px 0 0; }
