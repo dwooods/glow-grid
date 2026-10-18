@@ -186,6 +186,15 @@
             <option value="86400">every day</option>
           </select>
         </label>
+        <label class="field-inline" id="boardBrightLbl" title="Play every stored sprite at this brightness, without sending them again. Needs firmware 19.">Brightness
+          <select id="boardBright" disabled>
+            <option value="0">each sprite's own</option>
+            <option value="10">0.1</option>
+            <option value="20">0.2</option>
+            <option value="30">0.3</option>
+            <option value="40">0.4</option>
+          </select>
+        </label>
         <label class="check" id="boardShuffleLbl" title="Rotation picks a random sprite each time, never the one already playing, instead of the next in the list. Needs firmware 16."><input id="boardShuffle" type="checkbox" disabled> Random order</label>
       </div>
       <div class="btn-row" id="boardExamples" hidden>

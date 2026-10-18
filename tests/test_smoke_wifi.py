@@ -361,10 +361,10 @@ class SmokeWifi(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
     def test_send_is_refused_when_the_board_is_full(self):
-        """At 64 sprites a new name is refused in the editor with the reason, before anything is sent; replacing a name still works."""
+        """At 96 sprites (the fw 19 limit) a new name is refused in the editor with the reason, before anything is sent; replacing a name still works."""
         hb = FakeHttpBoard(fw=13)
         gg_blob = b'GG' + bytes(10)
-        for i in range(64):
+        for i in range(96):
             hb.store[f's{i:02d}'] = gg_blob
         self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
         self.pg.wait_for_timeout(700)
@@ -373,7 +373,7 @@ class SmokeWifi(unittest.TestCase):
         el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
         self.pg.evaluate("""() => { const n = state.cols * state.rows; state.frames = [new Array(n).fill('#ff8800')]; state.currentFrame = 0; afterFrameChange(); }""")
         self.set_name('one_too_many'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(500)
-        self.assertIn('holds 64 sprites and is full', self.status())
+        self.assertIn('holds 96 sprites and is full', self.status())
         self.assertFalse([l for l in hb.log if l.startswith('POST /put')], 'nothing was sent')
         self.set_name('s05'); self.pg.click('#boardSendBtn'); self.pg.wait_for_timeout(800)   # replace an existing name: allowed
         self.assertEqual(len(dialogs), 1); self.assertIn('Replace', dialogs[0])

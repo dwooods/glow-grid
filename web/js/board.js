@@ -10,7 +10,7 @@
 
 const BOARD_BAUD = 115200;
 const BOARD_PAGE = 5;                // rows per page in the list
-const BOARD_MAX_SPRITES = 64;        // the firmware's MAX_SPRITES
+const BOARD_MAX_SPRITES = 96;        // the firmware's MAX_SPRITES (96 since firmware 19; 64 before, which an older board reports as its own error)
 const BOARD_CRC_FW = 7;              // the first firmware with the CRC command (Remove examples needs it)
 const BOARD_GET_FW = 8;              // the first firmware with the GET command (Load needs it)
 // "FILE name bytes [frames fps10 bright_pct gamma10]": the last four only from firmware 17 on (the list shows no settings on an older board), and only for a valid sprite.
@@ -26,6 +26,7 @@ function boardLightText(f) {
   return `(${f.frames > 1 ? `${f.frames} frames, ${f.fps} fps, ` : ''}brightness ${f.brightness}, gamma ${f.gamma})`;
 }
 const BOARD_SHUFFLE_FW = 16;         // the first firmware with the SHUFFLE command (random rotation)
+const BOARD_BRIGHT_FW = 19;          // the first firmware with BRIGHT (one brightness for every sprite, no re-send)
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
 class SerialTransport {
@@ -139,6 +140,7 @@ class GgBoard {
   async on() { return this.cmd('ON', ['OK']); }
   async rotate(sec) { return this.cmd(`ROTATE ${sec}`, ['OK']); }
   async shuffle(on) { return this.cmd(`SHUFFLE ${on ? 1 : 0}`, ['OK']); }
+  async bright(pct) { return this.cmd(`BRIGHT ${pct}`, ['OK']); }
   async crc(name) {                   // checksum and size of the file stored under `name` (firmware 7 and later)
     const line = await this.cmd(`CRC ${name}`, ['OK']);
     const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
@@ -240,6 +242,7 @@ class HttpBoard {
   async on() { return this.call('POST', '/on'); }
   async rotate(sec) { return this.call('POST', `/rotate?s=${encodeURIComponent(sec)}`); }
   async shuffle(on) { return this.call('POST', `/shuffle?on=${on ? 1 : 0}`); }
+  async bright(pct) { return this.call('POST', `/bright?pct=${encodeURIComponent(pct)}`); }
   async setup(key) { return this.call('POST', '/setup' + (key ? `?key=${encodeURIComponent(key)}` : '')); }   // firmware 13: leave this network and open GlowGrid-Setup; firmware 18 wants the setup key
   async crc(name) {
     const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
@@ -327,6 +330,13 @@ function boardShowShuffle(info) {       // the checkbox shows the board's own se
   cb.checked = info.shuffle === '1'; cb.disabled = !can;
   $('boardShuffleLbl').title = can ? 'Rotation picks a random sprite each time, never the one already playing, instead of the next in the list.' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
 }
+function boardShowBright(info) {        // the select shows the board's own setting; a board without the field cannot do it
+  const sel = $('boardBright'), can = info.bright !== undefined;
+  const v = String(parseInt(info.bright, 10) || 0);
+  if (can && !Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `0.${v}`; sel.appendChild(o); }
+  sel.value = can ? v : '0'; sel.disabled = !can;
+  $('boardBrightLbl').title = can ? 'Play every stored sprite at this brightness, without sending them again. "Each sprite\'s own" uses the brightness saved in each file.' : `Board brightness needs firmware ${BOARD_BRIGHT_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+}
 function boardLinkUpdate() {           // "· Wi-Fi glowgrid.local", or "· USB" plus the board's address once it has joined a network
   const ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
   $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' + (ip ? ` · address ${ip}` : '') : '';
@@ -346,6 +356,7 @@ async function boardRefresh(showName) {            // showName: jump to the page
   $('boardOffBtn').disabled = info.panel === 'off';
   boardShowRotate(info.rotate);
   boardShowShuffle(info);
+  boardShowBright(info);
   boardNameHint();
 }
 function boardRenderList() {
@@ -532,6 +543,10 @@ $('boardRotate').addEventListener('change', () => {
 $('boardShuffle').addEventListener('change', () => {
   const on = $('boardShuffle').checked;
   boardAct(() => board.shuffle(on), on ? 'Random order on: each rotation picks a random sprite. The board remembers this after a power cycle.' : 'Random order off: rotation follows the list.');
+});
+$('boardBright').addEventListener('change', () => {
+  const pct = Number($('boardBright').value);
+  boardAct(() => board.bright(pct), pct ? `Every sprite now plays at brightness 0.${pct}. The board remembers this after a power cycle.` : 'Each sprite plays at its own brightness again.');
 });
 $('boardRefreshBtn').addEventListener('click', () => boardAct(async () => {}, 'List refreshed.'));
 boardUi(false);

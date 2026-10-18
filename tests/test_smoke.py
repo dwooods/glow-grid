@@ -25,7 +25,7 @@ STUB = """() => { window.__w = []; window.__calls = 0;
 # A fake ESP32-C3 behind the Board card's transport interface: the same line protocol c3/c3_player.ino speaks,
 # with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
 FAKE_BOARD = """() => {
-  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0; window.__fakeShuffle = 0;
+  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0; window.__fakeShuffle = 0; window.__fakeBright = 0;
   window.__fakeWifi = { state: 'off', ip: '-', ssid: '', polls: 0 };
   window.__fakeChunks = []; window.__fakeBreak = null; window.__fakeFw = 7;     // 'full': PUT refused after READY; 'mute': no replies at all
   window.__ggFakeSerial = () => {
@@ -61,11 +61,12 @@ FAKE_BOARD = """() => {
           { const b = window.__fakeStore.get(a1); const out = b.slice(); if (window.__fakeBreak === 'badget') out[20] ^= 1;
             for (let i = 0; i < out.length; i += 48) say('D ' + Array.from(out.subarray(i, i + 48), (v) => v.toString(16).padStart(2, '0')).join(''));
             return say('OK crc=' + crc32(b).toString(16).padStart(8, '0') + ' size=' + b.length); }
-        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 16 ? ' shuffle=' + window.__fakeShuffle : '') + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
+        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 16 ? ' shuffle=' + window.__fakeShuffle : '') + (window.__fakeFw >= 19 ? ' bright=' + window.__fakeBright : '') + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
         case 'SHUFFLE': if (window.__fakeFw < 16) return say('ERR unknown command'); if (!/^[01]$/.test(a1 || '')) return say('ERR usage: SHUFFLE <0|1> (1 = random order)'); window.__fakeShuffle = Number(a1); return say('OK shuffle ' + a1);
+        case 'BRIGHT': if (window.__fakeFw < 19) return say('ERR unknown command'); if (!/^(0|[1-3][0-9]|40)$/.test(a1 || '') || (a1 !== '0' && Number(a1) < 10)) return say('ERR usage: BRIGHT <0|10..40>'); window.__fakeBright = Number(a1); return say('OK bright ' + Number(a1));
         case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
-          if (!window.__fakeStore.has(a1) && window.__fakeStore.size >= 64) return say('ERR board holds 64 sprites; delete one first');
+          if (!window.__fakeStore.has(a1) && window.__fakeStore.size >= 96) return say('ERR board holds 96 sprites; delete one first');
           t.pending = { name: a1, size: Number(a2), crc: parseInt(a3, 16), buf: new Uint8Array(Number(a2)), got: 0, acked: 0 }; return say('READY');
         case 'SHOW': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeCurrent = a1; window.__fakePanel = 'on'; return say('OK showing ' + a1);
         case 'DEL': if (!window.__fakeStore.has(a1)) return say('ERR no such sprite'); window.__fakeStore.delete(a1);
@@ -368,6 +369,18 @@ class Smoke(unittest.TestCase):
         self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').checked"), 'follows what the board reports')
         self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400); self.pg.uncheck('#boardShuffle'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakeShuffle'), 0); self.assertIn('Random order off', status())
+        # board brightness: greyed out before firmware 19, then a select that sends BRIGHT and follows the board
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardBright').disabled"))
+        self.assertIn('firmware 19', self.pg.evaluate("document.getElementById('boardBrightLbl').title"))
+        self.pg.evaluate('window.__fakeFw = 19'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardBright').disabled"))
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardBright').value"), '0')
+        self.pg.select_option('#boardBright', '20'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeBright'), 20); self.assertIn('brightness 0.2', status())
+        self.pg.evaluate('window.__fakeBright = 35'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardBright').value"), '35', 'an unlisted board value gets its own entry')
+        self.pg.select_option('#boardBright', '0'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeBright'), 0); self.assertIn('own brightness', status())
         self.pg.evaluate('window.__fakeFw = 7')
         self.pg.on('dialog', lambda d: d.accept())
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)
@@ -479,7 +492,7 @@ class Smoke(unittest.TestCase):
         answer = {'ok': True}
         self.pg.on('dialog', lambda d: d.accept() if answer['ok'] else d.dismiss())
         total = self.pg.evaluate('GG_EXAMPLES.length')
-        self.assertEqual(total, 23)
+        self.assertEqual(total, 37)
         self.assertTrue(self.pg.evaluate("document.getElementById('boardExamples').hidden"), 'hidden until connected')
         self.connect(['mine'])
         self.assertFalse(self.pg.evaluate("document.getElementById('boardExamples').hidden"))
@@ -492,7 +505,7 @@ class Smoke(unittest.TestCase):
         self.assertEqual(len(self.store()), total + 1)
         self.assertEqual(self.pg.evaluate("GG_EXAMPLES.every((e) => { const b = window.__fakeStore.get(e.name); const w = ggExampleBytes(e); return b && b.length === w.length && b.every((v, i) => v === w[i]); })"), True)
         self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
-        self.assertEqual(self.pager()['info'], '1–5 of 24', 'the examples page like everything else')
+        self.assertEqual(self.pager()['info'], '1–5 of 38', 'the examples page like everything else')
         # add again: nothing is sent
         before = self.puts()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
@@ -613,24 +626,24 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate('window.__fakeFw = 6')
         self.connect()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)
-        n = len(self.store()); self.assertEqual(n, 23)
+        n = len(self.store()); self.assertEqual(n, 37)
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(400)
         self.assertIn('firmware 7', self.status()); self.assertEqual(len(self.store()), n)
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('CRC') || l.startsWith('DEL')).length"), 0)
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         # a board with no room for all of them: nothing is sent, and the message says why
         self.pg.evaluate("() => { window.__fakeFw = 7; window.__fakeStore.clear(); }")
-        self.pg.evaluate(self.SEED, [f'p{i:02d}' for i in range(55)])
+        self.pg.evaluate(self.SEED, [f'p{i:02d}' for i in range(70)])       # 70 + 37 examples > the 96 slots
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         before = self.puts()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
-        self.assertIn('would not fit', self.status()); self.assertEqual(self.puts(), before); self.assertEqual(len(self.store()), 55)
+        self.assertIn('would not fit', self.status()); self.assertEqual(self.puts(), before); self.assertEqual(len(self.store()), 70)
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         # the board refuses mid-way (no space): the card reports how far it got and shows what is there
         self.pg.evaluate("() => { window.__fakeStore.clear(); window.__fakeBreak = 'full'; }")
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(800)
-        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 23', self.status())
+        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 37', self.status())
         self.assertFalse(self.pg.evaluate("document.getElementById('boardAddExBtn').disabled"), 'buttons come back after an error')
         self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
 

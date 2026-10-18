@@ -14,7 +14,7 @@ import make_web_examples as mw  # noqa: E402
 import gg_format as gg  # noqa: E402
 from sprites import PALETTE  # noqa: E402
 
-MAX_SPRITES = 64     # the firmware's limit; the examples must leave room for the user's own
+MAX_SPRITES = 96     # the firmware's limit (fw 19); the examples must leave room for the user's own
 
 
 def shipped():

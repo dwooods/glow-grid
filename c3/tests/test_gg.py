@@ -665,20 +665,22 @@ class Board(unittest.TestCase):
 
     def test_sprite_list_limit(self):
         self.start()
+        with open(os.path.join(SKETCH, "c3_player.ino")) as fh:
+            limit = int(re.search(r"#define MAX_SPRITES (\d+)", fh.read()).group(1))   # 96 since fw 19 (64 before)
         fr = sample_frames(51, 1)
-        for i in range(64):                                   # MAX_SPRITES is 64
+        for i in range(limit):
             self.board.put(self.write_gg(f"s{i:02d}", fr))
         files, summary = self.board.list()
-        self.assertEqual(len(files), 64)
-        self.assertIn("64 files", summary)
-        # a 65th name is refused before any bytes are sent, and nothing is stored
-        self.board.send(f"PUT s64 780 00000000")
-        with self.assertRaisesRegex(RuntimeError, "holds 64 sprites"):
+        self.assertEqual(len(files), limit)
+        self.assertIn(f"{limit} files", summary)
+        # one more name is refused before any bytes are sent, and nothing is stored
+        self.board.send(f"PUT s{limit} 780 00000000")
+        with self.assertRaisesRegex(RuntimeError, f"holds {limit} sprites"):
             self.board.expect(["READY"])
-        self.assertEqual(len(os.listdir(self.fs)), 64, "nothing stored unseen")
-        # replacing one of the 64 is still allowed
+        self.assertEqual(len(os.listdir(self.fs)), limit, "nothing stored unseen")
+        # replacing one of them is still allowed
         self.assertTrue(self.board.put(self.write_gg("s10", sample_frames(52, 1))).startswith("OK saved s10"))
-        self.assertEqual(len(self.board.list()[0]), 64)
+        self.assertEqual(len(self.board.list()[0]), limit)
 
     def test_empty_board_shows_dim_marker_and_survives_restart(self):
         self.start()
