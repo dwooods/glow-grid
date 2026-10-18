@@ -4,7 +4,7 @@ Usage:  python3 build.py [output_dir]      (default: ./out)
 Needs:  pip install numpy trimesh manifold3d shapely
 
 All sizes are millimetres and live in the 'shared dimensions' block and next to each part.
-Nothing here has been test-printed yet; see the README's Enclosure section for what is unverified.
+Frame v5, holder v2 and cap v2 were printed 2026-10-15; v6/v3 (long lip notches, bracket clearance, slide-in cap, open cable slot) are not yet printed.
 """
 import os, sys
 import numpy as np, trimesh
@@ -36,7 +36,10 @@ ZL=23.0                                           # nominal back face of the pan
 LIP_DROP=2.0                                      # lip top sits this far behind ZL: a backstop, so the stack can't fall back past it
 LIPZ=ZL-LIP_DROP                                  # 21.0
 LIP_W=3.0                                         # how far the lip overlaps the panel edge
-NOTCH_SIDE='left'; NOTCH_C=2.5; NOTCH_W=25.0      # one gap in the lip for the panel's wire tail (side, centre along the wall, width)
+# (v6: the separate 25 mm panel-tail notch on the left wall, y -10..15, is gone; the panel tail must leave through the one gap below, or get its own entry in LIP_NOTCHES)
+# v6 (2026-10-17): the lip over the C3 blocked the wires soldered to the pin tips, so the left wall has ONE gap: (side, y0, y1), from 20 mm below the
+# holder to 8 mm above it. The lip on the other three walls is continuous (David, 2026-10-17: the right wall is not a wiring problem).
+LIP_NOTCHES=[('left',-62.0,-7.4)]   # top end 11 mm past the holder's edge (y -18.4): backs the panel beside the jack without crowding the C3 wires (David, 2026-10-17)
 FING_T=1.6; FING_W=10.0; FING_PRELOAD=0.8         # printed spring fingers: thickness, width, how far they are compressed when the cover is on
 FING_TIP=(ZL+FING_PRELOAD)                        # free height of the finger tip above the back plate
 PANEL_T=1.6; GRID_H=8.0
@@ -83,48 +86,68 @@ def finger(sx,sy,out):
 H_PCB, H_BOARD_L, H_BOARD_W = 1.2, 24.0, 18.0
 H_COMP_H=3.4; H_FIRST_PIN=2.6; H_PIN_TIP=1.2; H_HDR=2.5; H_PIN_UP=6.0     # tallest part under the board, first pin from end, tips under the board, header plastic, pin above plastic
 H_ROW=15.24
-H_BASE=2.5; H_CLR=0.2; H_RIB=0.10; H_RAIL=1.6; H_STOP=3.0                 # holder base, board clearance, crush-rib squeeze per side, rail and end-stop thickness (v2, printed and fitted 2026-10-15: base 2.5 and stop 3.0 match c3_holder_test.py)
-# v2 additions, same numbers as the printed test piece: a far-end cap that stops the board lifting when the USB cable is wiggled, and a notch for the u.FL antenna cable
+H_BASE=2.5; H_CLR=0.2; H_RIB=0.10; H_RAIL=2.4; H_STOP=3.0                 # holder base, board clearance, crush-rib squeeze per side, rail and end-stop thickness (v3: rails 2.4 so the cap grooves leave 1.6 mm of wall)
+# v3 (2026-10-17, after the v2 print): the pegged cap snapped at the pegs, and the board could not be dropped in with the antenna cable already plugged in.
+#   - the cable notch is now an open U-slot from the top of the far seat and end stop down to the base: the board drops in with the cable attached
+#   - the end stop only rises to the PCB top, so the cap's lip can slide over it
+#   - the cap is a U in plan that slides in from the far end: a bar over the board end (same 1.5 mm overhang and 0.4 mm air as v2) and two arms along
+#     the rail tops with tongues hanging OUTSIDE the rails; a ridge on each tongue runs in a groove in the rail's outer face. No pegs, nothing thin across layers.
 UFL_X, UFL_Y = 18.0, -4.9          # u.FL socket: 18 mm from the USB end, 4.9 mm toward -y (USB end at the top, pins up). Same sign as the test piece, which fitted
-CABLE_W = 3.5                      # notch through the far seat and stop, under the board only, for the 1.13 mm coax and the u.FL plug body
-CAP_OVER, CAP_T, CAP_GAP = 1.5, 1.2, 0.4   # cap lip overhang over the board end, plate thickness, air above the PCB
-PEG_D, PEG_L, PEG_FIT = 2.0, 3.0, 0.10     # pegs into the stop; hole is PEG_D + 2*PEG_FIT
-PEGYS = (-5.5, 5.5)
+CABLE_W = 3.5                      # U-slot through the far seat and stop, open at the top, for the 1.13 mm coax and the u.FL plug body
+CAP_OVER, CAP_T, CAP_GAP = 1.5, 1.2, 0.4   # cap bar overhang over the board end, plate thickness, air above the PCB
+CAP_ARM=10.0                       # how far the cap's arms run back along the rails from the board end (slide length)
+TONGUE_T, TONGUE_H = 1.2, 3.0      # tongue outside each rail: thickness, how far it hangs below the cap plate
+GROOVE_D, GROOVE_H, GROOVE_FIT = 0.8, 1.2, 0.15   # groove in the rail's outer face: depth, height; ridge is GROOVE_D-GROOVE_FIT deep and GROOVE_H-2*GROOVE_FIT high
 H_UNDER=max(H_COMP_H,H_PIN_TIP)+1.5                                          # air under the board
 H_ZS=H_BASE+H_UNDER; H_ZP=H_ZS+H_PCB                                         # board underside / PCB top, holder coords (z=0 is the holder's bottom)
 H_LEDGE=H_FIRST_PIN-1.1; H_HW=H_BOARD_W/2+H_CLR; H_X1=H_BOARD_L+0.1; H_XEND=H_X1+H_CLR+H_STOP
+H_ZR=H_ZP+0.8                                                                # rail top = cap plate underside
+H_OUTW=H_HW+H_RAIL                                                           # rail outer face
+GZ0=H_ZR-GROOVE_H-1.0                                                        # groove bottom: 1.0 mm of rail left above it
+XG0=H_X1-CAP_ARM                                                             # closed end of the groove (the cap's arms stop here)
 def make_holder():
-    p=[B(0,H_XEND,-H_HW-H_RAIL,H_HW+H_RAIL,0,H_BASE),
-       B(H_X1+H_CLR,H_XEND,-H_HW-H_RAIL,H_HW+H_RAIL,0,H_ZP+0.8),          # end stop: takes the USB plug-in push
+    p=[B(0,H_XEND,-H_OUTW,H_OUTW,0,H_BASE),
+       B(H_X1+H_CLR,H_XEND,-H_OUTW,H_OUTW,0,H_ZP),                         # end stop: takes the USB plug-in push; only up to the PCB top so the cap lip slides over it
        B(H_X1-H_LEDGE,H_X1+H_CLR,-H_HW,H_HW,H_BASE,H_ZS)]                  # far-end seat
     for sg_ in (1,-1):
-        y0,y1=(H_HW,H_HW+H_RAIL) if sg_==1 else (-H_HW-H_RAIL,-H_HW)
-        p.append(B(0,H_X1+H_CLR,y0,y1,H_BASE,H_ZP+0.8))                     # side rails
+        y0,y1=(H_HW,H_OUTW) if sg_==1 else (-H_OUTW,-H_HW)
+        p.append(B(0,H_XEND,y0,y1,H_BASE,H_ZR))                             # side rails, full length (the groove runs out the far end)
         ya,yb=(H_BOARD_W/2-3.8,H_BOARD_W/2) if sg_==1 else (-H_BOARD_W/2,-H_BOARD_W/2+3.8)
         p.append(B(0.1,0.1+H_LEDGE,ya,yb,H_BASE,H_ZS))                      # USB-end seat pads
         for rx in (8.0,18.0):                                               # crush ribs at PCB level
             inn=H_HW-(H_CLR+H_RIB); ya2,yb2=(inn,H_HW) if sg_==1 else (-H_HW,-inn)
             p.append(B(rx,rx+2.0,ya2,yb2,H_ZS+0.1,H_ZP+0.5))
     h=clean(union(p,engine='manifold'))
-    cuts_=[B(H_X1-H_LEDGE-0.1,H_XEND+0.1,UFL_Y-CABLE_W/2,UFL_Y+CABLE_W/2,H_BASE-0.01,H_ZS-0.05)]   # cable exit through the far seat and stop, under the board only
-    for py in PEGYS:                                                                                # peg holes from the top of the stop
-        hh=cylinder(radius=PEG_D/2+PEG_FIT,height=PEG_L+0.6,sections=32); hh.apply_translation([H_X1+H_CLR+H_STOP/2,py,H_CAPZ0-(PEG_L+0.6)/2+0.01]); cuts_.append(hh)
+    cuts_=[B(H_X1-H_LEDGE-0.1,H_XEND+0.1,UFL_Y-CABLE_W/2,UFL_Y+CABLE_W/2,H_BASE-0.01,H_ZR+1)]       # open U-slot: cable exit through the far seat and stop, from the base to the top
+    for sg_ in (1,-1):                                                                              # cap grooves in the rails' outer faces, open at the far end
+        yo=sg_*H_OUTW; yi=sg_*(H_OUTW-GROOVE_D)
+        cuts_.append(B(XG0,H_XEND+0.1,min(yo,yi)-(0.1 if sg_==-1 else 0),max(yo,yi)+(0.1 if sg_==1 else 0),GZ0,GZ0+GROOVE_H))
     return clean(difference([h]+cuts_,engine='manifold'))
-H_CAPZ0=H_ZP+0.8                                                                                    # cap plate sits on top of the rails and stop
 def make_cap():
-    # separate print, plate face down, pegs up; presses nothing, only stops the far end of the board lifting
-    cp=[B(H_X1-CAP_OVER,H_XEND,-H_HW-H_RAIL,H_HW+H_RAIL,H_CAPZ0,H_CAPZ0+CAP_T),                    # plate on the rails and stop
-        B(H_X1-CAP_OVER,H_X1+H_CLR,-H_HW+0.1,H_HW-0.1,H_ZP+CAP_GAP,H_CAPZ0+0.01)]                  # lip down to 0.4 mm above the PCB
-    for py in PEGYS:
-        pg=cylinder(radius=PEG_D/2,height=PEG_L+0.01,sections=32); pg.apply_translation([H_X1+H_CLR+H_STOP/2,py,H_CAPZ0-PEG_L/2+0.005]); cp.append(pg)
+    # separate print, plate face down, tongues up. Slides in from the far end along the rail grooves until the arms meet the groove ends.
+    # The bar's lip stops the far end of the board lifting (0.4 mm air, presses nothing); the arms carry the tongues and close the top of the U-slot.
+    xa=XG0+GROOVE_FIT                                                                               # arm front, a hair short of the groove end
+    cp=[B(H_X1-CAP_OVER,H_XEND,-H_OUTW-TONGUE_T,H_OUTW+TONGUE_T,H_ZR,H_ZR+CAP_T),                   # bar across the far end
+        B(H_X1-CAP_OVER,H_X1+H_CLR,-H_HW+0.1,H_HW-0.1,H_ZP+CAP_GAP,H_ZR+0.01)]                       # lip down to 0.4 mm above the PCB
+    for sg_ in (1,-1):
+        yr0,yr1=(H_HW+0.3,H_OUTW+TONGUE_T) if sg_==1 else (-H_OUTW-TONGUE_T,-H_HW-0.3)              # arm: over the rail only, inside edge 0.3 mm outside the board (clear of the pins)
+        cp.append(B(xa,H_XEND,yr0,yr1,H_ZR,H_ZR+CAP_T))
+        yt0,yt1=(H_OUTW+GROOVE_FIT,H_OUTW+TONGUE_T) if sg_==1 else (-H_OUTW-TONGUE_T,-H_OUTW-GROOVE_FIT)
+        cp.append(B(xa,H_XEND,yt0,yt1,H_ZR-TONGUE_H,H_ZR+0.01))                                      # tongue down the outside of the rail
+        rd=GROOVE_D-GROOVE_FIT; yg0,yg1=(H_OUTW-rd,H_OUTW+GROOVE_FIT+0.01) if sg_==1 else (-H_OUTW-GROOVE_FIT-0.01,-H_OUTW+rd)
+        cp.append(B(xa,H_XEND,yg0,yg1,GZ0+GROOVE_FIT,GZ0+GROOVE_H-GROOVE_FIT))                       # ridge into the groove
     return clean(union(cp,engine='manifold'))
-holder=make_holder(); report('c3_holder',holder); holder.export(OUT+'glow-grid_c3_holder_v2.stl')
-cap=make_cap(); report('c3_holder_cap',cap); cap.export(OUT+'glow-grid_c3_holder_cap_v2.stl')
+holder=make_holder(); report('c3_holder',holder); holder.export(OUT+'glow-grid_c3_holder_v3.stl')
+cap=make_cap(); report('c3_holder_cap',cap); cap.export(OUT+'glow-grid_c3_holder_cap_v3.stl')
+# both on one plate: holder as printed, cap flipped plate-face down (tongues up) and set 8 mm beyond the holder's far end
+capflat=cap.copy(); capflat.apply_transform(trimesh.transformations.rotation_matrix(np.pi,[0,1,0])); capflat.apply_translation([2*H_XEND+8.0+(H_X1-CAP_OVER)-H_XEND,0,H_ZR+CAP_T])
+both=union([holder,capflat],engine='manifold'); report('c3_holder_and_cap',both); both.export(OUT+'glow-grid_c3_holder_and_cap_v3.stl')
 # placement: holder x=0 is 0.3 mm off the left wall's inner face, centred on y=cy; holder z=0 sits on the back plate
 cy=-30.0; HX=-HI+0.3; HZ=BACK
 def to_frame(m): m=m.copy(); m.apply_translation([HX,cy,HZ]); return m
 # brackets on the back plate: two side walls and a far wall around the holder (clearance H_BC), glued; the left wall is the fourth side
-H_BC=0.25; BR_H=5.0; BR_T=1.6
+# v6: clearance 0.25 -> 0.6 per side. The v5 print came out the same size as the holder (PLA swell ate the 0.25), so the holder would not drop in.
+H_BC=0.6; BR_H=5.0; BR_T=1.6
 bx_end=HX+H_XEND+H_BC; byo=H_HW+H_RAIL+H_BC
 hold=[B(-HI,bx_end+BR_T,cy+byo,cy+byo+BR_T,BACK-0.1,BACK+BR_H),
       B(-HI,bx_end+BR_T,cy-byo-BR_T,cy-byo,BACK-0.1,BACK+BR_H),
@@ -133,23 +156,21 @@ for sx in (-48,48):
     fingers.append(finger(sx,50,+1)); fingers.append(finger(sx,-50,-1))
 frame=union([frame]+pads+hold+fingers,engine='manifold')   # 'hold' = the C3 holder brackets
 cuts.append(B(bx_end-0.1,bx_end+BR_T+0.1,cy+UFL_Y-CABLE_W/2,cy+UFL_Y+CABLE_W/2,BACK,BACK+BR_H+0.1))   # far-wall notch where the antenna cable leaves the holder (plate left intact)
-# lip notch for the panel's wire tail
-if NOTCH_SIDE in ('left','right'):
-    sg={'left':-1,'right':1}[NOTCH_SIDE]
-    cuts.append(B(min(sg*(HI-LIP_W-1),sg*(HI+0.01)),max(sg*(HI-LIP_W-1),sg*(HI+0.01)),NOTCH_C-NOTCH_W/2,NOTCH_C+NOTCH_W/2,LIPZ-LIP_W-1,LIPZ+0.5))
-else:
-    sg={'bottom':-1,'top':1}[NOTCH_SIDE]
-    cuts.append(B(NOTCH_C-NOTCH_W/2,NOTCH_C+NOTCH_W/2,min(sg*(HI-LIP_W-1),sg*(HI+0.01)),max(sg*(HI-LIP_W-1),sg*(HI+0.01)),LIPZ-LIP_W-1,LIPZ+0.5))
 # holes: jack and data lead in the BACK plate; USB-C slot in the left wall at the C3 port
-cuts.append(Cz(45,25,6.15,-1,BACK+1))                              # 12 mm panel-mount DC jack (12.3 bore)
-cuts.append(Cz(20,25,3.5,-1,BACK+1))                               # 7 mm data lead
+# v6: the two buttons sit in a row beside the C3 holder (same y as the holder, 20 mm centres) and the jack sits ABOVE the holder, away from the
+# buttons so the plug does not get in the way of pressing them (David). Its body clears the bracket by 1 mm and, behind the plate, the cradle's
+# left post by 5 mm. The 7 mm data-lead hole is gone: it was for the Pi build with the controller outside the case; the C3 drives DIN from inside.
+HOLE_Y=cy; HOLE_XS={'next':-36.0,'onoff':-16.0}; JACK_XY=(-66.0,6.0)
+cuts.append(Cz(JACK_XY[0],JACK_XY[1],6.15,-1,BACK+1))              # 12 mm panel-mount DC jack (12.3 bore)
 cuts.append(B(-HO-1,-HI+0.01,cy-6.0,cy+6.0,HZ+H_BASE,HZ+H_ZP-0.2))     # USB-C plug slot 12 wide, from the holder's top face up to just under the PCB top
-cuts.append(B(-HI-0.01,-HI+4.0,cy-8.0,cy+8.0,LIPZ-LIP_W-1,LIPZ+0.5))  # second, short lip notch so the USB-C plug clears the lip
-for bxx in (-20,-45):
-    cuts.append(Cz(bxx,25,6.15,-1,BACK+1))                         # two 12 mm panel-mount push buttons (next image, on/off)
+for side_,ny0,ny1 in LIP_NOTCHES:                                  # v6 lip gap(s) for the wiring (replaces the old tail notch and the short USB-plug notch)
+    sg_={'left':-1,'right':1}[side_]
+    cuts.append(B(min(sg_*(HI-LIP_W-1),sg_*(HI+0.01)),max(sg_*(HI-LIP_W-1),sg_*(HI+0.01)),ny0,ny1,LIPZ-LIP_W-1,LIPZ+0.5))
+for k in ('next','onoff'):
+    cuts.append(Cz(HOLE_XS[k],HOLE_Y,6.15,-1,BACK+1))              # two 12 mm panel-mount push buttons (next image, on/off)
 cuts.append(B(-38,3,-72.5,-59.5,BACK-0.4,BACK+0.5))                # 0.4 mm recess marking the flat spot for the 40 x 12 mm stick-on antenna
 frame=clean(difference([frame]+cuts,engine='manifold'))
-report('frame',frame); frame.export(OUT+'glow-grid_frame_v5.stl')
+report('frame',frame); frame.export(OUT+'glow-grid_frame_v6.stl')
 
 # ---------------- 2. GRID (separate print, black) ----------------
 bars=[]
