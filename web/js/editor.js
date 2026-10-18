@@ -1,21 +1,24 @@
 // Undo, rendering, frames, drawing, view. Classic script: shares one global scope with the other files in js/ (load order is in index.html).
 /* ---------- undo / redo ---------- */
 const undoStack = [], redoStack = [];
-const snapshot = () => JSON.stringify({ cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, shared: state.shared });
-function pushUndo() {
-  undoStack.push(snapshot()); if (undoStack.length > 100) undoStack.shift();
+// The name rides along only for steps that change it (Start over), so Undo of a paint stroke never reverts a name you typed.
+const snapshot = (withName) => JSON.stringify(Object.assign({ cols: state.cols, rows: state.rows, frames: state.frames, currentFrame: state.currentFrame, shared: state.shared }, withName ? { name: state.name } : {}));
+const snapHasName = (snap) => JSON.parse(snap).name !== undefined;
+function pushUndo(withName) {
+  undoStack.push(snapshot(withName)); if (undoStack.length > 100) undoStack.shift();
   redoStack.length = 0; updateUndoBtns();
 }
 function restore(snap) {
   const s = JSON.parse(snap); if (s.shared === undefined) s.shared = null;
+  if (s.name !== undefined) { setNameField(s.name); delete s.name; }
   const resized = s.cols !== state.cols || s.rows !== state.rows;
   Object.assign(state, s);
   if (!state.shared) state.target = 'frame';
   if (resized) { $('colsInput').value = state.cols; $('rowsInput').value = state.rows; buildGridDOM(); }
   afterFrameChange();
 }
-function undo() { if (!undoStack.length) return; stopPlay(); redoStack.push(snapshot()); restore(undoStack.pop()); updateUndoBtns(); }
-function redo() { if (!redoStack.length) return; stopPlay(); undoStack.push(snapshot()); restore(redoStack.pop()); updateUndoBtns(); }
+function undo() { if (!undoStack.length) return; stopPlay(); const s = undoStack.pop(); redoStack.push(snapshot(snapHasName(s))); restore(s); updateUndoBtns(); }
+function redo() { if (!redoStack.length) return; stopPlay(); const s = redoStack.pop(); undoStack.push(snapshot(snapHasName(s))); restore(s); updateUndoBtns(); }
 function updateUndoBtns() { $('undoBtn').disabled = !undoStack.length; $('redoBtn').disabled = !redoStack.length; }
 
 /* ---------- rendering ---------- */
@@ -359,9 +362,10 @@ gridEl.addEventListener('pointermove', (e) => {
 gridEl.addEventListener('pointerleave', hideHover);
 $('clearBtn').addEventListener('click', () => { stopPlay(); pushUndo(); setEditLayer(newBlankFrame(state.cols, state.rows)); afterFrameChange(); });
 $('startOverBtn').addEventListener('click', () => {
-  stopPlay(); pushUndo();
+  stopPlay(); pushUndo(true);
   state.frames = [newBlankFrame(state.cols, state.rows)]; state.currentFrame = 0; state.shared = null; state.target = 'frame';
-  afterFrameChange(); setStatus('Started over with one blank frame. Undo brings everything back.');
+  setNameField('sprite'); saveState();
+  afterFrameChange(); setStatus('Started over with one blank frame and the name "sprite". Undo brings everything back.');
 });
 const syncRestoreBtn = () => { $('restoreBtn').hidden = !(lastSession && !hasArt(state)); };
 $('restoreBtn').addEventListener('click', () => {
