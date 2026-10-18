@@ -11,7 +11,7 @@ Stores several Glow Grid sprites in the board's flash and plays one at a time. S
 | `c3_player/c3_player.ino` | the firmware: flash storage, serial commands, buttons, playback. The folder is named after the sketch because the Arduino IDE insists on it, so it opens straight from the clone |
 | `c3_player/gg_core.h` | the parts with no Arduino dependency: the `.gg` file check, the wiring map, the brightness/gamma table (same maths as `grid_common.py`), CRC-32 |
 | `tools/png_to_gg.py` | turns a Glow Grid PNG into a `.gg` sprite file (the editor's *Export for: ESP32-C3* writes the same file directly) |
-| `tools/gg_tool.py` | `list`, `put`, `get`, `show`, `del`, `off`, `on`, `rotate`, `shuffle`, `info` on the board over USB, or over Wi-Fi with `--host`; `wifi scan/set/status/clear` over USB (the firmware also answers `CRC <name>`: the checksum and size of a stored file, which the editor's Remove examples uses; and `GET <name>`: the file as `D <hex>` lines then `OK crc=… size=…`, fw 8, which `gg_tool.py get` and the editor's Load button use) |
+| `tools/gg_tool.py` | `list`, `put`, `get`, `show`, `del`, `off`, `on`, `rotate`, `shuffle`, `bright`, `info` on the board over USB, or over Wi-Fi with `--host`; `wifi scan/set/status/clear` over USB (the firmware also answers `CRC <name>`: the checksum and size of a stored file, which the editor's Remove examples uses; and `GET <name>`: the file as `D <hex>` lines then `OK crc=… size=…`, fw 8, which `gg_tool.py get` and the editor's Load button use) |
 | `c3_player/site_data.h`, `site_b64_0.h`, `site_b64_1.h` | generated and git-ignored: the editor as one gzipped page (base64 text) that the firmware serves at `/` (firmware 12). Run `python3 tools/build_site.py` before flashing; without them the sketch still builds and `/` says the editor is not built in |
 | `tools/build_site.py` | packs `../web` into that page and writes the three files above (`--check` says whether they are missing or out of date) |
 | `tools/gg_format.py` | reads and writes `.gg` files (used by the two tools and the tests) |
@@ -41,6 +41,7 @@ python3 tools/gg_tool.py del lantern
 python3 tools/gg_tool.py off          # panel dark, board keeps running; `on` resumes
 python3 tools/gg_tool.py rotate 300   # next sprite every 5 minutes, in list order; 0 = stay on one
 python3 tools/gg_tool.py shuffle 1    # rotation picks a random sprite (never the one playing); 0 = list order again (firmware 16)
+python3 tools/gg_tool.py bright 20    # every sprite plays at 0.2 without re-sending; 0 = each sprite's own brightness (firmware 19)
 python3 tools/gg_tool.py info         # fw=<n> says which firmware is on the board
 ```
 
@@ -76,7 +77,7 @@ HTTP API (all replies are the same `OK ...` / `ERR ...` text as USB, with status
 |---|---|
 | `GET /ping`, `/info`, `/list` | `PING`, `INFO`, `LIST` |
 | `GET /crc?name=X`, `GET /get?name=X` | `CRC X`; the file's bytes |
-| `POST /show?name=X`, `/del?name=X`, `/off`, `/on`, `/rotate?s=N`, `/shuffle?on=0|1` | `SHOW`, `DEL`, `OFF`, `ON`, `ROTATE`, `SHUFFLE` |
+| `POST /show?name=X`, `/del?name=X`, `/off`, `/on`, `/rotate?s=N`, `/shuffle?on=0|1`, `/bright?pct=N` | `SHOW`, `DEL`, `OFF`, `ON`, `ROTATE`, `SHUFFLE`, `BRIGHT` |
 | `POST /setup` | `WIFI SETUP`: leave this network and open setup mode (firmware 13, see below) |
 | `POST /put?name=X[&size=N][&crc=hex]` | `PUT`; the file as `multipart/form-data`, field `file` |
 
