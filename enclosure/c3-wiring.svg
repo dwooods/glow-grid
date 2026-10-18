@@ -1,11 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1190" font-family="Helvetica, Arial, sans-serif">
-<rect width="1240" height="1190" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 1212" font-family="Helvetica, Arial, sans-serif">
+<rect width="1240" height="1212" fill="#fff"/>
 <text x="30" y="40" font-size="24" font-weight="700" fill="#111">Glow Grid wiring: power, data, buttons (C3 build)</text>
 <text x="30" y="64" font-size="14" fill="#444">Thick = panel current (up to ~4.7 A at brightness 0.3). Thin = C3 branch (well under 0.3 A).</text>
 <text x="30" y="84" font-size="14" fill="#444">Pin map checked against the SuperMini pinout (2026-10-14). Bench-tested: USB flashing, Wi-Fi, onboard RGB LED (GPIO8, unused here), 16x16 panel from GPIO6 (c3_panel_test.ino).</text>
-<text x="30" y="104" font-size="14" fill="#444">Not wired or tested yet: the two buttons (ordered). The 1 A C3-branch fuse and optional 5 A main fuse are recommendations, not yet fitted. The C3 has 2 RMT TX channels: one for the panel, the onboard LED only if one is left.</text>
+<text x="30" y="104" font-size="14" fill="#444">Frame v6 puts the jack just above the C3 holder and the two buttons in a row beside it; the pin-tip wires leave through the gap in the left wall's lip.</text>
+<text x="30" y="122" font-size="12" fill="#666">Not wired or tested yet: the two buttons (ordered). The 1 A C3-branch fuse and optional 5 A main fuse are recommendations, not yet fitted. The C3 has 2 RMT TX channels: one for the panel, the onboard LED only if one is left.</text>
 
-<!-- supply -->
+<g transform="translate(0,22)"><!-- supply -->
 <rect x="30" y="130" width="170" height="130" rx="8" fill="#eef2f7" stroke="#333" stroke-width="2"/>
 <text x="115" y="165" font-size="17" font-weight="700" text-anchor="middle">5V 6A supply</text>
 <text x="115" y="188" font-size="13" text-anchor="middle" fill="#444">barrel plug, 5.5 x 2.5 mm</text>
@@ -110,5 +111,6 @@
 <rect x="30" y="1072" width="1180" height="26" fill="#fff"/><text x="46" y="1090">9</text><text x="90" y="1090">Button On/off: GPIO7</text><text x="400" y="1090">GND (same ground)</text><text x="760" y="1090">2 wires to a 12 mm panel button</text><rect x="1160" y="1078" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="1098" width="1180" height="26" fill="#f6f8fa"/><text x="46" y="1116">10</text><text x="90" y="1116">Meter check before power</text><text x="400" y="1116">5V to GND is not a short</text><text x="760" y="1116">multimeter, supply unplugged</text><rect x="1160" y="1104" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="1124" width="1180" height="26" fill="#fff"/><text x="46" y="1142">11</text><text x="90" y="1142">First power-up</text><text x="400" y="1142">Brightness low, one frame, watch for heat</text><text x="760" y="1142">supply on, panel at low brightness</text><rect x="1160" y="1130" width="14" height="14" fill="#fff" stroke="#333"/>
+</g>
 </g>
 </svg>
