@@ -66,7 +66,7 @@
 #define DATA_PIN 6
 #define BTN_NEXT 5
 #define BTN_OFF 7
-#define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
+#define MAX_SPRITES 96           // the list lives in RAM; PUT refuses a new name once it is full (64 until fw 19; 37 examples ship)
 #define GG_FW_VERSION 19          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode (WPA2; the password is the setup key, fw 18)
