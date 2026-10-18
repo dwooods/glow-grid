@@ -12,10 +12,13 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sprites import (  # noqa: E402
-    bat_frames, bunny_frames, burst_frames, candle_frames, cat_frames, chest_frames,
-    coin_frames, fish_frames, fox_frames, frog_frames, gem_frames, ghost_frames,
-    heart_frames, key_frames, knight_frames, lantern_frames, mushroom_frames,
-    owl_frames, potion_frames, rocket_frames, slime_frames, sword_frames, to_image)
+    burst_frames, candle_frames, cat_frames, coin_frames, fish_frames, fox_frames, frog_frames, gem_frames,
+    ghost_frames, heart_frames, key_frames, knight_frames, lantern_frames, owl_frames, potion_frames,
+    rocket_frames, slime_frames, to_image)
+from sprites2 import (  # noqa: E402
+    bat_frames, black_cat_frames, campfire_frames, cauldron_frames, cow_frames, diamond_frames, duck_frames,
+    hedgehog_frames, jack_frames, laser_sword_frames, moon_frames, mushroom_frames, pig_frames, skull_frames,
+    spider_frames, tombstone_frames, tree_frames, turtle_frames, witch_hat_frames)
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "images")
 BRIGHTNESS, GAMMA = 0.3, 2.2   # the editor's defaults
@@ -37,13 +40,27 @@ EXAMPLES = {
     "owl": (owl_frames(), 2),
     "coin": (coin_frames(), 6),
     "lantern": (lantern_frames(), 5),
-    "mushroom": (mushroom_frames(), 3),
-    "sword": (sword_frames(), 6),
-    "chest": (chest_frames(), 3),
+    "mushroom": (mushroom_frames(), 5),
+    "laser_sword": (laser_sword_frames(), 10),
+    "campfire": (campfire_frames(), 6),
     "bat": (bat_frames(), 6),
     "rocket": (rocket_frames(), 6),
     "candle": (candle_frames(), 5),
-    "bunny": (bunny_frames(), 8),
+    "pig": (pig_frames(), 4),
+    "cow": (cow_frames(), 2),
+    "duck": (duck_frames(), 4),
+    "hedgehog": (hedgehog_frames(), 3),
+    "turtle": (turtle_frames(), 3),
+    "diamond": (diamond_frames(), 5),
+    "tree": (tree_frames(), 3),
+    "jack": (jack_frames(), 3),
+    "witch_hat": (witch_hat_frames(), 3),
+    "cauldron": (cauldron_frames(), 4),
+    "spider": (spider_frames(), 4),
+    "skull": (skull_frames(), 4),
+    "black_cat": (black_cat_frames(), 3),
+    "moon": (moon_frames(), 3),
+    "tombstone": (tombstone_frames(), 2),
     "burst": (burst_frames(), 8),
 }
 
