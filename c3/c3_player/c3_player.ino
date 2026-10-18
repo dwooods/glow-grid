@@ -27,6 +27,8 @@
 //                                 a power cycle; each sprite keeps animating for the whole interval (David, 2026-10-15)
 //   SHUFFLE <0|1>              -> OK shuffle <0|1>. With 1, rotation picks a random sprite (never the one already playing)
 //                                 instead of the next in list order; kept across a power cycle (fw 16). The Next button stays in list order.
+//   BRIGHT <pct>               -> OK bright <pct>. 10..40 plays every sprite at that brightness instead of its own;
+//                                 0 = each sprite's own setting again. Kept across a power cycle (fw 19). INFO shows bright=<pct>.
 //   CRC <name>                 -> OK crc=<8 hex> size=<bytes> of the stored file, so the editor can tell an unchanged
 //                                 example from one you replaced (fw 7); ERR no such sprite
 //   GET <name>                 -> D <96 hex digits> lines (48 bytes each) with the stored file, then
@@ -65,7 +67,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 64           // the list lives in RAM; PUT refuses a new name once it is full
-#define GG_FW_VERSION 18          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 19          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode (WPA2; the password is the setup key, fw 18)
 #define SETUP_KEY_LEN 10
@@ -105,6 +107,10 @@ String pathOf(const String& name) { return "/" + name + ".gg"; }
 const char* OFF_MARK = "/panel.off";   // exists while the panel is off, so OFF survives a power cycle (David, 2026-10-15)
 const char* ROTATE_PATH = "/rotate.txt"; // the rotate interval in seconds, absent or 0 = off
 const char* SHUFFLE_MARK = "/shuffle.txt"; // exists while rotation is random
+const char* BRIGHT_PATH = "/bright.txt";   // board-wide brightness in percent (10..40); absent or 0 = each sprite's own
+uint8_t brightPct = 0;                     // 0 = use the sprite's own bright_pct
+#define BRIGHT_MIN 10
+#define BRIGHT_MAX 40
 String wifiSsid, wifiPass;   // from NVS (not the sprite flash); empty ssid = Wi-Fi not set up
 uint32_t gapMaxMs = 0;       // longest main-loop gap since the last INFO
 
@@ -129,6 +135,20 @@ void saveShuffle() {
   if (f) { f.print((uint32_t)1); f.close(); }
 }
 void loadShuffle() { shuffleOn = LittleFS.exists(SHUFFLE_MARK); }
+void saveBright() {
+  if (brightPct == 0) { LittleFS.remove(BRIGHT_PATH); return; }
+  File f = LittleFS.open(BRIGHT_PATH, "w");
+  if (f) { f.print((uint32_t)brightPct); f.close(); }
+}
+void loadBright() {
+  brightPct = 0;
+  File f = LittleFS.open(BRIGHT_PATH, "r");
+  if (!f) return;
+  long v = f.parseInt();
+  f.close();
+  if (v >= BRIGHT_MIN && v <= BRIGHT_MAX) brightPct = (uint8_t)v;
+}
+uint8_t playBright() { return brightPct ? brightPct : hdr.bright_pct; }
 
 // Keeps the off state in flash. Written only when it changes.
 void rememberPanel() {
@@ -163,7 +183,7 @@ const char* loadSprite(int idx) {
   const char* err = gg_parse_header(data, size, &hdr);
   if (err) { freeSprite(); return err; }
   dataLen = size;
-  gg_make_lut(hdr.bright_pct, hdr.gamma10, lut);
+  gg_make_lut(playBright(), hdr.gamma10, lut);
   frameNo = 0;
   nextFrameAt = millis();
   dirty = true;
@@ -345,10 +365,10 @@ String infoText() {
   uint32_t gap = gapMaxMs;
   gapMaxMs = 0;                      // gap_ms = the longest the main loop went without running since the last INFO
   String ip = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("-");
-  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu shuffle=%d wifi=%s ip=%s gap_ms=%lu",
+  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu shuffle=%d bright=%d wifi=%s ip=%s gap_ms=%lu",
               GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
               data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
-              (unsigned)freeBytes(), (unsigned long)rotateSec, shuffleOn ? 1 : 0, wifiState().c_str(), ip.c_str(), (unsigned long)gap);
+              (unsigned)freeBytes(), (unsigned long)rotateSec, shuffleOn ? 1 : 0, (int)brightPct, wifiState().c_str(), ip.c_str(), (unsigned long)gap);
 }
 
 String opShow(const String& name) {
@@ -387,6 +407,17 @@ String opShuffle(const char* arg) {
   shuffleOn = arg[0] == '1';
   saveShuffle();
   return sfmt("OK shuffle %d", shuffleOn ? 1 : 0);
+}
+
+String opBright(const char* arg) {
+  char* end = NULL;
+  long v = (arg && *arg) ? strtol(arg, &end, 10) : -1;
+  if (!arg || !*arg || *end != 0 || v < 0 || (v != 0 && (v < BRIGHT_MIN || v > BRIGHT_MAX)))
+    return sfmt("ERR usage: BRIGHT <0|%d..%d> (percent; 0 = each sprite's own)", BRIGHT_MIN, BRIGHT_MAX);
+  brightPct = (uint8_t)v;
+  saveBright();
+  if (data) { gg_make_lut(playBright(), hdr.gamma10, lut); dirty = true; }   // the playing sprite changes at once
+  return sfmt("OK bright %d", (int)brightPct);
 }
 
 String opCrc(const String& name) {
@@ -631,7 +662,7 @@ String opWifi(const char* rest) {
 // ---- HTTP API ----
 //   GET  /ping /info /list            same text as PING, INFO, LIST
 //   GET  /crc?name=X   GET /get?name=X (the file's bytes)
-//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N  /shuffle?on=0|1
+//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N  /shuffle?on=0|1  /bright?pct=N
 //   POST /setup                       leave this network and open setup mode (fw 13)
 //   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
 //                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
@@ -815,6 +846,7 @@ void httpBegin() {
   server.on("/on", HTTP_POST, []() { if (httpGuard()) httpReply(opPower(true)); });
   server.on("/rotate", HTTP_POST, []() { if (httpGuard()) httpReply(opRotate(server.arg("s").c_str())); });
   server.on("/shuffle", HTTP_POST, []() { if (httpGuard()) httpReply(opShuffle(server.arg("on").c_str())); });
+  server.on("/bright", HTTP_POST, []() { if (httpGuard()) httpReply(opBright(server.arg("pct").c_str())); });
   server.on("/put", HTTP_POST, httpPutDone, httpPutData);
   server.on("/setup", HTTP_POST, []() {
     if (!httpGuard()) return;
@@ -1033,6 +1065,8 @@ void doCommand(char* line) {
     say(opRotate(n >= 2 ? a1 : NULL));
   } else if (c == "SHUFFLE") {
     say(opShuffle(n >= 2 ? a1 : NULL));
+  } else if (c == "BRIGHT") {
+    say(opBright(n >= 2 ? a1 : NULL));
   } else if (c == "CRC") {
     say(n < 2 ? String("ERR no such sprite") : opCrc(String(a1)));
   } else if (c == "GET") {
@@ -1097,6 +1131,7 @@ void setup() {
   LittleFS.remove(TMP_PATH);         // an upload cut off by a power loss leaves this behind
   loadRotate();
   loadShuffle();
+  loadBright();
   wifiLoad();                        // joins the saved network in the background; nothing waits for it
   scanSprites();
   Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
