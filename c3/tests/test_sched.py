@@ -6,6 +6,7 @@ and time servers in the Wi-Fi log, and the zone string is checked against the re
 """
 import calendar
 import os
+import re
 import subprocess
 import sys
 import time
@@ -119,6 +120,43 @@ class Sched(_tg.Board):
         time.sleep(2.0)
         self.assertEqual(self.panel(board), "off")
 
+    def test_command_names_fit_the_serial_buffer(self):
+        # doCommand() reads the name with %7s into cmd[8]: a longer name is cut and never matches (SCHEDULE became SCHEDUL once)
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "c3_player", "c3_player.ino")).read()
+        body = src[src.index("void doCommand(char* line)"):src.index("void handleSerial()")]
+        size = int(re.search(r"char cmd\[(\d+)\]", body).group(1))
+        self.assertIn("%" + str(size - 1) + "s", body, "the scanf width must be one less than the buffer")
+        names = re.findall(r'c == "([A-Z0-9]+)"', body)
+        self.assertGreaterEqual(len(names), 12, "the command list was not found: update this test")
+        for n in names:
+            self.assertLessEqual(len(n), size - 1, n + " does not fit the command buffer")
+        self.assertIn("SCHED", names)
+        self.boot()
+        self.board.send("SCHEDULE 0700 2000")      # the long spelling is simply unknown, and changes nothing
+        with self.assertRaisesRegex(RuntimeError, "unknown"):
+            self.board.expect(["OK"])
+        self.assertEqual(self.info("schedule"), "off")
+
+    def test_spring_forward_does_not_skip_an_edge(self):
+        # 2026-03-08 01:59:55 PST -> 03:00 PDT: a window that opens at 02:30 (an hour that does not exist) still opens
+        board = self.boot(epoch=la_epoch(2026, 3, 8, 1, 59, 55, dst=False), scale="20")
+        board.simple("SCHED 0230 0600")
+        time.sleep(0.2)
+        self.assertEqual(self.panel(), "off", "01:59 is outside 02:30-06:00")
+        time.sleep(1.5)
+        self.assertEqual(self.info("clock"), "0300", "the clock jumped over the missing hour (30 s of fake time after 01:59:55)")
+        self.assertEqual(self.panel(), "on", "the window is open at 03:00")
+
+    def test_fall_back_repeated_hour(self):
+        # 2026-11-01 01:59:55 PDT -> 01:00 PST again: the repeated hour is read as clock time, so 01:00-01:30 opens a second time
+        board = self.boot(epoch=la_epoch(2026, 11, 1, 1, 59, 55, dst=True), scale="20")
+        board.simple("SCHED 0100 0130")
+        time.sleep(0.2)
+        self.assertEqual(self.panel(), "off", "01:59 is outside 01:00-01:30")
+        time.sleep(1.5)
+        self.assertEqual(self.info("clock"), "0100", "the clock went back an hour")
+        self.assertEqual(self.panel(), "on", "the window opens again in the repeated hour")
+
     def test_over_http(self):
         self.boot(epoch=la_epoch(2026, 10, 18, 12, 0, 0))
         self.http_base()
@@ -126,6 +164,9 @@ class Sched(_tg.Board):
         self.assertEqual(self.info("schedule"), "0700-2000")
         self.assertEqual(self.http("POST", "/sched?v=off")[2], b"OK schedule off\n")
         self.assertEqual(self.http("POST", "/sched?v=0700")[0], 400)
+        for bad in ("0700-0700", "2400-0100", "0760-0800", "abcd-2000", "07:00-20:00", "0700-", "-2000", ""):
+            self.assertEqual(self.http("POST", "/sched?v=" + bad)[0], 400, bad)
+        self.assertEqual(self.info("schedule"), "off", "refused values change nothing")
         st, hd, out = self.http("POST", "/sched?v=0700-2000", b"", {"Origin": "https://evil.example"})
         self.assertEqual((st, out), (403, b"ERR not allowed from this page or address\n"))
         self.assertEqual(self.info("schedule"), "off")
