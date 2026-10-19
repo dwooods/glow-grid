@@ -69,8 +69,10 @@ These appear in the README or JOURNEY as tools you can use alongside glow-grid o
 
 ## Open items before selling a product
 
-These are decisions or checks that are not code:
+Plan (2026-10-19): US only, a boxed kit, marketed to makers 14+, a pre-certified Wi-Fi module, and a listed (UL) power supply. These are decisions or checks that are not code:
 
-- **Name check:** search "glow-grid" / "Glow Grid" in trademark databases (USPTO, EUIPO) before putting it on a product or packaging. Not done.
+- **Name check:** search "glow grid", "glowgrid", "glo grid" and "glow-grid" separately in trademark databases (USPTO, EUIPO, TMview, WIPO), live marks in classes 9, 11 and 28, before putting the name on a product or packaging. Not cleared.
 - **Example sprites:** all are drawn in `examples/sprites.py` and `examples/sprites2.py`. Confirm none was traced from, or generated to resemble, someone else's character.
-- **Hardware compliance:** selling a Wi-Fi device with a power supply raises radio and electrical-safety rules (for example FCC and CE, and the supply's own certification) that are independent of any software licence. Not looked into.
+- **Radio:** the ESP32-C3 SuperMini is not a certified module. A sold kit should use a board built on a pre-certified module (for example an ESP32-C3-MINI-1 board), installed as its FCC grant requires, with the host device tested to FCC Part 15B. Not done.
+- **Power supply:** ship a UL-listed 5 V Class 2 adapter rated for the panel; not assembled by the seller.
+- **Age grade and marketing:** keep the product and packaging aimed at makers 14+; Prop 65 and product-liability checks not done.
