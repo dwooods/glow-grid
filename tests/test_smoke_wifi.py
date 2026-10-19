@@ -181,7 +181,7 @@ class SmokeWifi(unittest.TestCase):
         hb.fw = 20; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)      # the schedule over HTTP: POST /sched?v=HHMM-HHMM
         self.pg.fill('#boardSchedOn', '07:00'); self.pg.fill('#boardSchedOff', '20:00'); self.pg.check('#boardSched'); self.pg.wait_for_timeout(400)
         self.assertEqual(hb.sched, '0700-2000')
-        self.assertIn('Board time 14:32', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardSchedHint').hidden"), 'the board knows the time: no hint')
         self.pg.uncheck('#boardSched'); self.pg.wait_for_timeout(400); self.assertEqual(hb.sched, 'off')
         hb.fw = 17; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.rows(), ['flower (2 frames, 5 fps, brightness 0.3, gamma 2.2)', 'owl (2 frames, 5 fps, brightness 0.3, gamma 2.2)'], 'fw 17 lists each sprite\'s settings over Wi-Fi too')

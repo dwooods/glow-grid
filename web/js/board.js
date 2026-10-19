@@ -320,7 +320,7 @@ function boardUi(connected) {
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
   $('boardNameHint').hidden = !connected;
-  $('boardSchedHint').hidden = !connected;
+  if (!connected) $('boardSchedHint').hidden = true;      // boardShowSched shows it only when there is something to warn about
   $('boardExamples').hidden = !connected;
   $('boardList').hidden = !connected;
   if (!connected) { $('boardList').innerHTML = ''; boardNames = []; boardFiles = []; boardPage = 0; $('boardPager').hidden = true; $('boardFree').textContent = ''; }
@@ -365,9 +365,10 @@ function boardShowSched(info) {        // the box shows the board's own schedule
   box.checked = can && !!m;
   if (m) { $('boardSchedOn').value = schedShow(m[1]); $('boardSchedOff').value = schedShow(m[2]); }
   const hint = $('boardSchedHint');
-  if (!can) { hint.textContent = `Schedule needs firmware ${BOARD_SCHED_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`; return; }
-  const clock = /^\d{4}$/.test(info.clock || '') ? `Board time ${schedShow(info.clock)} (Los Angeles).` : 'The board has no time yet: it learns it over Wi-Fi shortly after joining, and a schedule waits until then.';
-  hint.textContent = m ? `${clock} Panel on ${schedShow(m[1])}, off ${schedShow(m[2])} every day.` : clock;
+  // a line shows only when there is something to know: an old firmware, or a board that has not learned the time yet (no live clock: it would go stale)
+  if (!can) hint.textContent = `Schedule needs firmware ${BOARD_SCHED_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+  else hint.textContent = /^\d{4}$/.test(info.clock || '') ? '' : 'The board has no time yet: it learns it over Wi-Fi shortly after joining, and a schedule waits until then.';
+  hint.hidden = !hint.textContent;
 }
 function boardLinkUpdate() {           // "· Wi-Fi glowgrid.local", or "· USB" plus the board's address once it has joined a network
   const ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
