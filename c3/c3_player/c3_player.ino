@@ -29,12 +29,16 @@
 //                                 instead of the next in list order; kept across a power cycle (fw 16). The Next button stays in list order.
 //   BRIGHT <pct>               -> OK bright <pct>. 10..40 plays every sprite at that brightness instead of its own;
 //                                 0 = each sprite's own setting again. Kept across a power cycle (fw 19). INFO shows bright=<pct>.
+//   SCHED <on> <off>           -> OK schedule <on>-<off>. Daily window in 24-hour HHMM, local time (America/Los_Angeles): the panel switches
+//                                 on at <on> and off at <off>; overnight windows (2200 0600) work. SCHED OFF removes it. Needs the board on
+//                                 Wi-Fi once per power-up to learn the time (NTP); without a time nothing happens. A manual On/Off holds
+//                                 until the next change. Kept across a power cycle (fw 20). INFO shows schedule=<on>-<off>|off clock=<HHMM>|-.
 //   CRC <name>                 -> OK crc=<8 hex> size=<bytes> of the stored file, so the editor can tell an unchanged
 //                                 example from one you replaced (fw 7); ERR no such sprite
 //   GET <name>                 -> D <96 hex digits> lines (48 bytes each) with the stored file, then
 //                                 OK crc=<8 hex> size=<bytes>; ERR no such sprite. Lets the editor load a sprite
 //                                 back into the grid (fw 8). The panel pauses on its current frame while it runs.
-//   INFO                       -> OK fw=<n> current=<name> ... rotate=<seconds> shuffle=<0|1> wifi=<off|connecting|connected> ip=<address or -> gap_ms=<n>
+//   INFO                       -> OK fw=<n> current=<name> ... rotate=<seconds> shuffle=<0|1> schedule=<HHMM-HHMM|off> clock=<HHMM|-> wifi=<off|connecting|connected> ip=<address or -> gap_ms=<n>
 //                                 (gap_ms: the longest the main loop went without running since the last INFO; fw 9)
 //   WIFI SET <ssid hex> <password hex, or -> for none>  -> OK wifi saved; joining. Stored in the chip's NVS, joined at every start (fw 9).
 //                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
@@ -55,6 +59,7 @@
 #include <DNSServer.h>
 #include <Preferences.h>
 #include <esp_random.h>
+#include <time.h>
 #include "gg_core.h"
 #include "setup_page.h"
 // The editor page for http://glowgrid.local/ comes from tools/build_site.py (git-ignored output). Without it the sketch still builds.
@@ -67,7 +72,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 96           // the list lives in RAM; PUT refuses a new name once it is full (64 until fw 19; 37 examples ship)
-#define GG_FW_VERSION 19          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 20          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode (WPA2; the password is the setup key, fw 18)
 #define SETUP_KEY_LEN 10
@@ -109,6 +114,15 @@ const char* ROTATE_PATH = "/rotate.txt"; // the rotate interval in seconds, abse
 const char* SHUFFLE_MARK = "/shuffle.txt"; // exists while rotation is random
 const char* BRIGHT_PATH = "/bright.txt";   // board-wide brightness in percent (10..40); absent or 0 = each sprite's own
 uint8_t brightPct = 0;                     // 0 = use the sprite's own bright_pct
+#define GG_TZ "PST8PDT,M3.2.0,M11.1.0"     // America/Los_Angeles with daylight saving (David, 2026-10-18)
+#ifndef GG_HAVE_STUB_TIME
+static inline time_t gg_epoch() { return time(nullptr); }   // the PC test build supplies its own clock
+#endif
+const char* SCHED_PATH = "/sched.txt";     // "HHMM HHMM": switch on, switch off
+bool schedSet = false;                     // a daily schedule is set
+uint16_t schedFrom = 0, schedTo = 0;       // minutes after midnight
+int8_t schedSeen = -1;                     // -1 not applied yet, 0 outside the window last second, 1 inside
+bool ntpStarted = false;
 #define BRIGHT_MIN 10
 #define BRIGHT_MAX 40
 String wifiSsid, wifiPass;   // from NVS (not the sprite flash); empty ssid = Wi-Fi not set up
@@ -149,6 +163,44 @@ void loadBright() {
   if (v >= BRIGHT_MIN && v <= BRIGHT_MAX) brightPct = (uint8_t)v;
 }
 uint8_t playBright() { return brightPct ? brightPct : hdr.bright_pct; }
+
+// ---- daily schedule (fw 20) ----
+String sfmt(const char* f, ...);
+bool timeValid() { return (long)gg_epoch() > 1700000000L; }           // false until NTP has set the clock
+bool localMinutes(int& mins) {
+  if (!timeValid()) return false;
+  time_t e = gg_epoch();
+  struct tm t;
+  localtime_r(&e, &t);
+  mins = t.tm_hour * 60 + t.tm_min;
+  return true;
+}
+bool inWindow(int m) { return schedFrom < schedTo ? (m >= schedFrom && m < schedTo) : (m >= schedFrom || m < schedTo); }
+void saveSched() {
+  if (!schedSet) { LittleFS.remove(SCHED_PATH); return; }
+  File f = LittleFS.open(SCHED_PATH, "w");
+  if (f) { f.print(sfmt("%02u%02u %02u%02u", schedFrom / 60, schedFrom % 60, schedTo / 60, schedTo % 60).c_str()); f.close(); }
+}
+void loadSched() {
+  schedSet = false;
+  File f = LittleFS.open(SCHED_PATH, "r");
+  if (!f) return;
+  long a = f.parseInt(), b = f.parseInt();
+  f.close();
+  if (a < 0 || b < 0 || a / 100 > 23 || a % 100 > 59 || b / 100 > 23 || b % 100 > 59 || a == b) return;
+  schedFrom = (uint16_t)(a / 100 * 60 + a % 100);
+  schedTo = (uint16_t)(b / 100 * 60 + b % 100);
+  schedSet = true;
+}
+String schedText() {
+  if (!schedSet) return String("off");
+  return sfmt("%02u%02u-%02u%02u", schedFrom / 60, schedFrom % 60, schedTo / 60, schedTo % 60);
+}
+String clockText() {
+  int m;
+  if (!localMinutes(m)) return String("-");
+  return sfmt("%02d%02d", m / 60, m % 60);
+}
 
 // Keeps the off state in flash. Written only when it changes.
 void rememberPanel() {
@@ -365,10 +417,10 @@ String infoText() {
   uint32_t gap = gapMaxMs;
   gapMaxMs = 0;                      // gap_ms = the longest the main loop went without running since the last INFO
   String ip = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("-");
-  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu shuffle=%d bright=%d wifi=%s ip=%s gap_ms=%lu",
+  return sfmt("OK fw=%d current=%s sprites=%d panel=%s frames=%d fps10=%d bright_pct=%d gamma10=%d free=%u rotate=%lu shuffle=%d bright=%d schedule=%s clock=%s wifi=%s ip=%s gap_ms=%lu",
               GG_FW_VERSION, cur >= 0 ? names[cur].c_str() : "-", nSprites, panelOn ? "on" : "off",
               data ? hdr.frames : 0, data ? hdr.fps10 : 0, data ? hdr.bright_pct : 0, data ? hdr.gamma10 : 0,
-              (unsigned)freeBytes(), (unsigned long)rotateSec, shuffleOn ? 1 : 0, (int)brightPct, wifiState().c_str(), ip.c_str(), (unsigned long)gap);
+              (unsigned)freeBytes(), (unsigned long)rotateSec, shuffleOn ? 1 : 0, (int)brightPct, schedText().c_str(), clockText().c_str(), wifiState().c_str(), ip.c_str(), (unsigned long)gap);
 }
 
 String opShow(const String& name) {
@@ -418,6 +470,25 @@ String opBright(const char* arg) {
   saveBright();
   if (data) { gg_make_lut(playBright(), hdr.gamma10, lut); dirty = true; }   // the playing sprite changes at once
   return sfmt("OK bright %d", (int)brightPct);
+}
+
+bool parseHhmm(const char* s, uint16_t& mins) {
+  if (!s || strlen(s) != 4) return false;
+  for (int i = 0; i < 4; i++) if (s[i] < '0' || s[i] > '9') return false;
+  int h = (s[0] - '0') * 10 + (s[1] - '0'), m = (s[2] - '0') * 10 + (s[3] - '0');
+  if (h > 23 || m > 59) return false;
+  mins = (uint16_t)(h * 60 + m);
+  return true;
+}
+
+String opSched(const char* on, const char* off) {
+  if (on && strcasecmp(on, "OFF") == 0) { schedSet = false; saveSched(); return String("OK schedule off"); }
+  uint16_t a, b;
+  if (!parseHhmm(on, a) || !parseHhmm(off, b) || a == b) return String("ERR usage: SCHED <on HHMM> <off HHMM> (24-hour, different times) or SCHED OFF");
+  schedFrom = a; schedTo = b; schedSet = true;
+  saveSched();
+  schedSeen = -1;                        // apply the window at once if the time is known
+  return "OK schedule " + schedText();
 }
 
 String opCrc(const String& name) {
@@ -662,7 +733,7 @@ String opWifi(const char* rest) {
 // ---- HTTP API ----
 //   GET  /ping /info /list            same text as PING, INFO, LIST
 //   GET  /crc?name=X   GET /get?name=X (the file's bytes)
-//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N  /shuffle?on=0|1  /bright?pct=N
+//   POST /show?name=X  /del?name=X  /off  /on  /rotate?s=N  /shuffle?on=0|1  /bright?pct=N  /sched?v=HHMM-HHMM|off
 //   POST /setup                       leave this network and open setup mode (fw 13)
 //   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
 //                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
@@ -847,6 +918,14 @@ void httpBegin() {
   server.on("/rotate", HTTP_POST, []() { if (httpGuard()) httpReply(opRotate(server.arg("s").c_str())); });
   server.on("/shuffle", HTTP_POST, []() { if (httpGuard()) httpReply(opShuffle(server.arg("on").c_str())); });
   server.on("/bright", HTTP_POST, []() { if (httpGuard()) httpReply(opBright(server.arg("pct").c_str())); });
+  server.on("/sched", HTTP_POST, []() {            // v=off, or v=HHMM-HHMM
+    if (!httpGuard()) return;
+    String v = server.arg("v");
+    int dash = v.indexOf("-");
+    if (dash < 0) { httpReply(opSched(v.c_str(), NULL)); return; }
+    String a = v.substring(0, dash), b = v.substring(dash + 1);
+    httpReply(opSched(a.c_str(), b.c_str()));
+  });
   server.on("/put", HTTP_POST, httpPutDone, httpPutData);
   server.on("/setup", HTTP_POST, []() {
     if (!httpGuard()) return;
@@ -1067,6 +1146,8 @@ void doCommand(char* line) {
     say(opShuffle(n >= 2 ? a1 : NULL));
   } else if (c == "BRIGHT") {
     say(opBright(n >= 2 ? a1 : NULL));
+  } else if (c == "SCHED") {
+    say(opSched(n >= 2 ? a1 : NULL, n >= 3 ? a2 : NULL));
   } else if (c == "CRC") {
     say(n < 2 ? String("ERR no such sprite") : opCrc(String(a1)));
   } else if (c == "GET") {
@@ -1114,6 +1195,24 @@ void handleSerial() {
   }
 }
 
+// Called every pass of loop(), acts once a second: starts NTP when the Wi-Fi is up, then keeps the panel inside the schedule.
+// Acts on changes only (switching on at <on>, off at <off>), so a manual On or Off holds until the next change; right after a
+// power-up, or when the schedule is saved, the first pass with a known time applies the state the window calls for.
+void scheduleTick() {
+  static uint32_t lastCheck = 0;
+  uint32_t now = millis();
+  if (now - lastCheck < 1000) return;
+  lastCheck = now;
+  if (!ntpStarted && !setupOn && wifiSsid.length() && WiFi.status() == WL_CONNECTED) { configTzTime(GG_TZ, "pool.ntp.org", "time.google.com"); ntpStarted = true; }
+  if (!schedSet) return;
+  int m;
+  if (!localMinutes(m)) return;
+  int8_t inside = inWindow(m) ? 1 : 0;
+  if (inside == schedSeen) return;
+  schedSeen = inside;
+  setPanel(inside == 1);
+}
+
 void setup() {
   Serial.setRxBufferSize(2048);      // must come before begin()
   Serial.begin(115200);
@@ -1132,6 +1231,7 @@ void setup() {
   loadRotate();
   loadShuffle();
   loadBright();
+  loadSched();
   wifiLoad();                        // joins the saved network in the background; nothing waits for it
   scanSprites();
   Serial.printf("Glow Grid player fw %d ready: %d sprite(s), %u bytes free\n", GG_FW_VERSION, nSprites,
@@ -1152,6 +1252,7 @@ void loop() {
   setupTick();
   handleButtons();
   rotateTick();
+  scheduleTick();
   playTick();
   delay(1);                          // lets the Wi-Fi tasks run
 }

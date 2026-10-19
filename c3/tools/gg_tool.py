@@ -11,6 +11,7 @@
     python3 gg_tool.py rotate 300                       # next sprite every 5 minutes; 0 = stay on one
     python3 gg_tool.py bright 20                        # play every sprite at 0.2; 0 = each sprite's own brightness
     python3 gg_tool.py shuffle 1                        # rotation picks a random sprite (0 = list order; firmware 16)
+    python3 gg_tool.py sched 07:00 20:00                # panel on at 07:00 and off at 20:00 every day (firmware 20); sched off removes it
     python3 gg_tool.py info
     python3 gg_tool.py --port COM3 list                   # name the port if it is not found automatically
 
@@ -245,6 +246,9 @@ class HttpBoard:
             return self._call("POST", "/shuffle?on=" + q)
         if verb == "BRIGHT":
             return self._call("POST", "/bright?pct=" + q)
+        if verb == "SCHED":                          # "SCHED 0700 2000" or "SCHED OFF" -> /sched?v=0700-2000 or v=off
+            parts = arg.split()
+            return self._call("POST", "/sched?v=" + (parts[0].lower() if len(parts) < 2 else parts[0] + "-" + parts[1]))
         raise ValueError("not available over Wi-Fi: " + command)
 
     def list(self):
@@ -292,6 +296,15 @@ def find_port():
     raise SystemExit(f"Could not pick a port automatically (found: {names}). Use --port COM3.")
 
 
+def sched_args(times):
+    """'07:00' '20:00' (or 0700 2000) -> '0700 2000'; 'off' -> 'OFF'. The board checks the values; this only fixes the spelling."""
+    if len(times) == 1 and times[0].lower() == "off":
+        return "OFF"
+    if len(times) != 2:
+        raise ValueError("sched needs two times, like: sched 07:00 20:00 (or: sched off)")
+    return " ".join(t.replace(":", "").zfill(4) for t in times)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port")
@@ -305,6 +318,8 @@ def main():
     r.add_argument("seconds", type=int)
     sh = sub.add_parser("shuffle")
     sh.add_argument("on", type=int, choices=[0, 1])
+    sc = sub.add_parser("sched")
+    sc.add_argument("times", nargs="+", help="ON OFF as 24-hour times (07:00 20:00), or the word off")
     br = sub.add_parser("bright")
     br.add_argument("pct", type=int, help="10..40 percent for every sprite; 0 = each sprite's own")
     p = sub.add_parser("put")
@@ -370,6 +385,8 @@ def main():
             print(board.simple(f"SHUFFLE {a.on}"))
         elif a.cmd == "bright":
             print(board.simple(f"BRIGHT {a.pct}"))
+        elif a.cmd == "sched":
+            print(board.simple("SCHED " + sched_args(a.times)))
     except (RuntimeError, TimeoutError, ValueError) as e:
         raise SystemExit(f"error: {e}")
     finally:

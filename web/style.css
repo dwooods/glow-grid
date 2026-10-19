@@ -395,6 +395,8 @@ input[type=range] { width: 100%; accent-color: var(--accent); min-height: 28px; 
 .board-row small { color: var(--text-dim); }
 .board-row .board-meta { font-weight: 400; }
 .board-name-hint { margin: 0 0 4px; }
+.board-sched-hint { margin: 4px 0 0; }
+.board-time { width: 5.2em; text-align: center; }
 .board-pager { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); font-size: var(--fs-sm); color: var(--text-dim); margin-top: var(--s-1); }
 .board-pager[hidden] { display: none; }
 .board-status[data-kind="err"] { color: #f08c7a; }

@@ -24,6 +24,7 @@ PALETTE.update({
     # witch hat
     "h": (84, 96, 150),    # hat, lit side
     "d": (46, 52, 96),     # hat, shaded side
+    "z": (236, 240, 250),  # full moon
 })
 
 
@@ -605,21 +606,23 @@ def black_cat_frames():
 
 
 def moon_frames():
-    """8 frames: a grey-white full moon with clouds drifting across it and a few stars."""
+    """8 frames: a light grey-white full moon, three dark clouds drifting across (they wrap round, so the loop is seamless), and six
+    yellow and gold stars that twinkle."""
     frames = []
     for k in range(8):
         g = _grid()
-        for x, y in ((1, 1), (13, 2), (2, 12), (14, 13)):
-            _put(g, x, y, "S" if (k + x) % 3 else "W")
-        _ell(g, 8, 7, 4, 4, "S")                                      # grey-white moon
+        for x, y in ((1, 1), (13, 1), (2, 12), (14, 13), (1, 7), (14, 5)):
+            _put(g, x, y, "Y" if (k + x + y) % 3 else "G")            # twinkle between yellow and gold
+        _ell(g, 8, 7, 4, 4, "z")                                      # moon
         for x, y in ((6, 4), (7, 4), (5, 5)):                         # bright rim
             _put(g, x, y, "W")
         for x, y in ((6, 6), (9, 8), (7, 9), (10, 6)):                # craters
-            _put(g, x, y, "x")
-        for cx, cy, w in ((k * 2 - 4, 6, 6), (k * 2 - 12, 10, 5)):    # two clouds crossing
+            _put(g, x, y, "S")
+        for off, cy, w in ((0, 6, 6), (8, 10, 5), (16, 2, 5)):        # three clouds, 3 px a frame: 8 frames = one 24 px lap
+            cx = (3 * k + off) % 24 - 6
             for x in range(cx, cx + w):
-                _put(g, x, cy, "s"); _put(g, x, cy + 1, "s")
-            _put(g, cx + 1, cy - 1, "s"); _put(g, cx + 2, cy - 1, "s"); _put(g, cx + w - 2, cy - 1, "s")
+                _put(g, x, cy, "x"); _put(g, x, cy + 1, "x")
+            _put(g, cx + 1, cy - 1, "x"); _put(g, cx + 2, cy - 1, "x"); _put(g, cx + w - 2, cy - 1, "x")
         frames.append(_rows(g))
     return frames
 

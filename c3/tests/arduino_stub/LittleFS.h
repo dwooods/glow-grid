@@ -44,6 +44,7 @@ class File {
   // the Stream bits the sketch uses on a File (real Arduino File derives from Stream)
   size_t print(unsigned long v) { if (!st || !st->fp) return 0; return fprintf(st->fp, "%lu", v); }
   size_t print(uint32_t v) { return print((unsigned long)v); }
+  size_t print(const char* t) { if (!st || !st->fp) return 0; return fputs(t, st->fp) < 0 ? 0 : strlen(t); }
   long parseInt() { long v = 0; if (st && st->fp && fscanf(st->fp, "%ld", &v) == 1) return v; return 0; }
   bool isDirectory() { return st && st->isDir; }
   File openNextFile() {

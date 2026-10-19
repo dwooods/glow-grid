@@ -26,6 +26,7 @@ function boardLightText(f) {
   return `(${f.frames > 1 ? `${f.frames} frames, ${f.fps} fps, ` : ''}brightness ${f.brightness}, gamma ${f.gamma})`;
 }
 const BOARD_SHUFFLE_FW = 16;         // the first firmware with the SHUFFLE command (random rotation)
+const BOARD_SCHED_FW = 20;           // the first firmware with SCHED (daily on/off window) and the clock in INFO
 const BOARD_BRIGHT_FW = 19;          // the first firmware with BRIGHT (one brightness for every sprite, no re-send)
 const BOARD_CHUNK = 1024;            // the firmware answers "A" after every 1024 bytes of a PUT
 
@@ -141,6 +142,7 @@ class GgBoard {
   async rotate(sec) { return this.cmd(`ROTATE ${sec}`, ['OK']); }
   async shuffle(on) { return this.cmd(`SHUFFLE ${on ? 1 : 0}`, ['OK']); }
   async bright(pct) { return this.cmd(`BRIGHT ${pct}`, ['OK']); }
+  async sched(on, off) { return this.cmd(on ? `SCHED ${on} ${off}` : 'SCHED OFF', ['OK']); }      // on, off as HHMM; empty = remove the schedule
   async crc(name) {                   // checksum and size of the file stored under `name` (firmware 7 and later)
     const line = await this.cmd(`CRC ${name}`, ['OK']);
     const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
@@ -243,6 +245,7 @@ class HttpBoard {
   async rotate(sec) { return this.call('POST', `/rotate?s=${encodeURIComponent(sec)}`); }
   async shuffle(on) { return this.call('POST', `/shuffle?on=${on ? 1 : 0}`); }
   async bright(pct) { return this.call('POST', `/bright?pct=${encodeURIComponent(pct)}`); }
+  async sched(on, off) { return this.call('POST', `/sched?v=${on ? `${on}-${off}` : 'off'}`); }
   async setup(key) { return this.call('POST', '/setup' + (key ? `?key=${encodeURIComponent(key)}` : '')); }   // firmware 13: leave this network and open GlowGrid-Setup; firmware 18 wants the setup key
   async crc(name) {
     const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
@@ -317,6 +320,7 @@ function boardUi(connected) {
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
   $('boardNameHint').hidden = !connected;
+  $('boardSchedHint').hidden = !connected;
   $('boardExamples').hidden = !connected;
   $('boardList').hidden = !connected;
   if (!connected) { $('boardList').innerHTML = ''; boardNames = []; boardFiles = []; boardPage = 0; $('boardPager').hidden = true; $('boardFree').textContent = ''; }
@@ -348,6 +352,23 @@ function boardShowBright(info) {        // the select shows the board's own sett
   sel.value = can ? v : '0'; sel.disabled = !can;
   $('boardBrightLbl').title = can ? 'Play every stored sprite at this brightness, without sending them again. "Each sprite\'s own" uses the brightness saved in each file.' : `Board brightness needs firmware ${BOARD_BRIGHT_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
 }
+// Daily schedule (firmware 20): times are typed as 24-hour HH:MM, kept as HHMM on the wire.
+function schedParse(text) {            // "7:05", "07:05" or "0705" -> "0705"; anything else -> ''
+  const m = /^\s*([01]?\d|2[0-3]):?([0-5]\d)\s*$/.exec(String(text));
+  return m ? m[1].padStart(2, '0') + m[2] : '';
+}
+const schedShow = (hhmm) => `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+function boardShowSched(info) {        // the box shows the board's own schedule; a board without the field cannot do it
+  const can = info.schedule !== undefined, box = $('boardSched');
+  box.disabled = !can; $('boardSchedOn').disabled = !can; $('boardSchedOff').disabled = !can;
+  const m = /^(\d{4})-(\d{4})$/.exec(info.schedule || '');
+  box.checked = can && !!m;
+  if (m) { $('boardSchedOn').value = schedShow(m[1]); $('boardSchedOff').value = schedShow(m[2]); }
+  const hint = $('boardSchedHint');
+  if (!can) { hint.textContent = `Schedule needs firmware ${BOARD_SCHED_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`; return; }
+  const clock = /^\d{4}$/.test(info.clock || '') ? `Board time ${schedShow(info.clock)} (Los Angeles).` : 'The board has no time yet: it learns it over Wi-Fi shortly after joining, and a schedule waits until then.';
+  hint.textContent = m ? `${clock} Panel on ${schedShow(m[1])}, off ${schedShow(m[2])} every day.` : clock;
+}
 function boardLinkUpdate() {           // "· Wi-Fi glowgrid.local", or "· USB" plus the board's address once it has joined a network
   const ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
   $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' + (ip ? ` · address ${ip}` : '') : '';
@@ -367,6 +388,7 @@ async function boardRefresh(showName) {            // showName: jump to the page
   $('boardOffBtn').disabled = info.panel === 'off';
   boardShowRotate(info.rotate, info);
   boardShowBright(info);
+  boardShowSched(info);
   boardNameHint();
 }
 function boardRenderList() {
@@ -564,6 +586,17 @@ $('boardRotate').addEventListener('change', () => {
   boardAct(async () => { if (sec && boardCanShuffle) await board.shuffle(random); return board.rotate(sec); },
     sec ? `Rotating ${label}${random ? ' in random order' : ' in list order'}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
 });
+function boardSchedApply() {
+  const box = $('boardSched');
+  if (!box.checked) { boardAct(() => board.sched('', ''), 'Schedule off.'); return; }
+  const on = schedParse($('boardSchedOn').value), off = schedParse($('boardSchedOff').value);
+  if (!on || !off) { box.checked = false; boardSay('Type both times in 24-hour form, like 07:00 and 20:00.', 'err'); return; }
+  if (on === off) { box.checked = false; boardSay('On and off need different times.', 'err'); return; }
+  $('boardSchedOn').value = schedShow(on); $('boardSchedOff').value = schedShow(off);
+  boardAct(() => board.sched(on, off), `Schedule on: the panel switches on at ${schedShow(on)} and off at ${schedShow(off)} every day. A manual On or Off holds until the next change. The board remembers this after a power cycle.`);
+}
+$('boardSched').addEventListener('change', boardSchedApply);
+for (const id of ['boardSchedOn', 'boardSchedOff']) $(id).addEventListener('change', () => { if ($('boardSched').checked) boardSchedApply(); });
 $('boardBright').addEventListener('change', () => {
   const pct = Number($('boardBright').value);
   boardAct(() => board.bright(pct), pct ? `Every sprite now plays at brightness 0.${pct}. The board remembers this after a power cycle.` : 'Each sprite plays at its own brightness again.');

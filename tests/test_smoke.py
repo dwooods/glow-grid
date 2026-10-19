@@ -25,7 +25,7 @@ STUB = """() => { window.__w = []; window.__calls = 0;
 # A fake ESP32-C3 behind the Board card's transport interface: the same line protocol c3/c3_player.ino speaks,
 # with sprites kept in a Map. Installed with page.add_init_script so board.js finds window.__ggFakeSerial at load.
 FAKE_BOARD = """() => {
-  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0; window.__fakeShuffle = 0; window.__fakeBright = 0;
+  window.__fakeStore = new Map(); window.__fakePanel = 'on'; window.__fakeCurrent = '-'; window.__fakeLog = []; window.__fakeRotate = 0; window.__fakeShuffle = 0; window.__fakeBright = 0; window.__fakeSched = 'off'; window.__fakeClock = '-';
   window.__fakeWifi = { state: 'off', ip: '-', ssid: '', polls: 0 };
   window.__fakeChunks = []; window.__fakeBreak = null; window.__fakeFw = 7;     // 'full': PUT refused after READY; 'mute': no replies at all
   window.__ggFakeSerial = () => {
@@ -61,8 +61,12 @@ FAKE_BOARD = """() => {
           { const b = window.__fakeStore.get(a1); const out = b.slice(); if (window.__fakeBreak === 'badget') out[20] ^= 1;
             for (let i = 0; i < out.length; i += 48) say('D ' + Array.from(out.subarray(i, i + 48), (v) => v.toString(16).padStart(2, '0')).join(''));
             return say('OK crc=' + crc32(b).toString(16).padStart(8, '0') + ' size=' + b.length); }
-        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 16 ? ' shuffle=' + window.__fakeShuffle : '') + (window.__fakeFw >= 19 ? ' bright=' + window.__fakeBright : '') + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
+        case 'INFO': return say('OK fw=' + window.__fakeFw + ' current=' + window.__fakeCurrent + ' sprites=' + names().length + ' panel=' + window.__fakePanel + ' rotate=' + window.__fakeRotate + (window.__fakeFw >= 16 ? ' shuffle=' + window.__fakeShuffle : '') + (window.__fakeFw >= 19 ? ' bright=' + window.__fakeBright : '') + (window.__fakeFw >= 20 ? ' schedule=' + window.__fakeSched + ' clock=' + window.__fakeClock : '') + (window.__fakeFw >= 9 ? ' wifi=' + window.__fakeWifi.state + ' ip=' + window.__fakeWifi.ip : ''));
         case 'SHUFFLE': if (window.__fakeFw < 16) return say('ERR unknown command'); if (!/^[01]$/.test(a1 || '')) return say('ERR usage: SHUFFLE <0|1> (1 = random order)'); window.__fakeShuffle = Number(a1); return say('OK shuffle ' + a1);
+        case 'SCHED': if (window.__fakeFw < 20) return say('ERR unknown command');
+          if (/^off$/i.test(a1 || '')) { window.__fakeSched = 'off'; return say('OK schedule off'); }
+          if (!/^\\d{4}$/.test(a1 || '') || !/^\\d{4}$/.test(a2 || '') || a1 === a2) return say('ERR usage: SCHED <on HHMM> <off HHMM> (24-hour, different times) or SCHED OFF');
+          window.__fakeSched = a1 + '-' + a2; return say('OK schedule ' + window.__fakeSched);
         case 'BRIGHT': if (window.__fakeFw < 19) return say('ERR unknown command'); if (!/^(0|[1-3][0-9]|40)$/.test(a1 || '') || (a1 !== '0' && Number(a1) < 10)) return say('ERR usage: BRIGHT <0|10..40>'); window.__fakeBright = Number(a1); return say('OK bright ' + Number(a1));
         case 'ROTATE': if (!/^\\d+$/.test(a1 || '')) return say('ERR usage: ROTATE <seconds>'); window.__fakeRotate = Number(a1); return say('OK rotate ' + a1);
         case 'PUT': if (!/^[A-Za-z0-9_-]{1,31}$/.test(a1)) return say('ERR bad name');
@@ -387,6 +391,30 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("document.getElementById('boardBright').value"), '35', 'an unlisted board value gets its own entry')
         self.pg.select_option('#boardBright', '0'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakeBright'), 0); self.assertIn('own brightness', status())
+        # schedule: greyed out before firmware 20, then a checkbox with two 24-hour times that sends SCHED and follows the board
+        dis = "['boardSched', 'boardSchedOn', 'boardSchedOff'].every((i) => document.getElementById(i).disabled)"
+        self.assertTrue(self.pg.evaluate(dis)); self.assertIn('firmware 20', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
+        self.pg.evaluate('window.__fakeFw = 20'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertFalse(self.pg.evaluate(dis)); self.assertFalse(self.pg.evaluate("document.getElementById('boardSched').checked"))
+        self.assertIn('no time yet', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
+        self.pg.fill('#boardSchedOn', '7:05'); self.pg.fill('#boardSchedOff', '2000'); self.pg.check('#boardSched'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeSched'), '0705-2000'); self.assertIn('switches on at 07:05 and off at 20:00', status())
+        self.assertEqual(self.pg.evaluate("[document.getElementById('boardSchedOn').value, document.getElementById('boardSchedOff').value]"), ['07:05', '20:00'], 'times are tidied')
+        self.pg.evaluate("window.__fakeClock = '1432'"); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        hint = self.pg.evaluate("document.getElementById('boardSchedHint').textContent")
+        self.assertIn('Board time 14:32', hint); self.assertIn('Panel on 07:05, off 20:00', hint)
+        self.pg.fill('#boardSchedOn', '21:30'); self.pg.press('#boardSchedOn', 'Tab'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeSched'), '2130-2000', 'changing a time while it is ticked sends it at once')
+        self.pg.uncheck('#boardSched'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeSched'), 'off'); self.assertEqual(status(), 'Schedule off.')
+        self.pg.fill('#boardSchedOn', 'abc'); self.pg.click('#boardSched'); self.pg.wait_for_timeout(400)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardSched').checked")); self.assertIn('24-hour', status())
+        self.pg.fill('#boardSchedOn', '20:00'); self.pg.click('#boardSched'); self.pg.wait_for_timeout(400)
+        self.assertFalse(self.pg.evaluate("document.getElementById('boardSched').checked")); self.assertIn('different times', status())
+        self.assertEqual(self.pg.evaluate('window.__fakeSched'), 'off', 'nothing reached the board')
+        self.pg.evaluate("window.__fakeSched = '2200-0600'"); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertTrue(self.pg.evaluate("document.getElementById('boardSched').checked"), 'follows what the board reports')
+        self.assertEqual(self.pg.evaluate("[document.getElementById('boardSchedOn').value, document.getElementById('boardSchedOff').value]"), ['22:00', '06:00'])
         self.pg.evaluate('window.__fakeFw = 7')
         self.pg.on('dialog', lambda d: d.accept())
         self.pg.click("#boardList .board-row:nth-child(2) button:has-text('Delete')"); self.pg.wait_for_timeout(400)

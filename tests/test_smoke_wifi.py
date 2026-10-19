@@ -25,6 +25,7 @@ class FakeHttpBoard:
     def __init__(self, fw=9):
         self.store, self.log, self.fw = {}, [], fw
         self.panel, self.current, self.rotate, self.shuffle = 'on', '-', 0, 0
+        self.sched = 'off'                        # firmware 20: the daily on/off window, 'off' or 'HHMM-HHMM'
         self.fail_put = None                      # an ERR text to answer a /put with
         self.damage_get = False
         self.setups = 0                           # POST /setup calls (firmware 13)
@@ -49,7 +50,7 @@ class FakeHttpBoard:
             lines = [f'FILE {n} {len(b)}' + (f' {b[6] | b[7] << 8} {b[8] | b[9] << 8} {b[10]} {b[11]}' if self.fw >= 17 and len(b) >= 12 and b[10] else '') for n, b in sorted(self.store.items())] + [f'OK {len(self.store)} files, 1400000 bytes free']
             return self.reply(route, 200, '\n'.join(lines) + '\n')
         if u.path == '/info':
-            return self.reply(route, 200, f'OK fw={self.fw} current={self.current} sprites={len(self.store)} panel={self.panel} rotate={self.rotate}' + (f' shuffle={self.shuffle}' if self.fw >= 16 else '') + f' wifi=connected ip=192.168.50.6 gap_ms=3\n')
+            return self.reply(route, 200, f'OK fw={self.fw} current={self.current} sprites={len(self.store)} panel={self.panel} rotate={self.rotate}' + (f' shuffle={self.shuffle}' if self.fw >= 16 else '') + (f' schedule={self.sched} clock=1432' if self.fw >= 20 else '') + f' wifi=connected ip=192.168.50.6 gap_ms=3\n')
         if u.path == '/crc':
             if name not in self.store: return err('no such sprite')
             b = self.store[name]; return self.reply(route, 200, f'OK crc={zlib.crc32(b) & 0xffffffff:08x} size={len(b)}\n')
@@ -72,6 +73,7 @@ class FakeHttpBoard:
                 return self.reply(route, 403, 'ERR wrong setup key')
             self.setups += 1; return self.reply(route, 200, 'OK setup mode starts in a moment: join the Wi-Fi network GlowGrid-Setup and open http://192.168.4.1/\n')
         if u.path == '/rotate': self.rotate = int(q['s']); return self.reply(route, 200, f'OK rotate {self.rotate}\n')
+        if u.path == '/sched' and self.fw >= 20: self.sched = q['v']; return self.reply(route, 200, 'OK schedule off\n' if q['v'] == 'off' else f'OK schedule {q["v"]}\n')
         if u.path == '/shuffle' and self.fw >= 16: self.shuffle = int(q['on']); return self.reply(route, 200, f'OK shuffle {self.shuffle}\n')
         if u.path == '/put':
             if self.fail_put: return err(self.fail_put)
@@ -176,6 +178,11 @@ class SmokeWifi(unittest.TestCase):
         hb.fw = 16; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.pg.select_option('#boardRotate', 'r300'); self.pg.wait_for_timeout(400); self.assertEqual((hb.shuffle, hb.rotate), (1, 300))
         self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual((hb.shuffle, hb.rotate), (0, 300))
+        hb.fw = 20; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)      # the schedule over HTTP: POST /sched?v=HHMM-HHMM
+        self.pg.fill('#boardSchedOn', '07:00'); self.pg.fill('#boardSchedOff', '20:00'); self.pg.check('#boardSched'); self.pg.wait_for_timeout(400)
+        self.assertEqual(hb.sched, '0700-2000')
+        self.assertIn('Board time 14:32', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
+        self.pg.uncheck('#boardSched'); self.pg.wait_for_timeout(400); self.assertEqual(hb.sched, 'off')
         hb.fw = 17; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.rows(), ['flower (2 frames, 5 fps, brightness 0.3, gamma 2.2)', 'owl (2 frames, 5 fps, brightness 0.3, gamma 2.2)'], 'fw 17 lists each sprite\'s settings over Wi-Fi too')
         hb.fw = 9

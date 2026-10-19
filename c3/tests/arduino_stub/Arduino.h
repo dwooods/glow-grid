@@ -25,6 +25,22 @@ inline uint32_t millis() {
   static const double scale = sc ? atof(sc) : 1.0;
   return (uint32_t)((double)(ts.tv_sec * 1000UL + ts.tv_nsec / 1000000UL) * scale);
 }
+// The clock (fw 20). $GG_FAKE_EPOCH = the UNIX time at start; it then advances with millis() (so $GG_TIME_SCALE speeds it up). Without it the
+// board has no time, as before the first NTP answer. configTzTime() only records the zone and servers in $GG_WIFI_LOG ("ntp <tz> <server>").
+#define GG_HAVE_STUB_TIME 1
+#include <time.h>
+inline time_t gg_epoch() {
+  static const char* e = getenv("GG_FAKE_EPOCH");
+  static const uint32_t t0 = millis();
+  if (!e) return 0;
+  return (time_t)atol(e) + (time_t)((millis() - t0) / 1000);
+}
+inline void configTzTime(const char* tz, const char* server1, const char* = NULL, const char* = NULL) {
+  setenv("TZ", tz, 1);
+  tzset();
+  const char* p = getenv("GG_WIFI_LOG");
+  if (p) { FILE* f = fopen(p, "a"); if (f) { fprintf(f, "ntp %s %s\n", tz, server1); fclose(f); } }
+}
 // Setup mode opens by itself on the board; here only when a test asks ($GG_SETUP_AUTO set), so the other tests see the old behaviour.
 #define GG_SETUP_AUTO_START() (getenv("GG_SETUP_AUTO") != NULL)
 inline long random(long m) { return m > 0 ? rand() % m : 0; }   // the real core uses the hardware RNG; tests only need it to vary
