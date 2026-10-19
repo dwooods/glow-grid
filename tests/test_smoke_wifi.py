@@ -302,11 +302,11 @@ class SmokeWifi(unittest.TestCase):
         self.fresh_page(); self.board_helpers(); self.pg.wait_for_timeout(300)
         self.assertEqual(self.status(), ''); self.assertTrue(el('boardTools', 'hidden'))
         self.assertEqual(self.pg.evaluate('boardServedBy()'), '')
-        # served over http, the USB note says why (not "this browser" alone), and points at the https editor
+        # served over http, or without Web Serial, the USB note is short and points to Help
         self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", 'delete Navigator.prototype.serial', before=hb.install); self.board_helpers()
-        self.assertFalse(el('boardUnsupported', 'hidden')); self.assertIn('plain http', el('boardUnsupportedWhy')); self.assertIn('dwooods.github.io', el('boardUnsupportedWhy'))
+        self.assertFalse(el('boardUnsupported', 'hidden')); self.assertIn('USB is not available here', self.pg.evaluate("document.getElementById('boardUnsupported').textContent"))
         self.fresh_page('delete Navigator.prototype.serial'); self.board_helpers()
-        self.assertIn('Chrome or Edge on a computer', el('boardUnsupportedWhy')); self.assertNotIn('plain http', el('boardUnsupportedWhy'))
+        self.assertIn('Help', self.pg.evaluate("document.getElementById('boardUnsupported').textContent"))
 
     def test_change_the_boards_wifi_from_the_editor(self):
         """Firmware 13: over Wi-Fi the Network dialog offers 'Change the board's Wi-Fi'. It asks first, sends POST /setup, drops the
