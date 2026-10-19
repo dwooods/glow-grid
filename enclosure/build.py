@@ -4,7 +4,7 @@ Usage:  python3 build.py [output_dir]      (default: ./out)
 Needs:  pip install numpy trimesh manifold3d shapely
 
 All sizes are millimetres and live in the 'shared dimensions' block and next to each part.
-Frame v5, holder v2 and cap v2 were printed 2026-10-15; v6/v3 (long lip notches, bracket clearance, slide-in cap, open cable slot) are not yet printed.
+Frame v5, holder v2 and cap v2 were printed 2026-10-15; v6/v3 (long lip notches, bracket clearance, slide-in cap, open cable slot) are not yet printed; v7/cradle v15 (2026-10-18) add 3 mm of depth (ZL 23 -> 26) and the cradle slot follows.
 """
 import os, sys
 import numpy as np, trimesh
@@ -32,9 +32,9 @@ def report(name,m):
 WALL=2.0; OUTER=166.0; INNER=OUTER-2*WALL        # 162 pocket
 HO=OUTER/2; HI=INNER/2                            # 83, 81
 BACK=3.0                                          # back plate
-ZL=23.0                                           # nominal back face of the panel when the cover holds the stack (20 mm of wiring space behind it)
+ZL=26.0                                           # v7 (2026-10-18): 23 -> 26, 3 mm more wiring room behind the panel (23.0 in v5/v6); everything below follows from it
 LIP_DROP=2.0                                      # lip top sits this far behind ZL: a backstop, so the stack can't fall back past it
-LIPZ=ZL-LIP_DROP                                  # 21.0
+LIPZ=ZL-LIP_DROP                                  # 24.0 (v7)
 LIP_W=3.0                                         # how far the lip overlaps the panel edge
 # (v6: the separate 25 mm panel-tail notch on the left wall, y -10..15, is gone; the panel tail must leave through the one gap below, or get its own entry in LIP_NOTCHES)
 # v6 (2026-10-17): the lip over the C3 blocked the wires soldered to the pin tips, so the left wall has ONE gap: (side, y0, y1), from 20 mm below the
@@ -43,7 +43,7 @@ LIP_NOTCHES=[('left',-62.0,-7.4)]   # top end 11 mm past the holder's edge (y -1
 FING_T=1.6; FING_W=10.0; FING_PRELOAD=0.8         # printed spring fingers: thickness, width, how far they are compressed when the cover is on
 FING_TIP=(ZL+FING_PRELOAD)                        # free height of the finger tip above the back plate
 PANEL_T=1.6; GRID_H=8.0
-H=ZL+PANEL_T+GRID_H                               # 32.6 frame rim height
+H=ZL+PANEL_T+GRID_H                               # 35.6 frame rim height (v7; 32.6 in v6)
 GRID_OUT=161.0                                    # grid outer (walls on +/-80 centres, 1 mm thick)
 
 def extrude_x(poly,x0,x1):
@@ -170,7 +170,7 @@ for k in ('next','onoff'):
     cuts.append(Cz(HOLE_XS[k],HOLE_Y,6.15,-1,BACK+1))              # two 12 mm panel-mount push buttons (next image, on/off)
 cuts.append(B(-38,3,-72.5,-59.5,BACK-0.4,BACK+0.5))                # 0.4 mm recess marking the flat spot for the 40 x 12 mm stick-on antenna
 frame=clean(difference([frame]+cuts,engine='manifold'))
-report('frame',frame); frame.export(OUT+'glow-grid_frame_v6.stl')
+report('frame',frame); frame.export(OUT+'glow-grid_frame_v7.stl')
 
 # ---------------- 2. GRID (separate print, black) ----------------
 bars=[]
@@ -275,7 +275,7 @@ for pg in ([_txt] if _txt.geom_type=='Polygon' else list(_txt.geoms)):
     e=trimesh.creation.extrude_polygon(pg,EMB_H+0.1); e.apply_translation([0,0,5.0-0.1]); e.merge_vertices(); e.remove_unreferenced_vertices(); _emb.append(e)
 slab_feet.extend(_emb)
 cradle=clean(union(blocks+slab_feet,engine='manifold'))
-report('cradle (two feet joined by a curved bar)',cradle); cradle.export(OUT+'glow-grid_desk_cradle_v14.stl')
+report('cradle (two feet joined by a curved bar)',cradle); cradle.export(OUT+'glow-grid_desk_cradle_v15.stl')
 print('base: feet',2*FOOT_HALF_W,'x',round(SLAB_U1-SLAB_U0,1),'mm r',FOOT_R,'; bar',BAR_W,'mm wide bowing',BAR_BOW,'mm forward; fillet r',FILLET_R)
 
 # ---------------- checks ----------------

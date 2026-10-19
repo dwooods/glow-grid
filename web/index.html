@@ -173,29 +173,17 @@
         <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
         <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
         <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
-        <label class="field-inline" title="The board moves to another stored sprite on its own: the next one in list order, or a random one (never the one already playing). Kept across a power cycle. Random needs firmware 16.">Rotate
+        <label class="field-inline" title="The board moves to a random stored sprite on its own (never the one already playing). Kept across a power cycle. Random order needs firmware 16; an older board goes through the list in order.">Rotate
           <select id="boardRotate">
             <option value="0">off</option>
-            <optgroup label="In list order">
-              <option value="10">every 10 s</option>
-              <option value="30">every 30 s</option>
-              <option value="60">every minute</option>
-              <option value="300">every 5 min</option>
-              <option value="900">every 15 min</option>
-              <option value="3600">every hour</option>
-              <option value="21600">every 6 hours</option>
-              <option value="86400">every day</option>
-            </optgroup>
-            <optgroup label="In random order" id="boardRotateRandom">
-              <option value="r10">every 10 s</option>
-              <option value="r30">every 30 s</option>
-              <option value="r60">every minute</option>
-              <option value="r300">every 5 min</option>
-              <option value="r900">every 15 min</option>
-              <option value="r3600">every hour</option>
-              <option value="r21600">every 6 hours</option>
-              <option value="r86400">every day</option>
-            </optgroup>
+            <option value="10">every 10 s</option>
+            <option value="30">every 30 s</option>
+            <option value="60">every minute</option>
+            <option value="300">every 5 min</option>
+            <option value="900">every 15 min</option>
+            <option value="3600">every hour</option>
+            <option value="21600">every 6 hours</option>
+            <option value="86400">every day</option>
           </select>
         </label>
         <label class="field-inline" id="boardBrightLbl" title="Play every stored sprite at this brightness, without sending them again. Needs firmware 19.">Brightness
@@ -208,11 +196,12 @@
           </select>
         </label>
         <span class="field-inline" id="boardSchedBox" title="Switch the panel on and off by itself every day, in 24-hour time (Los Angeles time). Needs firmware 20, and the board on Wi-Fi so it can learn the time.">
-          <label class="check"><input id="boardSched" type="checkbox" disabled> Schedule</label>
+          <label class="check"><input id="boardSched" type="checkbox" disabled> Schedule (24 h)</label>
           <label class="field-inline">on <input id="boardSchedOn" class="board-time" type="text" inputmode="numeric" maxlength="5" size="5" value="07:00" aria-label="Switch on at (24-hour, HH:MM)" disabled></label>
           <label class="field-inline">off <input id="boardSchedOff" class="board-time" type="text" inputmode="numeric" maxlength="5" size="5" value="20:00" aria-label="Switch off at (24-hour, HH:MM)" disabled></label>
         </span>
       </div>
+      <p class="hint board-sched-hint" id="boardSchedNote" hidden></p>
       <p class="hint board-sched-hint" id="boardSchedHint" hidden></p>
       <div class="btn-row" id="boardExamples" hidden>
         <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the original example sprites from the repo on the board. Never replaces a sprite that is already there.">Add examples</button>

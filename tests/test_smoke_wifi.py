@@ -174,10 +174,10 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#boardOffBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'off')
         self.pg.click('#boardOnBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'on')
         self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual(hb.rotate, 300)
-        self.assertTrue(self.pg.evaluate("Array.from(document.querySelectorAll('#boardRotateRandom option')).every((o) => o.disabled)"), 'firmware 9 has no random order')
+        self.assertIn('firmware 16', self.pg.evaluate("document.getElementById('boardRotate').title"), 'firmware 9 has no random order')
         hb.fw = 16; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
-        self.pg.select_option('#boardRotate', 'r300'); self.pg.wait_for_timeout(400); self.assertEqual((hb.shuffle, hb.rotate), (1, 300))
-        self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual((hb.shuffle, hb.rotate), (0, 300))
+        self.pg.select_option('#boardRotate', '0'); self.pg.wait_for_timeout(400); self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400)
+        self.assertEqual((hb.shuffle, hb.rotate), (1, 300), 'every rotation is random from firmware 16')
         hb.fw = 20; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)      # the schedule over HTTP: POST /sched?v=HHMM-HHMM
         self.pg.fill('#boardSchedOn', '07:00'); self.pg.fill('#boardSchedOff', '20:00'); self.pg.check('#boardSched'); self.pg.wait_for_timeout(400)
         self.assertEqual(hb.sched, '0700-2000')

@@ -320,7 +320,7 @@ function boardUi(connected) {
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
   $('boardNameHint').hidden = !connected;
-  if (!connected) $('boardSchedHint').hidden = true;      // boardShowSched shows it only when there is something to warn about
+  if (!connected) { $('boardSchedHint').hidden = true; $('boardSchedNote').hidden = true; }      // boardShowSched shows it only when there is something to warn about
   $('boardExamples').hidden = !connected;
   $('boardList').hidden = !connected;
   if (!connected) { $('boardList').innerHTML = ''; boardNames = []; boardFiles = []; boardPage = 0; $('boardPager').hidden = true; $('boardFree').textContent = ''; }
@@ -331,17 +331,14 @@ function boardNameHint() {             // says what Send will do with the name i
   if (!board) { el.textContent = ''; return; }
   el.textContent = boardNames.includes(name) ? `Send replaces “${name}” on the board (you are asked first). Change the Name to keep it and add a new sprite.` : `Send adds “${name}” as a new sprite.`;
 }
-let boardCanShuffle = false;          // the board reports shuffle= (firmware 16+), so the "random order" rotations can be chosen
-function boardShowRotate(sec, info) {  // the select shows the board's own setting (interval and list or random order); an unlisted value gets its own entry
+let boardCanShuffle = false;          // the board reports shuffle= (firmware 16+); every rotation is in random order where it can be
+function boardShowRotate(sec, info) {  // the select shows the board's own interval; an unlisted value gets its own entry
   const sel = $('boardRotate');
   boardCanShuffle = info.shuffle !== undefined;
-  const group = $('boardRotateRandom');
-  for (const o of group.querySelectorAll('option')) o.disabled = !boardCanShuffle;
-  group.title = boardCanShuffle ? '' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+  sel.title = boardCanShuffle ? '' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}): it goes through the list in order. Re-flash c3_player.ino from the repo.`;
   const n = parseInt(sec, 10) || 0;
-  const random = n > 0 && info.shuffle === '1';
-  const v = (random ? 'r' : '') + String(n);
-  if (!Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `every ${n} s`; (random ? group : sel.querySelector('optgroup')).appendChild(o); }
+  const v = String(n);
+  if (!Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `every ${n} s`; sel.appendChild(o); }
   sel.value = v;
   sel.disabled = false;
 }
@@ -358,12 +355,26 @@ function schedParse(text) {            // "7:05", "07:05" or "0705" -> "0705"; a
   return m ? m[1].padStart(2, '0') + m[2] : '';
 }
 const schedShow = (hhmm) => `${hhmm.slice(0, 2)}:${hhmm.slice(2)}`;
+function schedNoteText() {             // what the two times mean, in plain words (24-hour clock; "off" earlier than "on" runs overnight)
+  const on = schedParse($('boardSchedOn').value), off = schedParse($('boardSchedOff').value);
+  if (!on || !off) return { text: '24-hour clock: type times like 07:00 and 20:00 (19:00 is 7 pm).', bad: !!($('boardSchedOn').value.trim() && $('boardSchedOff').value.trim()) };
+  if (on === off) return { text: 'On and off need different times.', bad: true };
+  const m = (h) => Number(h.slice(0, 2)) * 60 + Number(h.slice(2)), span = (m(off) - m(on) + 1440) % 1440;
+  const dur = `${Math.floor(span / 60)} h${span % 60 ? ` ${span % 60} min` : ''}`;
+  const when = m(off) > m(on) ? `${schedShow(on)} to ${schedShow(off)} the same day` : `${schedShow(on)} until ${schedShow(off)} the next morning (overnight)`;
+  return { text: `24-hour clock. Lights are on from ${when}: ${dur} on, ${Math.floor((1440 - span) / 60)} h${(1440 - span) % 60 ? ` ${(1440 - span) % 60} min` : ''} off, every day.`, bad: false };
+}
+function schedNoteUpdate() {
+  const note = $('boardSchedNote'), r = schedNoteText();
+  note.textContent = r.text; note.classList.toggle('board-sched-bad', r.bad);
+}
 function boardShowSched(info) {        // the box shows the board's own schedule; a board without the field cannot do it
   const can = info.schedule !== undefined, box = $('boardSched');
   box.disabled = !can; $('boardSchedOn').disabled = !can; $('boardSchedOff').disabled = !can;
   const m = /^(\d{4})-(\d{4})$/.exec(info.schedule || '');
   box.checked = can && !!m;
   if (m) { $('boardSchedOn').value = schedShow(m[1]); $('boardSchedOff').value = schedShow(m[2]); }
+  $('boardSchedNote').hidden = !can; schedNoteUpdate();
   const hint = $('boardSchedHint');
   // a line shows only when there is something to know: an old firmware, or a board that has not learned the time yet (no live clock: it would go stale)
   if (!can) hint.textContent = `Schedule needs firmware ${BOARD_SCHED_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
@@ -581,11 +592,10 @@ $('boardSendBtn').addEventListener('click', boardSend);
 $('boardOnBtn').addEventListener('click', () => boardAct(() => board.on(), 'Lights on.'));
 $('boardOffBtn').addEventListener('click', () => boardAct(() => board.off(), 'Lights off. The panel stays dark until Lights on, even after a power cycle.'));
 $('boardRotate').addEventListener('change', () => {
-  const raw = $('boardRotate').value, random = raw[0] === 'r';
-  const sec = Number(random ? raw.slice(1) : raw);
+  const sec = Number($('boardRotate').value);
   const label = $('boardRotate').selectedOptions[0].textContent;
-  boardAct(async () => { if (sec && boardCanShuffle) await board.shuffle(random); return board.rotate(sec); },
-    sec ? `Rotating ${label}${random ? ' in random order' : ' in list order'}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
+  boardAct(async () => { if (sec && boardCanShuffle) await board.shuffle(true); return board.rotate(sec); },
+    sec ? `Rotating ${label}${boardCanShuffle ? ' in random order' : ' in list order (random order needs newer firmware)'}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
 });
 function boardSchedApply() {
   const box = $('boardSched');
@@ -597,7 +607,7 @@ function boardSchedApply() {
   boardAct(() => board.sched(on, off), `Schedule on: the panel switches on at ${schedShow(on)} and off at ${schedShow(off)} every day. A manual On or Off holds until the next change. The board remembers this after a power cycle.`);
 }
 $('boardSched').addEventListener('change', boardSchedApply);
-for (const id of ['boardSchedOn', 'boardSchedOff']) $(id).addEventListener('change', () => { if ($('boardSched').checked) boardSchedApply(); });
+for (const id of ['boardSchedOn', 'boardSchedOff']) { $(id).addEventListener('input', schedNoteUpdate); $(id).addEventListener('change', () => { schedNoteUpdate(); if ($('boardSched').checked) boardSchedApply(); }); }
 $('boardBright').addEventListener('change', () => {
   const pct = Number($('boardBright').value);
   boardAct(() => board.bright(pct), pct ? `Every sprite now plays at brightness 0.${pct}. The board remembers this after a power cycle.` : 'Each sprite plays at its own brightness again.');
