@@ -161,7 +161,7 @@
       <p class="hint board-purpose">Send the drawing to an ESP32-C3 player over USB or Wi-Fi, then play, rotate or delete the sprites stored on it. Nothing else here needs a board.</p>
       <p class="hint board-unsupported" id="boardUnsupported" hidden><strong>USB is not supported in this browser.</strong> <span id="boardUnsupportedWhy">USB needs Chrome or Edge on a computer;</span> Connect over Wi-Fi works here if the board is on your network. Help ▸ Board card lists where each works. <em>Export for ESP32-C3</em> still saves the sprite file.</p>
       <div class="btn-row">
-        <button id="boardConnectBtn" class="btn" type="button" title="Pick the ESP32-C3's USB port">Connect over USB</button>
+        <button id="boardConnectBtn" class="btn" type="button" title="Pick the board's USB port">Connect over USB</button>
         <button id="boardWifiBtn" class="btn btn-quiet" type="button" title="Connect to a board on your Wi-Fi (the Network button at the top sets the address)">Connect over Wi-Fi</button>
         <button id="boardDisconnectBtn" class="btn btn-quiet" type="button" hidden>Disconnect</button>
       </div>
@@ -172,7 +172,7 @@
         <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
         <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
         <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
-        <label class="field-inline" title="The board moves to a random stored sprite on its own (never the one already playing). Kept across a power cycle. Random order needs firmware 16; an older board goes through the list in order.">Rotate
+        <label class="field-inline" title="The board moves to a random stored sprite on its own (never the one already playing). Kept across a power cycle. A board with old software goes through the list in order; update the board to get random order.">Rotate
           <select id="boardRotate">
             <option value="0">off</option>
             <option value="10">every 10 s</option>
@@ -185,7 +185,7 @@
             <option value="86400">every day</option>
           </select>
         </label>
-        <label class="field-inline" id="boardBrightLbl" title="Play every stored sprite at this brightness, without sending them again. Needs firmware 19.">Brightness
+        <label class="field-inline" id="boardBrightLbl" title="Play every stored sprite at this brightness, without sending them again.">Brightness
           <select id="boardBright" disabled>
             <option value="0">each sprite's own</option>
             <option value="10">0.1</option>
@@ -194,7 +194,7 @@
             <option value="40">0.4</option>
           </select>
         </label>
-        <span class="field-inline" id="boardSchedBox" title="Switch the panel on and off by itself every day, in 24-hour time (Los Angeles time). Needs firmware 20, and the board on Wi-Fi so it can learn the time.">
+        <span class="field-inline" id="boardSchedBox" title="Switch the panel on and off by itself every day, in 24-hour time (Los Angeles time). The board must be on Wi-Fi so it can learn the time.">
           <label class="check"><input id="boardSched" type="checkbox" disabled> Schedule (24 h)</label>
           <label class="field-inline">on <input id="boardSchedOn" class="board-time" type="text" inputmode="numeric" maxlength="5" size="5" value="07:00" aria-label="Switch on at (24-hour, HH:MM)" disabled></label>
           <label class="field-inline">off <input id="boardSchedOff" class="board-time" type="text" inputmode="numeric" maxlength="5" size="5" value="20:00" aria-label="Switch off at (24-hour, HH:MM)" disabled></label>
@@ -203,7 +203,7 @@
       <p class="hint board-sched-hint" id="boardSchedNote" hidden></p>
       <p class="hint board-sched-hint" id="boardSchedHint" hidden></p>
       <div class="btn-row" id="boardExamples" hidden>
-        <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the original example sprites from the repo on the board. Never replaces a sprite that is already there.">Add examples</button>
+        <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the built-in example sprites on the board. Never replaces a sprite that is already there.">Add examples</button>
         <button id="boardRemoveExBtn" class="btn btn-quiet" type="button" title="Delete the example sprites from the board, including older versions of them and examples that have been replaced. Keeps any you changed.">Remove examples</button>
       </div>
       <ul class="board-list" id="boardList" hidden></ul>
@@ -254,8 +254,8 @@
       <h3>Set up the board's Wi-Fi</h3>
       <p class="hint" id="netSetupHint"></p>
       <label id="netKeyRow" hidden>Setup key (on the board's label) <input id="netKey" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" maxlength="24"></label>
-      <div class="btn-row"><button id="netSetupBtn" class="btn btn-quiet" type="button" hidden title="Firmware 13: the board leaves this network and opens GlowGrid-Setup for 5 minutes">Change the board's Wi-Fi…</button>
-        <button id="netKeyShowBtn" class="btn btn-quiet" type="button" hidden title="Firmware 18, over USB: shows the key that is the password of GlowGrid-Setup">Show setup key</button></div>
+      <div class="btn-row"><button id="netSetupBtn" class="btn btn-quiet" type="button" hidden title="The board leaves this network and opens its own setup network for 5 minutes. The password appears on the board's panel.">Change the board's Wi-Fi…</button>
+        <button id="netKeyShowBtn" class="btn btn-quiet" type="button" hidden title="Over USB: shows the setup key, the password of the board's setup network (boards with old software only)">Show setup key</button></div>
       <div id="netScanRow">
         <div class="btn-row"><button id="netScanBtn" class="btn" type="button">Scan for networks</button></div>
         <label>Networks found <select id="netPick" aria-label="Networks the board found"><option value="">Press Scan first</option></select></label>

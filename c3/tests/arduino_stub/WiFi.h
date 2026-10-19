@@ -7,7 +7,13 @@
 #define WIFI_POWER_8_5dBm 34
 #define WIFI_OFF 0
 #define WIFI_AUTH_OPEN 0
+#define WIFI_AUTH_WPA2_PSK 3
+#define WIFI_AUTH_WPA3_PSK 6
 enum wl_status_t { WL_IDLE_STATUS = 0, WL_NO_SSID_AVAIL = 1, WL_CONNECTED = 3, WL_DISCONNECTED = 6 };
+enum arduino_event_id_t { ARDUINO_EVENT_WIFI_AP_STACONNECTED = 1, ARDUINO_EVENT_WIFI_AP_STADISCONNECTED = 2 };
+struct arduino_event_info_t { struct { int reason; } wifi_ap_stadisconnected; };
+struct EspStub { unsigned getFreeHeap() { return 123456; } };
+static EspStub ESP;
 struct IPAddress { String toString() const { return String("127.0.0.1"); } };
 class WiFiStub {
   bool began = false;
@@ -37,9 +43,12 @@ class WiFiStub {
   void scanDelete() { nHits = 0; }
   bool setHostname(const char* h) { log("hostname", h); return true; }
   void setAutoReconnect(bool) {}
+  void onEvent(void (*)(arduino_event_id_t, arduino_event_info_t)) {}
   // Access point: only logged ("softap <ssid>", "softap off") so the tests can see setup mode start and end.
-  // The password goes to the log too ("softap <ssid> <password>", or "(open)"), so the tests can check the setup network is WPA2.
-  bool softAP(const char* ssid, const char* pass = NULL) { log("softap", ssid, pass ? pass : "(open)"); return true; }
+  // The password and the security mode go to the log too ("softap <ssid> <password> wpa3", or "(open)"), so the tests can check the setup network.
+  bool softAP(const char* ssid, const char* pass = NULL, int = 1, int = 0, int = 4, bool = false, int auth = WIFI_AUTH_WPA2_PSK) {
+    std::string pw = pass ? pass : "(open)"; pw += auth == WIFI_AUTH_WPA3_PSK ? " wpa3" : auth == WIFI_AUTH_OPEN ? " open" : " wpa2";
+    log("softap", ssid, pw.c_str()); return true; }
   bool softAPdisconnect(bool = false) { log("softap", "off"); return true; }
   IPAddress softAPIP() { return IPAddress(); }
   bool setTxPower(int) { return true; }

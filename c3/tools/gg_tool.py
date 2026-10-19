@@ -22,7 +22,7 @@ Wi-Fi (firmware 9). Set it up once over USB, then the same commands work over th
     python3 gg_tool.py wifi clear
     python3 gg_tool.py --host glowgrid.local list            # or the board's address, e.g. --host 192.168.1.50
     python3 gg_tool.py --host glowgrid.local put lantern.gg  # every command except wifi works this way
-    python3 gg_tool.py wifi key                               # the setup key: the password of the GlowGrid-Setup network (firmware 18); over USB only
+    python3 gg_tool.py wifi key                               # the stored setup key (firmware 18 to 20 only; firmware 21 shows a new key on the panel instead); over USB only
 The network side has no password yet: anyone on your home network can change the sprites (other websites cannot, from firmware 18).
 
 Close the Arduino Serial Monitor first: only one program can use the port.
@@ -199,7 +199,7 @@ class Board:
         return self.simple("WIFI CLEAR")
 
     def wifi_key(self, new=False):
-        """The board's setup key (the GlowGrid-Setup password; firmware 18). USB only. new=True makes a fresh one."""
+        """The board's stored setup key (firmware 18 to 20 only; 21 has none, its key is shown on the panel). USB only. new=True makes a fresh one."""
         return self.simple("WIFI KEY NEW" if new else "WIFI KEY")
 
 
@@ -353,7 +353,12 @@ def main():
                 for name, rssi, secure in board.wifi_scan():
                     print(f"  {name:<34} {rssi:>4} dBm  {'password' if secure else 'open'}")
             elif a.wcmd == "key":
-                print(board.wifi_key(a.new))
+                try:
+                    print(board.wifi_key(a.new))
+                except RuntimeError as e:
+                    if "usage" not in str(e):
+                        raise
+                    print("This firmware (21 or later) has no stored setup key: the setup network's password is the 8 digits shown on the board's panel.")
             else:
                 print(board.wifi_status() if a.wcmd == "status" else board.wifi_clear())
         elif a.cmd == "list":

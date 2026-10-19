@@ -246,7 +246,7 @@ class HttpBoard {
   async shuffle(on) { return this.call('POST', `/shuffle?on=${on ? 1 : 0}`); }
   async bright(pct) { return this.call('POST', `/bright?pct=${encodeURIComponent(pct)}`); }
   async sched(on, off) { return this.call('POST', `/sched?v=${on ? `${on}-${off}` : 'off'}`); }
-  async setup(key) { return this.call('POST', '/setup' + (key ? `?key=${encodeURIComponent(key)}` : '')); }   // firmware 13: leave this network and open GlowGrid-Setup; firmware 18 wants the setup key
+  async setup(key) { return this.call('POST', '/setup' + (key ? `?key=${encodeURIComponent(key)}` : '')); }   // firmware 13: leave this network and open GlowGrid-Setup; firmware 18 to 20 want the setup key, 21 on needs none
   async crc(name) {
     const line = await this.call('GET', `/crc?name=${encodeURIComponent(name)}`);
     const m = /crc=([0-9a-f]{8}) size=(\d+)/.exec(line);
@@ -292,7 +292,9 @@ const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);     
 const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
 const BOARD_SCAN_FW = 10;          // the first firmware that can list nearby networks (WIFI SCAN)
 const BOARD_SETUP_FW = 13;         // the first firmware with setup mode (POST /setup: the board hosts its own Wi-Fi setup page)
-const BOARD_KEY_FW = 18;           // the first firmware with a setup key: GlowGrid-Setup is WPA2 and POST /setup needs the key
+const BOARD_KEY_FW = 18;           // firmware 18 to 20: GlowGrid-Setup is WPA2 with a stored setup key, and POST /setup needs the key
+const BOARD_PANELKEY_FW = 21;      // firmware 21 on: the setup network is WPA3, new each time (GlowGrid-Setup-NNNN), and its 8-digit key is shown on the panel; no typed key
+const boardNeedsKey = (fw) => Number(fw) >= BOARD_KEY_FW && Number(fw) < BOARD_PANELKEY_FW;
 const BOARD_HOST_KEY = 'ggBoardHost';
 const BOARD_HOST_DEFAULT = 'glowgrid.local';
 // The editor also runs from the board itself (firmware 12 serves it at http://glowgrid.local/ or its IP address). Then the page and the board
@@ -335,7 +337,7 @@ let boardCanShuffle = false;          // the board reports shuffle= (firmware 16
 function boardShowRotate(sec, info) {  // the select shows the board's own interval; an unlisted value gets its own entry
   const sel = $('boardRotate');
   boardCanShuffle = info.shuffle !== undefined;
-  sel.title = boardCanShuffle ? '' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}): it goes through the list in order. Re-flash c3_player.ino from the repo.`;
+  sel.title = boardCanShuffle ? '' : 'Random order needs newer board software, so this board goes through the list in order. Update the board to get it.';
   const n = parseInt(sec, 10) || 0;
   const v = String(n);
   if (!Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `every ${n} s`; sel.appendChild(o); }
@@ -347,7 +349,7 @@ function boardShowBright(info) {        // the select shows the board's own sett
   const v = String(parseInt(info.bright, 10) || 0);
   if (can && !Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `0.${v}`; sel.appendChild(o); }
   sel.value = can ? v : '0'; sel.disabled = !can;
-  $('boardBrightLbl').title = can ? 'Play every stored sprite at this brightness, without sending them again. "Each sprite\'s own" uses the brightness saved in each file.' : `Board brightness needs firmware ${BOARD_BRIGHT_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+  $('boardBrightLbl').title = can ? 'Play every stored sprite at this brightness, without sending them again. "Each sprite\'s own" uses the brightness saved in each file.' : 'Board brightness needs newer board software. Update the board to use it.';
 }
 // Daily schedule (firmware 20): times are typed as 24-hour HH:MM, kept as HHMM on the wire.
 function schedParse(text) {            // "7:05", "07:05" or "0705" -> "0705"; anything else -> ''
@@ -377,7 +379,7 @@ function boardShowSched(info) {        // the box shows the board's own schedule
   $('boardSchedNote').hidden = !can; schedNoteUpdate();
   const hint = $('boardSchedHint');
   // a line shows only when there is something to know: an old firmware, or a board that has not learned the time yet (no live clock: it would go stale)
-  if (!can) hint.textContent = `Schedule needs firmware ${BOARD_SCHED_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+  if (!can) hint.textContent = 'The daily schedule needs newer board software. Update the board to use it.';
   else hint.textContent = /^\d{4}$/.test(info.clock || '') ? '' : 'The board has no time yet: it learns it over Wi-Fi shortly after joining, and a schedule waits until then.';
   hint.hidden = !hint.textContent;
 }
@@ -420,7 +422,7 @@ function boardRenderList() {
     const load = document.createElement('button'); load.type = 'button'; load.className = 'btn btn-quiet'; load.textContent = 'Load';
     const canGet = Number(boardFw) >= BOARD_GET_FW;
     load.disabled = !canGet;
-    load.title = canGet ? 'Put this sprite in the editor grid to change it' : `Load needs firmware ${BOARD_GET_FW} or later (this board has ${boardFw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+    load.title = canGet ? 'Put this sprite in the editor grid to change it' : 'Load needs newer board software. Update the board to use it.';
     load.addEventListener('click', () => boardLoad(f.name));
     const play = document.createElement('button'); play.type = 'button'; play.className = 'btn btn-quiet'; play.textContent = 'Play';
     play.disabled = playing;
@@ -491,8 +493,8 @@ async function boardAttach(b) {
   boardUi(true);
   try {
     await boardRefresh();
-    const fwNote = boardFw ? `Firmware ${boardFw}.` : 'Firmware older than 3 (re-flash from the repo).';
-    boardSay(`Connected${b.via === 'wifi' ? ` over Wi-Fi (${b.host})` : ''}. ${fwNote}` + (b.via === 'wifi' && Number(boardFw) && Number(boardFw) < BOARD_WIFI_FW ? ' (Wi-Fi needs firmware 9, so this will not last.)' : ''), 'ok');
+    const fwNote = boardFw ? `Board software version ${boardFw}.` : 'The board software is very old: update it.';
+    boardSay(`Connected${b.via === 'wifi' ? ` over Wi-Fi (${b.host})` : ''}. ${fwNote}` + (b.via === 'wifi' && Number(boardFw) && Number(boardFw) < BOARD_WIFI_FW ? ' (Wi-Fi needs newer board software, so this will not last.)' : ''), 'ok');
   } catch (err) { boardSay(`Board said: ${err.message}`, 'err'); }
   netSync();
 }
@@ -560,7 +562,7 @@ async function boardRemoveExamples() {
   const known = new Set([...GG_EXAMPLES.map((e) => e.name), ...ggLegacyNames()]);
   const mine = boardNames.filter((n) => known.has(n));       // by name first; the CRC check below decides which are really ours
   if (!mine.length) { boardSay('No examples are on the board.', 'ok'); return; }
-  if (!(Number(boardFw) >= BOARD_CRC_FW)) { boardSay(`Remove examples needs firmware ${BOARD_CRC_FW} or later (this board has ${boardFw || 'an older one'}), so it can tell your own sprites from the examples. Re-flash c3_player.ino from the repo.`, 'err'); return; }
+  if (!(Number(boardFw) >= BOARD_CRC_FW)) { boardSay('Remove examples needs newer board software, so it can tell your own sprites from the examples. Update the board to use it.', 'err'); return; }
   if (!confirm(`Check ${mine.length} sprite${mine.length === 1 ? '' : 's'} with an example's name and remove the ones that are still an example (this version or an older one)? Any you changed are kept.`)) { boardSay('Nothing removed.', ''); return; }
   boardBusy(true);
   const removed = [], kept = [];
@@ -595,7 +597,7 @@ $('boardRotate').addEventListener('change', () => {
   const sec = Number($('boardRotate').value);
   const label = $('boardRotate').selectedOptions[0].textContent;
   boardAct(async () => { if (sec && boardCanShuffle) await board.shuffle(true); return board.rotate(sec); },
-    sec ? `Rotating ${label}${boardCanShuffle ? ' in random order' : ' in list order (random order needs newer firmware)'}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
+    sec ? `Rotating ${label}${boardCanShuffle ? ' in random order' : ' in list order (random order needs newer board software)'}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
 });
 function boardSchedApply() {
   const box = $('boardSched');
@@ -636,19 +638,19 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
   $('netScanBtn').disabled = !canScan;
   $('netPick').disabled = !canScan || $('netPick').options.length < 2;
   $('netScanRow').hidden = !fw9;
-  $('netScanHint').textContent = fw9 && !canScan ? `Scan needs firmware ${BOARD_SCAN_FW}+ (board has ${boardFw}). Type the name below.` : '';
+  $('netScanHint').textContent = fw9 && !canScan ? 'Scanning needs newer board software. Type the name below.' : '';
   $('netConnectBtn').disabled = !!board && boardVia === 'wifi';
   const w = boardInfo.wifi && !['-', 'off'].includes(boardInfo.wifi) ? boardInfo.wifi : '', ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
   $('netSaved').textContent = !usb ? 'Connect the board over USB to see or forget its saved network.' : !fw9 ? 'This board is too old to store a network.' : w ? `${w}${ip ? `, address ${ip}` : ', not joined'}` : 'None saved.';
   $('netClearBtn').hidden = !usb || !fw9 || !w;
   const canSetup = !!board && boardVia === 'wifi' && Number(boardFw) >= BOARD_SETUP_FW;
   $('netSetupBtn').hidden = !canSetup;
-  $('netKeyRow').hidden = !(canSetup && Number(boardFw) >= BOARD_KEY_FW);
-  $('netKeyShowBtn').hidden = !(usb && Number(boardFw) >= BOARD_KEY_FW);
+  $('netKeyRow').hidden = !(canSetup && boardNeedsKey(boardFw));
+  $('netKeyShowBtn').hidden = !(usb && boardNeedsKey(boardFw));
   $('netSetupHint').textContent = !board ? 'Connect the board over USB first (Board card).'
     : boardVia === 'wifi' ? (canSetup ? 'Connected over Wi-Fi. To change network, press Change the board\'s Wi-Fi.'
       : 'Connected over Wi-Fi. To change network, reconnect over USB.')
-    : !fw9 ? `Needs firmware ${BOARD_WIFI_FW}+ (board has ${boardFw || 'older'}). Re-flash.`
+    : !fw9 ? 'Wi-Fi setup needs newer board software. Update the board.'
     : '2.4 GHz only. Stored on the board.';
 }
 function netResetForm() {             // blank name and password, and drop the scan list, so nothing stale is shown
@@ -735,22 +737,24 @@ async function netClear() {
 }
 async function netSetup() {            // firmware 13: the board leaves this network and hosts GlowGrid-Setup, where its Wi-Fi can be changed from any phone
   if (!board || boardVia !== 'wifi') return;
-  const needKey = Number(boardFw) >= BOARD_KEY_FW, key = $('netKey').value.trim();
+  const needKey = boardNeedsKey(boardFw), panelKey = Number(boardFw) >= BOARD_PANELKEY_FW, key = $('netKey').value.trim();
   if (needKey && !key) { netSay('Type the setup key first. It is on the board\'s label (or press Show setup key while the board is on USB).', 'err'); $('netKey').focus(); return; }
-  if (!confirm('The board will leave your Wi-Fi and open GlowGrid-Setup for 5 minutes. Continue?')) return;
+  if (!confirm(panelKey ? 'The board will leave your Wi-Fi and open its setup network for 5 minutes. Its password appears on the board\'s panel, so you need to be able to see the panel. Continue?'
+    : 'The board will leave your Wi-Fi and open GlowGrid-Setup for 5 minutes. Continue?')) return;
   const b = board;
   $('netSetupBtn').disabled = true;
   try {
     await b.setup(needKey ? key : '');
     $('netKey').value = '';
     await b.close();                     // the link ends now; the card clears itself
-    const msg = needKey ? 'Join the Wi-Fi network GlowGrid-Setup. Its password is the same setup key. If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.'
-      : 'Join the Wi-Fi network GlowGrid-Setup (no password on this old firmware: update it). If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.';
+    const msg = panelKey ? 'Join the Wi-Fi network GlowGrid-Setup-NNNN (the 4 digits are new each time). Its password is the 8 digits shown on the board\'s panel. If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes. Afterwards, Forget the GlowGrid-Setup network on your phone.'
+      : needKey ? 'Join the Wi-Fi network GlowGrid-Setup. Its password is the same setup key. If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.'
+      : 'Join the Wi-Fi network GlowGrid-Setup (this board has old software and the network has no password: update the board). If no page opens, go to http://192.168.4.1/ . It closes in 5 minutes.';
     netSay(msg, 'ok'); boardSay(msg, 'ok');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { $('netSetupBtn').disabled = false; netSync(); }
 }
-async function netShowKey() {          // firmware 18, over USB: the setup key, to print on the board's label
+async function netShowKey() {          // firmware 18 to 20, over USB: the setup key, to print on the board's label
   if (!board || boardVia !== 'usb') return;
   try { netSay(`Setup key: ${await board.wifiKey()}. Print it on the board's label. It is the password of GlowGrid-Setup and the code for Change the board's Wi-Fi.`, 'ok'); }
   catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }

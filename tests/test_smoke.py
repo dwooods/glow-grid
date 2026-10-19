@@ -320,7 +320,7 @@ class Smoke(unittest.TestCase):
         self.assertIn('ESP32-C3', self.pg.evaluate("document.querySelector('#boardCard .board-purpose').textContent"), 'a first-time user is told what the card is for')
         self.assertTrue(self.pg.evaluate("document.getElementById('boardTools').hidden"), 'tools hidden until connected')
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
-        self.assertEqual(status(), 'Connected. Firmware 7.')
+        self.assertEqual(status(), 'Connected. Board software version 7.')
         self.assertEqual(rows(), [])
         self.assertIn('Nothing stored', self.pg.evaluate("document.getElementById('boardList').textContent"))
         # a blank drawing is refused before anything is sent (the page opens on one black frame)
@@ -365,7 +365,7 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("document.querySelectorAll('#boardRotate optgroup').length"), 0, 'no groups')
         self.assertEqual(self.pg.evaluate("Array.from(document.querySelectorAll('#boardRotate option')).map((o) => o.textContent).filter((t) => /random|list/i.test(t)).length"), 0, 'the word random is not in the list')
         self.assertEqual(self.pg.evaluate("document.getElementById('boardShuffle')"), None, 'the old checkbox is gone')
-        self.assertIn('firmware 16', self.pg.evaluate("document.getElementById('boardRotate').title"))
+        self.assertIn('newer board software', self.pg.evaluate("document.getElementById('boardRotate').title"))
         self.pg.evaluate('window.__fakeFw = 16'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').title"), '')
         self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400)
@@ -378,7 +378,7 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate('window.__fakeRotate'), 0); self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), '0')
         # board brightness: greyed out before firmware 19, then a select that sends BRIGHT and follows the board
         self.assertTrue(self.pg.evaluate("document.getElementById('boardBright').disabled"))
-        self.assertIn('firmware 19', self.pg.evaluate("document.getElementById('boardBrightLbl').title"))
+        self.assertIn('newer board software', self.pg.evaluate("document.getElementById('boardBrightLbl').title"))
         self.pg.evaluate('window.__fakeFw = 19'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.assertFalse(self.pg.evaluate("document.getElementById('boardBright').disabled"))
         self.assertEqual(self.pg.evaluate("document.getElementById('boardBright').value"), '0')
@@ -390,7 +390,7 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate('window.__fakeBright'), 0); self.assertIn('own brightness', status())
         # schedule: greyed out before firmware 20, then a checkbox with two 24-hour times that sends SCHED and follows the board
         dis = "['boardSched', 'boardSchedOn', 'boardSchedOff'].every((i) => document.getElementById(i).disabled)"
-        self.assertTrue(self.pg.evaluate(dis)); self.assertIn('firmware 20', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
+        self.assertTrue(self.pg.evaluate(dis)); self.assertIn('newer board software', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
         self.pg.evaluate('window.__fakeFw = 20'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.assertFalse(self.pg.evaluate(dis)); self.assertFalse(self.pg.evaluate("document.getElementById('boardSched').checked"))
         self.assertIn('no time yet', self.pg.evaluate("document.getElementById('boardSchedHint').textContent"))
@@ -646,7 +646,7 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate(self.SEED, ['old'])
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.assertTrue(self.pg.evaluate("document.querySelector('#boardList .board-row button').disabled"))
-        self.assertIn('firmware 8', self.pg.evaluate("document.querySelector('#boardList .board-row button').title"))
+        self.assertIn('newer board software', self.pg.evaluate("document.querySelector('#boardList .board-row button').title"))
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('GET')).length"), 0)
         # File > Open .gg sprite: from a file on the computer, named after the file
         blob = self.pg.evaluate("Array.from(ggBytes([new Array(256).fill('#abcdef')], 16, 16, 9, 0.3, 2.2))")
@@ -697,7 +697,7 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)
         n = len(self.store()); self.assertEqual(n, 37)
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(400)
-        self.assertIn('firmware 7', self.status()); self.assertEqual(len(self.store()), n)
+        self.assertIn('newer board software', self.status()); self.assertEqual(len(self.store()), n)
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('CRC') || l.startsWith('DEL')).length"), 0)
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         # a board with no room for all of them: nothing is sent, and the message says why
@@ -774,7 +774,7 @@ class Smoke(unittest.TestCase):
         # 2026-10-15: Disconnect left COM3 held until the tab was closed, so the Arduino IDE could not flash.
         self.fresh_page(FAKE_PORT.replace('() => {', '(() => {', 1) + ')()')
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(800)
-        self.assertEqual(self.pg.evaluate("document.getElementById('boardStatus').textContent"), 'Connected. Firmware 3.')
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardStatus').textContent"), 'Connected. Board software version 3.')
         self.assertEqual(self.pg.evaluate('window.__port.signals'), {'dataTerminalReady': True, 'requestToSend': False})
         self.assertEqual(self.pg.evaluate('window.__port.writes.slice(0, 3)'), ['PING', 'LIST', 'INFO'])
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(500)

@@ -29,7 +29,7 @@ class FakeHttpBoard:
         self.fail_put = None                      # an ERR text to answer a /put with
         self.damage_get = False
         self.setups = 0                           # POST /setup calls (firmware 13)
-        self.key = 'k7m2xq9p4d'                   # the setup key (firmware 18): POST /setup needs ?key=
+        self.key = 'k7m2xq9p4d'                   # the setup key (firmware 18 to 20): POST /setup needs ?key=; firmware 21 shows a key on the panel and needs none
 
     def install(self, ctx, host=None):
         ctx.route(f'http://{host or self.HOST}/**', self.handle)
@@ -69,9 +69,9 @@ class FakeHttpBoard:
         if u.path in ('/off', '/on'):
             self.panel = u.path[1:]; return self.reply(route, 200, f'OK panel {self.panel}\n')
         if u.path == '/setup' and self.fw >= 13:
-            if self.fw >= 18 and q.get('key', '').lower().replace('-', '').replace(' ', '') != self.key:
+            if 18 <= self.fw < 21 and q.get('key', '').lower().replace('-', '').replace(' ', '') != self.key:
                 return self.reply(route, 403, 'ERR wrong setup key')
-            self.setups += 1; return self.reply(route, 200, 'OK setup mode starts in a moment: join the Wi-Fi network GlowGrid-Setup and open http://192.168.4.1/\n')
+            self.setups += 1; self.setup_query = u.query; return self.reply(route, 200, 'OK setup mode starts in a moment: join the Wi-Fi network GlowGrid-Setup-NNNN and open http://192.168.4.1/\n')
         if u.path == '/rotate': self.rotate = int(q['s']); return self.reply(route, 200, f'OK rotate {self.rotate}\n')
         if u.path == '/sched' and self.fw >= 20: self.sched = q['v']; return self.reply(route, 200, 'OK schedule off\n' if q['v'] == 'off' else f'OK schedule {q["v"]}\n')
         if u.path == '/shuffle' and self.fw >= 16: self.shuffle = int(q['on']); return self.reply(route, 200, f'OK shuffle {self.shuffle}\n')
@@ -152,7 +152,7 @@ class SmokeWifi(unittest.TestCase):
         # connect: pasted http:// and a trailing slash are tolerated; the dialog closes; the address is remembered
         self.pg.fill('#netHost', 'http://glowgrid.local/'); self.pg.click('#netConnectBtn'); self.pg.wait_for_timeout(700)
         self.assertFalse(self.pg.evaluate("document.getElementById('netDlg').open"))
-        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Firmware 9.')
+        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Board software version 9.')
         self.assertIn('Wi-Fi glowgrid.local', el('boardLink')); self.assertEqual(self.rows(), [])
         self.assertEqual(self.pg.evaluate("localStorage.getItem('ggBoardHost')"), 'glowgrid.local')
         self.assertFalse(el('boardTools', 'hidden')); self.assertTrue(el('boardConnectBtn', 'hidden')); self.assertTrue(el('boardWifiBtn', 'hidden'))
@@ -174,7 +174,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#boardOffBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'off')
         self.pg.click('#boardOnBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'on')
         self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual(hb.rotate, 300)
-        self.assertIn('firmware 16', self.pg.evaluate("document.getElementById('boardRotate').title"), 'firmware 9 has no random order')
+        self.assertIn('newer board software', self.pg.evaluate("document.getElementById('boardRotate').title"), 'firmware 9 has no random order')
         hb.fw = 16; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.pg.select_option('#boardRotate', '0'); self.pg.wait_for_timeout(400); self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400)
         self.assertEqual((hb.shuffle, hb.rotate), (1, 300), 'every rotation is random from firmware 16')
@@ -213,7 +213,7 @@ class SmokeWifi(unittest.TestCase):
         el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
         self.pg.evaluate('window.__fakeFw = 9')
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
-        self.assertEqual(self.status(), 'Connected. Firmware 9.'); self.assertIn('USB', el('boardLink'))
+        self.assertEqual(self.status(), 'Connected. Board software version 9.'); self.assertIn('USB', el('boardLink'))
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertFalse(el('netSaveBtn', 'disabled')); self.assertIn('None saved', el('netSaved')); self.assertTrue(el('netClearBtn', 'hidden'))
         self.assertIn('2.4 GHz', el('netSetupHint')); self.assertFalse(el('netConnectBtn', 'disabled'))
@@ -240,7 +240,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.pg.evaluate('window.__fakeFw = 8'); self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
-        self.assertTrue(el('netSaveBtn', 'disabled')); self.assertIn('firmware 9', el('netSetupHint'))
+        self.assertTrue(el('netSaveBtn', 'disabled')); self.assertIn('newer board software', el('netSetupHint'))
         self.assertEqual(self.errors, [])
 
     def test_scan_and_pick_a_network(self):
@@ -281,7 +281,7 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#netClose'); self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.pg.evaluate('window.__fakeFw = 9'); self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
-        self.assertTrue(el('netScanBtn', 'disabled')); self.assertIn('firmware 10', el('netScanHint')); self.assertFalse(el('netSaveBtn', 'disabled'))
+        self.assertTrue(el('netScanBtn', 'disabled')); self.assertIn('newer board software', el('netScanHint')); self.assertFalse(el('netSaveBtn', 'disabled'))
         self.assertEqual(self.errors, [])
 
     def test_editor_served_by_the_board_connects_to_it(self):
@@ -291,7 +291,7 @@ class SmokeWifi(unittest.TestCase):
         self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
         self.pg.wait_for_timeout(700)
         el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
-        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Firmware 12.')
+        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Board software version 12.')
         self.assertIn('Wi-Fi glowgrid.local', el('boardLink')); self.assertFalse(el('boardTools', 'hidden'))
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertEqual(el('netHost', 'value'), 'glowgrid.local')
@@ -318,7 +318,7 @@ class SmokeWifi(unittest.TestCase):
         dialogs = []
         answer = {'ok': False}
         self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept() if answer['ok'] else d.dismiss()))
-        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Firmware 13.')
+        self.assertEqual(self.status(), 'Connected over Wi-Fi (glowgrid.local). Board software version 13.')
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertFalse(el('netSetupBtn', 'hidden')); self.assertIn('Change the board', el('netSetupHint'))
         self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(300)                  # declined
@@ -353,6 +353,27 @@ class SmokeWifi(unittest.TestCase):
         self.pg.fill('#netKey', 'K7M2-XQ9P-4D'); self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(500)
         self.assertEqual(hb.setups, 1); self.assertTrue(el('boardTools', 'hidden'))
         self.assertIn('password', el('netStatus')); self.assertEqual(el('netKey', 'value'), '')
+        self.assertEqual(self.errors, [])
+
+    def test_firmware_21_needs_no_typed_key(self):
+        """Firmware 21: the setup network's password is shown on the panel, so the editor has no key field and no Show-key button; the button
+        sends POST /setup with no key, warns that the panel must be visible, and the message tells where the digits are and to Forget the network."""
+        hb = FakeHttpBoard(fw=21)
+        self.fresh_page("window.__ggBoardOrigin = 'glowgrid.local'", before=hb.install); self.board_helpers()
+        self.pg.wait_for_timeout(700)
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        dialogs = []
+        self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept()))
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertTrue(el('netKeyRow', 'hidden'), 'no key field on firmware 21')
+        self.assertTrue(el('netKeyShowBtn', 'hidden'))
+        self.assertFalse(el('netSetupBtn', 'hidden'), 'the button stays')
+        self.pg.click('#netSetupBtn'); self.pg.wait_for_timeout(500)
+        self.assertEqual(hb.setups, 1); self.assertEqual(hb.setup_query, '', 'no key is sent')
+        self.assertEqual(len(dialogs), 1); self.assertIn('panel', dialogs[0])
+        self.assertTrue(el('boardTools', 'hidden'))
+        status = el('netStatus')
+        for word in ('GlowGrid-Setup-', '8 digits', 'panel', 'Forget'): self.assertIn(word, status)
         self.assertEqual(self.errors, [])
 
     def test_show_setup_key_over_usb(self):

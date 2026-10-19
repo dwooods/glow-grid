@@ -44,10 +44,8 @@
 //                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
 //   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid.local ssid=<name>   (never the password)
 //   WIFI CLEAR                 -> OK wifi cleared
-//   WIFI SETUP                 -> OK setup mode ...: the board leaves its network and opens "GlowGrid-Setup" for 5 minutes (fw 13)
-//   WIFI KEY                   -> OK key=<10 characters>: the board's setup key (fw 18). It is the WPA2 password of GlowGrid-Setup and the
-//                                 code POST /setup asks for. Made once, at random, on first use; print it on the label.
-//   WIFI KEY NEW               -> a new random key (refused while setup mode is open)
+//   WIFI SETUP                 -> OK setup mode ...: the board leaves its network and opens "GlowGrid-Setup-NNNN" for 5 minutes (fw 13). From
+//                                 fw 21 the network is WPA3 and its 8-digit password is shown on the panel, new every time (no WIFI KEY any more)
 //   WIFI SCAN                  -> NET <ssid hex> <rssi dBm> <1 if it needs a password, else 0> lines (strongest first, up to 20, one per name,
 //                                 hidden networks left out), then OK networks=<n> (fw 10). Takes 2 to 5 seconds; the animation stalls meanwhile.
 
@@ -72,10 +70,11 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 96           // the list lives in RAM; PUT refuses a new name once it is full (64 until fw 19; 37 examples ship)
-#define GG_FW_VERSION 20          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 22          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
-#define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode (WPA2; the password is the setup key, fw 18)
-#define SETUP_KEY_LEN 10
+#define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode is "GlowGrid-Setup-NNNN" (random NNNN each time, fw 21)
+#define SETUP_KEY_LEN 8                        // digits shown on the panel; WPA needs at least 8 characters
+#define SETUP_DIGIT_LEVEL 20                   // brightness (0..255) of the key digits on the panel; 8 digits at 20 draw about 0.4 A
 #define SETUP_TIMEOUT_MS 300000UL              // setup mode ends by itself after 5 minutes
 #define JOIN_WAIT_SAVE_MS 30000UL              // after new credentials are saved, this long before setup mode opens again
 #define SETUP_SAVE_CLOSE_MS 8000UL             // after Save the setup network stays up this long, so the page can show its countdown and the phone is not dropped mid-reply
@@ -101,7 +100,9 @@ uint8_t lut[256];
 int frameNo = 0;
 uint32_t nextFrameAt = 0;
 bool panelOn = true;
-bool setupOn = false;        // setup mode is running: the board hosts GlowGrid-Setup and a slow blue pulse shows on LED 0
+bool setupOn = false;        // setup mode is running: the board hosts GlowGrid-Setup-NNNN (WPA3) and the panel shows its 8-digit key
+char setupSsid[24] = "";     // this session's network name (fw 21); a new random suffix each time, so a phone's remembered network never clashes
+char setupKey[SETUP_KEY_LEN + 1] = "";   // this session's password: digits, shown on the panel, never stored or sent anywhere
 bool dirty = true;           // a still needs drawing
 uint32_t rotateSec = 0;      // 0 = stay on one sprite; else move to the next one every rotateSec seconds
 uint32_t rotateAt = 0;       // millis() at which the next sprite is due
@@ -282,11 +283,27 @@ bool selectName(const String& name) {
   return false;
 }
 
-// The setup-mode signal: LED 0 pulses dim blue (about 2 s a cycle), drawn over whatever the panel shows.
-uint8_t setupPulse() {
-  uint32_t t = millis() % 2000UL;
-  uint32_t up = t < 1000 ? t : 2000 - t;
-  return (uint8_t)(3 + up * 40 / 1000);
+// The setup-mode signal (fw 21): the panel shows this session's 8-digit key, two rows of four (3x5 font), and a bar on the bottom row that
+// shrinks as the 5 minutes run out. Being able to read it is the proof that the person is at the board.
+static const uint8_t DIGIT_FONT[10][5] = {   // 3 bits per row, left pixel = bit 2
+  {7,5,5,5,7}, {2,6,2,2,7}, {7,1,7,4,7}, {7,1,7,1,7}, {5,5,7,1,1},
+  {7,4,7,1,7}, {7,4,7,5,7}, {7,1,1,2,2}, {7,5,7,5,7}, {7,5,7,1,7}};
+
+void setupDraw(uint32_t elapsedMs) {
+  strip.clear();
+  const uint8_t L = SETUP_DIGIT_LEVEL;
+  for (int i = 0; i < SETUP_KEY_LEN; i++) {
+    int d = setupKey[i] - '0';
+    if (d < 0 || d > 9) continue;
+    int x0 = (i % 4) * 4, y0 = (i / 4) * 6 + 1;      // columns 0-14, rows 1-5 and 7-11
+    for (int r = 0; r < 5; r++)
+      for (int c = 0; c < 3; c++)
+        if (DIGIT_FONT[d][r] & (4 >> c)) strip.setPixelColor(gg_led_index(x0 + c, y0 + r), L, L, L);
+  }
+  uint32_t left = elapsedMs >= SETUP_TIMEOUT_MS ? 0 : SETUP_TIMEOUT_MS - elapsedMs;
+  int bar = (int)((left * GG_COLS + SETUP_TIMEOUT_MS - 1) / SETUP_TIMEOUT_MS);   // 16 lit pixels, one fewer every ~19 s
+  for (int x = 0; x < bar && x < GG_COLS; x++) strip.setPixelColor(gg_led_index(x, GG_ROWS - 2), 0, 0, 12);
+  strip.show();
 }
 
 // Applies the wiring order and the brightness/gamma table, then sends one frame to the panel.
@@ -298,7 +315,6 @@ void render(int frame) {
       strip.setPixelColor(gg_led_index(x, y), lut[p[0]], lut[p[1]], lut[p[2]]);
     }
   }
-  if (setupOn) strip.setPixelColor(0, 0, 0, setupPulse());
   strip.show();
 }
 
@@ -315,7 +331,7 @@ void rotateTick() {
 }
 
 void playTick() {
-  if (!panelOn || !data) return;
+  if (setupOn || !panelOn || !data) return;     // in setup mode the panel belongs to the key display
   if (hdr.frames == 1) {
     if (dirty) { render(0); dirty = false; }
     return;
@@ -538,7 +554,7 @@ const char* putCommit(const String& name, size_t size) {
 // ---- Wi-Fi (firmware 9): credentials in NVS, set over USB; the board then serves the HTTP API below ----
 // No password on the API for now (David, 2026-10-15): anyone on the home network can list, send and delete sprites. Add a token before
 // this goes beyond a home network. What fw 18 adds (security review, 2026-10-17): a web page on another site cannot drive the board
-// (Origin and Host are checked on every route, see httpGuard) and the one route that opens a network, POST /setup, needs the setup key.
+// (Origin and Host are checked on every route, see httpGuard) and the one route that opens a network, POST /setup, only starts setup mode: joining it needs the 8 digits shown on the panel (fw 21; fw 18 to 20 asked for a stored key here).
 #define HOSTNAME "glowgrid"
 WebServer server(80);
 Preferences prefs;
@@ -551,8 +567,6 @@ bool setupRequested = false; uint32_t setupReqAt = 0;     // POST /setup or WIFI
 bool setupSavePending = false; uint32_t setupSaveAt = 0;  // credentials saved from the page: join a moment after the reply went out
 bool joinWatch = false; uint32_t joinWatchAt = 0, joinWatchMs = 0;   // a network just saved is joining; if it does not, setup opens again
 String setupScanText;                          // the last scan, served to the setup page without scanning again
-String setupKey;                               // the WPA2 password of GlowGrid-Setup and the code POST /setup needs; NVS key "key"
-uint8_t keyFails = 0; uint32_t keyLockUntil = 0;   // wrong keys in a row; after 5 the check is locked for a minute
 
 void wifiBegin() {
   WiFi.mode(WIFI_STA);
@@ -568,58 +582,6 @@ void wifiLoad() {
   wifiPass = prefs.getString("pass", "");
   prefs.end();
   if (wifiSsid.length()) wifiBegin();            // joins in the background; WiFi.setAutoReconnect keeps trying (no setup mode for this, fw 18)
-}
-
-// ---- Setup key (firmware 18) ----
-// 10 characters from a 32-symbol alphabet (no l, o, 0, 1; lower case so a phone keyboard types it as printed): 50 bits, made once from the
-// hardware random number generator and kept in NVS. It is the WPA2 password of GlowGrid-Setup, and POST /setup (the editor's "Change the
-// board's Wi-Fi") must send it. Read it over USB with WIFI KEY and print it on the board's label. It is created on first use, not at
-// boot, so the radio is already on (the generator is only fully random while it runs).
-void keyMake() {
-  static const char ALPHA[] = "abcdefghijkmnpqrstuvwxyz23456789";
-  bool wasOff = (WiFi.getMode() == WIFI_OFF);
-  if (wasOff) WiFi.mode(WIFI_STA);
-  char k[SETUP_KEY_LEN + 1];
-  for (int i = 0; i < SETUP_KEY_LEN; i++) k[i] = ALPHA[esp_random() & 31];
-  k[SETUP_KEY_LEN] = 0;
-  if (wasOff) WiFi.mode(WIFI_OFF);
-  setupKey = String(k);
-  prefs.begin("gg", false);
-  prefs.putString("key", k);
-  prefs.end();
-}
-
-const String& keyGet() {
-  if (setupKey.length() != SETUP_KEY_LEN) {
-    prefs.begin("gg", true);
-    setupKey = prefs.getString("key", "");
-    prefs.end();
-    if (setupKey.length() != SETUP_KEY_LEN) keyMake();
-  }
-  return setupKey;
-}
-
-// Compares what was typed with the key (case, spaces and dashes ignored, same time for every wrong guess). "" = right, else the ERR text.
-String keyCheck(const String& typed) {
-  uint32_t now = millis();
-  if (keyLockUntil && (int32_t)(keyLockUntil - now) > 0) return String("ERR too many wrong setup keys; wait a minute");
-  const char* key = keyGet().c_str();
-  char t[SETUP_KEY_LEN + 1];
-  size_t n = 0;
-  bool good = true;
-  for (const char* s = typed.c_str(); *s; s++) {
-    char c = *s;
-    if (c == ' ' || c == '-') continue;
-    if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
-    if (n >= SETUP_KEY_LEN) { good = false; break; }
-    t[n++] = c;
-  }
-  if (n != SETUP_KEY_LEN) good = false;
-  uint8_t diff = 0;
-  for (size_t i = 0; i < SETUP_KEY_LEN; i++) diff |= (uint8_t)((i < n ? t[i] : 0) ^ key[i]);
-  if (good && diff == 0) { keyFails = 0; return String(""); }
-  if (++keyFails >= 5) { keyFails = 0; keyLockUntil = now + 60000UL; if (keyLockUntil == 0) keyLockUntil = 1; }
-  return String("ERR wrong setup key");
 }
 
 void wifiStop() {
@@ -710,16 +672,6 @@ String opWifi(const char* rest) {
     return String("OK wifi cleared");
   }
   if (n >= 1 && s == "SETUP") return opSetup();
-  if (n >= 1 && s == "KEY") {
-    String a = String(n >= 2 ? h1 : "");
-    a.toUpperCase();
-    if (n >= 2) {
-      if (a != "NEW") return String("ERR usage: WIFI KEY | WIFI KEY NEW");
-      if (setupOn) return String("ERR close setup mode first: it is using the current key");
-      keyMake();
-    }
-    return sfmt("OK key=%s", keyGet().c_str());
-  }
   if (n >= 2 && s == "SET") {
     String e = wifiStore(h1, n >= 3 ? h2 : "");
     if (e.length()) return e;
@@ -727,7 +679,7 @@ String opWifi(const char* rest) {
     wifiJoinNow(JOIN_WAIT_SAVE_MS);
     return String("OK wifi saved; joining. Check with WIFI STATUS (2.4 GHz networks only)");
   }
-  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR | WIFI SETUP | WIFI KEY [NEW]");
+  return String("ERR usage: WIFI STATUS | WIFI SCAN | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR | WIFI SETUP");
 }
 
 // ---- HTTP API ----
@@ -737,7 +689,7 @@ String opWifi(const char* rest) {
 //   POST /setup                       leave this network and open setup mode (fw 13)
 //   POST /put?name=X[&crc=hex]        the file as multipart/form-data (field "file"): binary-safe, and a plain "simple" request,
 //                                      so a browser sends no pre-flight. Raw POST bodies do not work: the ESP32 core cuts them at the first zero byte.
-//   POST /setup?key=K                 the key is the board's setup key (fw 18)
+//   POST /setup                       starts setup mode (fw 21: no key; the setup network's password appears on the panel)
 // Replies are the same "OK ..." / "ERR ..." text as USB. A reply to a browser page carries CORS headers for that page's own origin, and the
 // pre-flight a browser sends before a request from the https editor page to a private address is answered (Access-Control-Allow-Private-Network).
 //
@@ -796,7 +748,7 @@ void httpCors() {
 
 void httpReply(const String& msg) {
   int code = 200;
-  if (msg.startsWith("ERR")) code = (msg.indexOf("no such") >= 0) ? 404 : (msg.indexOf("setup key") >= 0) ? 403 : 400;
+  if (msg.startsWith("ERR")) code = (msg.indexOf("no such") >= 0) ? 404 : 400;
   httpCors();
   server.send(code, "text/plain", msg + "\n");
 }
@@ -929,8 +881,7 @@ void httpBegin() {
   server.on("/put", HTTP_POST, httpPutDone, httpPutData);
   server.on("/setup", HTTP_POST, []() {
     if (!httpGuard()) return;
-    String e = keyCheck(server.arg("key"));
-    httpReply(e.length() ? e : opSetup());
+    httpReply(opSetup());
   });
   server.onNotFound(httpNotFound);
   server.begin();
@@ -954,37 +905,52 @@ void wifiTick() {
 
 
 // ---- Setup mode (firmware 13) ----
-// Puts the board on a home network without USB. The board hosts the WPA2 network "GlowGrid-Setup" whose password is the board's setup key
-// (fw 18; before that it was open, so anyone in range during the 5 minutes could have pointed the board at their own network) and answers
-// every DNS name with its own address, so a phone opens the page by itself as a "sign in" screen. It serves one small page at
-// http://192.168.4.1/: pick a network from a scan, type the password, Save. LED 0 pulses dim blue while it runs. It starts when
+// Puts the board on a home network without USB. The board hosts the WPA3 network "GlowGrid-Setup-NNNN" (fw 21: new random NNNN and a new
+// 8-digit password every session, the password shown on the panel, nothing stored; fw 18 to 20 used a stored 10-character key, before
+// that the network was open) and answers every DNS name with its own address, so a phone opens the page by itself as a "sign in" screen.
+// It serves one small page at http://192.168.4.1/: pick a network from a scan, type the password, Save. The panel shows the key and a
+// countdown bar while it runs. It starts when
 //   * there is no saved network at power-up,
 //   * a network just saved did not join within 30 s,
-//   * it is asked for: POST /setup?key=<setup key> (the editor's "Change the board's Wi-Fi" button), the USB command WIFI SETUP, or a
+//   * it is asked for: POST /setup (the editor's "Change the board's Wi-Fi" button; no key, since the digits only appear on the panel), the USB command WIFI SETUP, or a
 //     5-second hold of the On/off button.
 // A saved network that does not join after a power-up does NOT open it (fw 18): a router that is slow to start after a power cut would
 // take the board off the network for 5 minutes. Use the button hold or USB if the network really changed.
 // It ends after 5 minutes (the board goes back to the saved network, which is kept) or when a network is saved.
 // The API is not served on the setup network: only this page and its scan and save are reachable.
 
+// Diagnostics while setup is open (fw 21): one line per station join/leave (with the Wi-Fi reason code) and per request, with the free heap,
+// so a phone that drops off or a page that stalls can be read from the Serial Monitor.
+void setupEvent(arduino_event_id_t ev, arduino_event_info_t info) {
+  if (!setupOn) return;
+  if (ev == ARDUINO_EVENT_WIFI_AP_STACONNECTED) Serial.printf("setup: station joined, heap=%u\n", (unsigned)ESP.getFreeHeap());
+  else if (ev == ARDUINO_EVENT_WIFI_AP_STADISCONNECTED) Serial.printf("setup: station left, reason=%d, heap=%u\n", (int)info.wifi_ap_stadisconnected.reason, (unsigned)ESP.getFreeHeap());
+}
+void setupLog(const char* what) { Serial.printf("setup: %s %s, heap=%u\n", what, setupServer.uri().c_str(), (unsigned)ESP.getFreeHeap()); }
+
 void setupPage() {
+  setupLog("page");
   setupServer.sendHeader("Cache-Control", "no-store");
   setupServer.send(200, "text/html", SETUP_PAGE);
 }
 
 void setupScanSend() {
+  setupLog("scan");
   if (setupServer.arg("fresh").length() || setupScanText.length() == 0) setupScanText = wifiScanText();
   setupServer.sendHeader("Cache-Control", "no-store");
   setupServer.send(200, "text/plain", setupScanText);
 }
 
 void setupSave() {
+  setupLog("save");
   String e = wifiStore(setupServer.arg("s").c_str(), setupServer.arg("p").c_str());
   if (e.length()) { setupServer.send(400, "text/plain", e + "\n"); return; }
   setupServer.send(200, "text/plain", "OK saved\n");
   setupSavePending = true;
   setupSaveAt = millis();                       // the join starts after SETUP_SAVE_CLOSE_MS; the page counts it down
 }
+
+void setupEnd();                                // defined below; setupStart() calls it when the network cannot start
 
 void setupStart() {
   if (setupOn) { setupAt = millis(); return; }
@@ -998,18 +964,31 @@ void setupStart() {
   setupScanText = wifiScanText();                // scan first, while no phone is attached: the page then shows the list at once
   WiFi.mode(WIFI_AP_STA);
   WiFi.setTxPower(WIFI_POWER_8_5dBm);
-  WiFi.softAP(SETUP_SSID, keyGet().c_str());     // WPA2: the setup key is the password
+  // A new name and password every session (fw 21), made now that the radio is on (esp_random is only fully random while it runs).
+  // The key is 8 digits shown on the panel; the network is WPA3-only (SAE), so a recorded handshake cannot be guessed offline.
+  // Tested on the ESP32-C3 core 3.3.12: iPhone and Windows 11 join it; phones from before about 2018 cannot.
+  snprintf(setupSsid, sizeof(setupSsid), SETUP_SSID "-%04u", (unsigned)(esp_random() % 10000));
+  for (int i = 0; i < SETUP_KEY_LEN; i++) setupKey[i] = (char)('0' + esp_random() % 10);
+  setupKey[SETUP_KEY_LEN] = 0;
+  if (!WiFi.softAP(setupSsid, setupKey, 1, 0, 2, false, WIFI_AUTH_WPA3_PSK)) {
+    memset(setupKey, 0, sizeof(setupKey));
+    Serial.println("setup mode: the WPA3 network did not start");
+    setupEnd();
+    return;
+  }
   dnsServer.start(53, "*", WiFi.softAPIP());
   static bool routesAdded = false;
   if (!routesAdded) {
     routesAdded = true;
+    WiFi.onEvent(setupEvent);
     setupServer.on("/", HTTP_GET, setupPage);
     setupServer.on("/scan", HTTP_GET, setupScanSend);
     setupServer.on("/save", HTTP_POST, setupSave);
     setupServer.onNotFound(setupPage);           // every other address (the phone's "is there internet" checks) shows the page too
   }
   setupServer.begin();
-  Serial.println("setup mode: join the Wi-Fi network " SETUP_SSID " (password: the setup key, see WIFI KEY) and open http://192.168.4.1/ (5 minutes)");
+  setupDraw(0);
+  Serial.printf("setup mode: join the Wi-Fi network %s (password: the 8 digits on the panel) and open http://192.168.4.1/ (5 minutes)\n", setupSsid);
 }
 
 // Ends setup mode: the setup network and its server go away and the panel goes back to what it was showing.
@@ -1020,6 +999,7 @@ void setupEnd() {
   WiFi.softAPdisconnect(true);
   setupOn = false;
   setupSavePending = false;
+  memset(setupKey, 0, sizeof(setupKey)); setupSsid[0] = 0;   // the key lives only as long as the session
   if (!panelOn) { strip.clear(); strip.show(); }
   else if (data) { dirty = true; nextFrameAt = millis(); }
   else showEmpty();
@@ -1034,10 +1014,10 @@ void setupFinish() {
 }
 
 String opSetup() {
-  if (setupOn) return String("OK setup mode is already on: join the Wi-Fi network " SETUP_SSID " (password: the setup key) and open http://192.168.4.1/");
+  if (setupOn) return String("OK setup mode is already on: join the Wi-Fi network " SETUP_SSID "-NNNN (password: the 8 digits on the panel) and open http://192.168.4.1/");
   setupRequested = true;
   setupReqAt = millis();
-  return String("OK setup mode starts in a moment: join the Wi-Fi network " SETUP_SSID " (password: the setup key on the board's label) and open http://192.168.4.1/ (5 minutes; this connection ends)");
+  return String("OK setup mode starts in a moment: join the Wi-Fi network " SETUP_SSID "-NNNN (NNNN is 4 digits; the password is the 8 digits that appear on the panel) and open http://192.168.4.1/ (5 minutes; this connection ends)");
 }
 
 // Called every pass of loop().
@@ -1054,11 +1034,10 @@ void setupTick() {
   }
   dnsServer.processNextRequest();
   setupServer.handleClient();
-  static uint32_t lastPulse = 0;
-  if (now - lastPulse >= 50) {
-    lastPulse = now;
-    strip.setPixelColor(0, 0, 0, setupPulse());
-    strip.show();
+  static uint32_t lastDraw = 0;
+  if (now - lastDraw >= 250) {                   // redrawn a few times a second: a USB command that touched the panel cannot leave it blank
+    lastDraw = now;
+    setupDraw(now - setupAt);
   }
   // millis() again, not `now`: handleClient() above may just have set setupSaveAt, and `now - setupSaveAt` would wrap to a huge number
   // and close the setup network on the same pass as the reply (which is what fw 13 and 14 did, whatever the delay was meant to be).

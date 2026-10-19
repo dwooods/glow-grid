@@ -185,6 +185,24 @@ class Parity(unittest.TestCase):
             self.assertEqual(got, expected_led_frames(frames, min(b, 0.4), g, (1, 1, 0, 0)), f"{b} {g}")
 
 
+class SetupPageScript(unittest.TestCase):
+    """The setup page's own JavaScript must parse. Firmware 18 shipped an apostrophe inside a single-quoted string ("board's label"), so on a
+    real browser nothing on the page ran (the list stayed on "Loading..." and the buttons were dead) while every test, which only looked for
+    text in the page, passed."""
+
+    def test_the_script_in_the_setup_page_is_valid_javascript(self):
+        with open(os.path.join(SKETCH, "setup_page.h"), encoding="utf-8") as fh:
+            src = fh.read()
+        literals = re.findall(r'^\s*"((?:[^"\\]|\\.)*)"\s*;?\s*$', src, re.M)
+        html = "".join(literals).encode().decode("unicode_escape")
+        scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+        self.assertEqual(len(scripts), 1, "one script block")
+        path = os.path.join(tempfile.mkdtemp(), "setup_page_script.js")
+        write_text(path, scripts[0])
+        r = subprocess.run(["node", "--check", path], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+
 class IdeBuild(unittest.TestCase):
     """The Arduino IDE rewrites a sketch before compiling: it generates a prototype for every function and inserts
     them after the includes. A struct or typedef used in a parameter list must therefore come from a header, and
@@ -1092,57 +1110,54 @@ class Board(unittest.TestCase):
         self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://192.168.50.6", "Host": "glowgrid.local"})[0], 403)
         self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[0].split()[:3], ["FILE", "keep", str(len(small))], "and nothing changed")
 
-    def test_setup_key(self):
-        """The setup key (fw 18): made once at random, read over USB, the WPA2 password of GlowGrid-Setup, and the code POST /setup needs."""
+    FONT_PIXELS = [12, 8, 11, 11, 9, 11, 12, 7, 13, 12]   # lit pixels in each digit of the 3x5 font
+
+    def setup_creds(self, n=1):
+        """(ssid, password, security) of the n-th setup network the board started, read from the stub's softap log."""
+        import re
+        hits = re.findall(r"^softap (GlowGrid-Setup-\d{4}) (\S+) (\w+)$", self.wifi_log(), re.M)
+        self.assertGreaterEqual(len(hits), n, self.wifi_log())
+        return hits[n - 1]
+
+    def test_setup_key_is_on_the_panel(self):
+        """Firmware 21: every setup session is a WPA3 network with a new random name and a new 8-digit password; the password is drawn on the
+        panel (never stored, never sent over USB or HTTP) and the editor's button needs no key."""
         self.start(wifi=True)
+        self.board.put(self.write_gg("alpha", sample_frames(31, 1)))
         self.board.wifi_set("Net", "password1")
-        self.board.send("WIFI KEY")
-        key = self.board.expect(["OK key="]).split("=")[1]
-        self.assertRegex(key, r"^[a-km-np-z2-9]{10}$", "10 characters, no l or o, no 0 or 1, lower case")
-        self.assertNotIn(key, self.board.simple("INFO")); self.assertNotIn(key, self.board.wifi_status())
-        self.board.send("WIFI KEY"); self.assertEqual(self.board.expect(["OK key="]), "OK key=" + key, "it does not change by itself")
-        board = self.restart()
-        board.send("WIFI KEY"); self.assertEqual(board.expect(["OK key="]), "OK key=" + key, "and it survives a power cycle")
         api = self.http_base()
-        # the editor's button: no key, a wrong key and a malformed one are refused (403) and open nothing
-        for q in ("", "?key=", "?key=" + key[:-1], "?key=" + key + "a"):          # 4 wrong in a row: not locked yet
-            st, _, out = self.http("POST", "/setup" + q, b"", base=api)
-            self.assertEqual((st, out), (403, b"ERR wrong setup key\n"), q)
-        time.sleep(1.2)
-        self.assertNotIn("softap", self.wifi_log(), "a wrong key does not open setup")
-        # five wrong in a row lock the check for a minute: even the right key is refused meanwhile
-        for _ in range(5):
-            self.http("POST", "/setup?key=wrongwrong", b"", base=api)
-        st, _, out = self.http("POST", "/setup?key=" + key, b"", base=api)
-        self.assertEqual((st, out), (403, b"ERR too many wrong setup keys; wait a minute\n"))
-        self.assertNotIn("softap", self.wifi_log())
-        # a restart clears the lock; the right key (typed in capitals, with a dash) opens setup, and the network's password is the key
-        board = self.restart()
-        api = self.http_base()
-        typed = (key[:5] + "-" + key[5:]).upper()
-        st, _, out = self.http("POST", "/setup?key=" + typed, b"", base=api)
+        # the editor's button opens setup without a key; a key sent anyway is ignored
+        st, _, out = self.http("POST", "/setup?key=whatever", b"", base=api)
         self.assertEqual(st, 200)
         self.assertIn(b"OK setup mode starts", out)
         self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "setup mode")
-        self.assertIn(f"softap GlowGrid-Setup {key}\n", self.wifi_log(), "WPA2, with the key as the password")
-        self.assertNotIn("(open)", self.wifi_log().split("softap GlowGrid-Setup")[1].split("\n")[0])
-        # the key cannot be changed while setup is using it; WIFI KEY NEW makes another one afterwards
-        board.send("WIFI KEY NEW"); self.assertIn("close setup mode first", self._err(board))
-        board.send("WIFI KEY NOPE"); self.assertIn("usage", self._err(board))
-        self.wait_for(lambda: "wifi=setup" in board.simple("INFO"), "setup state")
-        board.wifi_set("Net2", "password2")                         # saving closes setup (this also ends it for the test)
+        ssid, key, sec = self.setup_creds(1)
+        self.assertEqual(sec, "wpa3", "WPA3 only")
+        self.assertRegex(key, r"^[0-9]{8}$", "8 digits")
+        for text in (self.board.simple("INFO"), self.board.wifi_status()): self.assertNotIn(key, text)
+        self.board.send("WIFI KEY"); self.assertIn("usage", self._err(self.board))   # the stored-key command is gone
+        # the panel: the digits are drawn white (20,20,20) and a bar of dim blue pixels counts the time down; no sprite pixels remain
+        frame = self.last_frames(1, wait=0.8)[0]
+        px = [frame[i:i + 6] for i in range(0, len(frame), 6)]
+        self.assertEqual(px.count("141414"), sum(self.FONT_PIXELS[int(c)] for c in key), "the key's digits are what is lit")
+        self.assertTrue(14 <= px.count("00000c") <= 16, "the countdown bar is nearly full at the start")
+        self.assertEqual(len(px) - px.count("141414") - px.count("00000c") - px.count("000000"), 0, "nothing else is lit")
+        # nothing is stored: the key is not in the board's flash
+        for root, _, files in os.walk(self.fs):                     # the sprite files (LittleFS) ...
+            for name in files:
+                with open(os.path.join(root, name), "rb") as fh: self.assertNotIn(key.encode(), fh.read(), name)
+        if os.path.isfile(self.fs + "_nvs"):                        # ... and the saved settings (NVS)
+            with open(self.fs + "_nvs", "rb") as fh: self.assertNotIn(key.encode(), fh.read(), "nvs")
+        # saving a network closes setup; the panel goes back to the sprite and the digits are gone
+        self.board.wifi_set("Net2", "password2")
         self.wait_for(lambda: "softap off" in self.wifi_log(), "setup to close", timeout=12)
-        board.send("WIFI KEY NEW")
-        key2 = board.expect(["OK key="]).split("=")[1]
-        self.assertRegex(key2, r"^[a-km-np-z2-9]{10}$")
-        self.assertNotEqual(key2, key)
-        board = self.restart()
-        board.send("WIFI KEY"); self.assertEqual(board.expect(["OK key="]), "OK key=" + key2)
-        # two boards do not share a key: the generator is not a constant
-        keys = set()
-        for _ in range(3):
-            board.send("WIFI KEY NEW"); keys.add(board.expect(["OK key="]))
-        self.assertEqual(len(keys), 3)
+        self.assertEqual(self.last_frames(1, wait=0.8)[0].count("141414"), 0)
+        # a second session: a new name and a new key (1 chance in 10^12 of a clash)
+        self.board.send("WIFI SETUP"); self.board.expect(["OK"])
+        self.wait_for(lambda: self.log_count("softap GlowGrid-Setup") == 2, "a second setup session")
+        ssid2, key2, sec2 = self.setup_creds(2)
+        self.assertNotEqual((ssid, key), (ssid2, key2))
+        self.assertEqual(sec2, "wpa3")
 
     def _err(self, board):
         try:
@@ -1272,10 +1287,9 @@ class Board(unittest.TestCase):
         self.assertIn("OK setup mode starts", self.board.expect(["OK"]))
         self.wait_for(lambda: "softap GlowGrid-Setup" in self.wifi_log(), "the setup network")
         self.assertIn("dns start", self.wifi_log())
-        self.board.send("WIFI KEY")
-        key = self.board.expect(["OK key="]).split("=")[1]
-        self.assertIn(f"softap GlowGrid-Setup {key}\n", self.wifi_log(), "the setup network is WPA2 and its password is the setup key")
-        self.assertNotIn("softap GlowGrid-Setup (open)", self.wifi_log())
+        ssid, key, sec = self.setup_creds(1)
+        self.assertEqual(sec, "wpa3", "the setup network is WPA3 and its password is the 8 digits on the panel")
+        self.assertRegex(key, r"^[0-9]{8}$")
         self.assertIn("wifi=setup ip=-", self.board.simple("INFO"))
         base = self.setup_base()
         # the page: the real one, at / and at any other address (a phone's "is there internet" check lands on it)
@@ -1295,10 +1309,8 @@ class Board(unittest.TestCase):
         import urllib.error
         with self.assertRaises(Exception):
             self.http("GET", "/ping", base=api)
-        # the panel shows the pulse on LED 0 (blue only, dim) while the sprite carries on
-        time.sleep(0.4)
-        p0 = self.pixel0()
-        self.assertTrue(p0.startswith("0000") and 3 <= int(p0[4:], 16) <= 43, p0)
+        # the panel shows the key digits and the countdown bar, not the sprite
+        self.assertGreater(self.last_frames(1, wait=0.5)[0].count("141414"), 40)
         # a bad password is refused with the board's words and nothing is stored
         form = {"Content-Type": "application/x-www-form-urlencoded"}
         st, _, body = self.http("POST", "/save", ("s=" + b"Home Net".hex() + "&p=" + b"short".hex()).encode(), form, base=base)
@@ -1331,10 +1343,7 @@ class Board(unittest.TestCase):
         self.start(wifi=True)
         self.board.wifi_set("Net", "password1")
         api = self.http_base()
-        self.board.send("WIFI KEY")
-        key = self.board.expect(["OK key="]).split("=")[1]
-        self.assertEqual(self.http("POST", "/setup", b"", base=api)[0], 403, "no key, no setup")
-        st, hd, body = self.http("POST", "/setup?key=" + key, b"", headers={"Origin": "https://dwooods.github.io"}, base=api)
+        st, hd, body = self.http("POST", "/setup", b"", headers={"Origin": "https://dwooods.github.io"}, base=api)
         self.assertEqual(st, 200)
         self.assertIn(b"OK setup mode starts", body)
         self.assertEqual(hd["Access-Control-Allow-Origin"], "https://dwooods.github.io")
