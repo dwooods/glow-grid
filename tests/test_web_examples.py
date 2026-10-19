@@ -77,3 +77,23 @@ class WebExamples(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LegacyExamples(unittest.TestCase):
+    """web/js/examples_legacy.js: fingerprints of earlier example versions, so Remove examples can delete old copies."""
+
+    def test_legacy_file_is_up_to_date(self):
+        if not os.path.isdir(os.path.join(ROOT, '.git')):
+            self.skipTest('needs the git history')
+        import make_legacy_examples as ml
+        with open(ml.OUT, newline='') as fh:
+            self.assertEqual(fh.read(), ml.render(ml.collect()), 'run: python3 examples/make_legacy_examples.py')
+
+    def test_no_legacy_entry_is_a_current_example(self):
+        now = {(d['name'], d['crc'], len(d['hex']) // 2) for d in shipped()}
+        with open(os.path.join(ROOT, 'web', 'js', 'examples_legacy.js')) as fh:
+            old = [tuple(json.loads('[' + m + ']')) for m in re.findall(r'^\s*\[(.*)\],$', fh.read(), re.M)]
+        self.assertTrue(old, 'the list is not empty')
+        self.assertFalse(now & set(old))
+        for n in ('bunny_sprite', 'chest_sprite', 'sword_sprite'):      # examples retired in the 2026-10-18 overhaul
+            self.assertIn(n, [o[0] for o in old])

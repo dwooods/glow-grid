@@ -172,10 +172,10 @@ class SmokeWifi(unittest.TestCase):
         self.pg.click('#boardOffBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'off')
         self.pg.click('#boardOnBtn'); self.pg.wait_for_timeout(400); self.assertEqual(hb.panel, 'on')
         self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual(hb.rotate, 300)
-        self.assertTrue(self.pg.evaluate("document.getElementById('boardShuffle').disabled"), 'firmware 9 has no random order')
+        self.assertTrue(self.pg.evaluate("Array.from(document.querySelectorAll('#boardRotateRandom option')).every((o) => o.disabled)"), 'firmware 9 has no random order')
         hb.fw = 16; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
-        self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400); self.assertEqual(hb.shuffle, 1)
-        self.pg.uncheck('#boardShuffle'); self.pg.wait_for_timeout(400); self.assertEqual(hb.shuffle, 0)
+        self.pg.select_option('#boardRotate', 'r300'); self.pg.wait_for_timeout(400); self.assertEqual((hb.shuffle, hb.rotate), (1, 300))
+        self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400); self.assertEqual((hb.shuffle, hb.rotate), (0, 300))
         hb.fw = 17; self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.rows(), ['flower (2 frames, 5 fps, brightness 0.3, gamma 2.2)', 'owl (2 frames, 5 fps, brightness 0.3, gamma 2.2)'], 'fw 17 lists each sprite\'s settings over Wi-Fi too')
         hb.fw = 9

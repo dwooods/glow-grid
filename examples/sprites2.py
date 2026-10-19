@@ -21,6 +21,9 @@ PALETTE.update({
     "q": (240, 70, 115),   # snout
     # cow patches, cauldron, black cat, spider
     "x": (110, 110, 130),
+    # witch hat
+    "h": (84, 96, 150),    # hat, lit side
+    "d": (46, 52, 96),     # hat, shaded side
 })
 
 
@@ -198,30 +201,55 @@ def bat_frames():
 
 
 # ---- pig: walks, with a curly tail and a twitching snout ----
+def _pig_small(g, ox, oy, step, tucked=False):
+    """A small pig facing right, about 11 wide, body centre at (ox, oy). step 0/1 picks the leg pose; tucked pulls the legs in."""
+    _ell(g, ox, oy, 3, 2, "I")                                        # body
+    _ell(g, ox + 4, oy - 0.5, 2, 2, "I")                              # head
+    for dx in range(-3, 4):                                           # belly shade
+        _put(g, ox + dx, oy + 2, "i")
+    _put(g, ox + 7, oy, "q"); _put(g, ox + 7, oy + 1, "q")             # snout
+    _put(g, ox + 4, oy - 3, "i"); _put(g, ox + 5, oy - 3, "i")        # ear
+    _put(g, ox + 5, oy - 1, "E")                                      # eye
+    _put(g, ox - 4, oy - 1, "i"); _put(g, ox - 5, oy - 2, "i")        # curly tail
+    if tucked:
+        legs = ((ox - 2, oy + 3), (ox + 2, oy + 3))
+        for x, y in legs:
+            _put(g, x, y, "i")
+    else:
+        front, back = ((ox + 3, ox - 2), (ox + 2, ox - 3))[step % 2]
+        for x in (front, back):
+            _put(g, x, oy + 3, "i"); _put(g, x, oy + 4, "i")
+
+
+def _rotate(g, ang, px, py, lift):
+    """Rotate grid g by ang degrees (counter-clockwise on screen) about (px, py), then move it up by lift rows."""
+    c, s = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+    out = _grid()
+    for y in range(16):
+        for x in range(16):
+            dx, dy = x - px, y - py + lift
+            sx = round(px + dx * c - dy * s)                          # counter-clockwise with y pointing down
+            sy = round(py + dx * s + dy * c)
+            if 0 <= sx < 16 and 0 <= sy < 16 and g[sy][sx] != ".":
+                out[y][x] = g[sy][sx]
+    return out
+
+
 def pig_frames():
-    """4 frames: a pig walking to the right, tail curling, snout twitching."""
-    legs = (((3, 3), (10, 9)), ((4, 4), (9, 10)), ((3, 3), (10, 9)), ((2, 2), (11, 8)))
+    """11 frames: a small pig trots in place (4 frames), then jumps and does a backflip (6 frames), lands, and trots again."""
     frames = []
-    for k in range(4):
+    for k in range(4):                                                # trot
         g = _grid()
-        bob = 1 if k in (1, 3) else 0
-        _ell(g, 7, 8 + bob, 6, 3, "I")
-        _ell(g, 12, 8 + bob, 3, 3, "I")
-        for x in range(16):                               # belly shade
-            if g[11 + bob][x] == "I":
-                g[11 + bob][x] = "i"
-        _put(g, 11, 4 + bob, "i"); _put(g, 12, 4 + bob, "i"); _put(g, 13, 5 + bob, "i")   # ear
-        for dx, dy in ((14, 8), (15, 8), (14, 9), (15, 9), (14, 10), (15, 10)):             # snout
-            _put(g, dx - (1 if k % 2 else 0), dy + bob - (0 if k % 2 else 0), "q")
-        _put(g, 11, 7 + bob, "E")                         # eye
-        tail = (((0, 6), (1, 7)), ((0, 7), (0, 6)), ((0, 6), (1, 7)), ((0, 5), (0, 6)))[k]
-        for x, y in tail:
-            _put(g, x, y + bob, "i")
-        for a, b in legs[k]:
-            for yy in (12 + bob, 13, 14):
-                if yy >= 12 + bob and yy <= 13 + (0 if bob else 1):
-                    _put(g, a, yy, "i"); _put(g, a + 1, yy, "i")
+        _pig_small(g, 7, 9 + (1 if k in (1, 3) else 0) - 1, k % 2)
         frames.append(_rows(g))
+    for i in range(1, 7):                                             # backflip: 6 steps round a full turn, up and down in an arc
+        t = i / 7
+        g = _grid()
+        _pig_small(g, 7, 8, 0, tucked=True)
+        lift = round(4 * 3 * t * (1 - t))
+        frames.append(_rows(_rotate(g, 360 * t, 7, 8, lift)))
+    g = _grid(); _pig_small(g, 7, 9, 1)                               # landing
+    frames.append(_rows(g))
     return frames
 
 
@@ -384,14 +412,14 @@ def diamond_frames():
 
 # ---- christmas tree: twinkling lights and a star ----
 def tree_frames():
-    """6 frames: a fir tree whose lights twinkle in turn and whose star flashes."""
-    lights = ((5, 6, "R"), (10, 6, "E"), (7, 8, "Y"), (4, 9, "M"), (11, 9, "R"), (8, 11, "E"), (3, 12, "Y"), (12, 12, "M"), (6, 13, "R"), (10, 13, "E"))
+    """6 frames: a small fir tree whose lights twinkle in turn, with a little star sitting on its tip that flashes."""
+    lights = ((6, 8, "R"), (9, 8, "E"), (7, 9, "Y"), (5, 10, "M"), (10, 10, "R"), (8, 11, "E"), (5, 12, "Y"), (10, 12, "M"), (6, 13, "R"), (9, 13, "E"))
     frames = []
     for k in range(6):
         g = _grid()
-        for y in range(3, 14):                                        # three tiers of green
-            tier = 0 if y < 7 else (1 if y < 11 else 2)
-            w = (y - (3, 6, 9)[tier]) + 1 + tier
+        for y in range(5, 14):                                        # three short tiers of green
+            tier = 0 if y < 8 else (1 if y < 11 else 2)
+            w = (y - (5, 8, 11)[tier]) + 1 + tier
             for x in range(8 - w, 8 + w):
                 _put(g, x, y, "N" if (x + y) % 3 else "n")
         for x in range(6, 10):
@@ -400,7 +428,7 @@ def tree_frames():
             on = (i + k) % 3 != 0
             _put(g, x, y, c if on else "n")
         star = "W" if k % 2 else "G"
-        for x, y in ((7, 0), (6, 1), (7, 1), (8, 1), (5, 2), (6, 2), (7, 2), (8, 2), (9, 2), (7, 3)):
+        for x, y in ((7, 2), (8, 2), (6, 3), (7, 3), (8, 3), (9, 3), (7, 4), (8, 4)):   # a small star resting on the tip
             _put(g, x, y, star)
         frames.append(_rows(g))
     return frames
@@ -436,26 +464,32 @@ def jack_frames():
 
 
 # ---- halloween set ----
+_HAT_TIPS = {            # rows 1-3: the curved tip of the hat flops left, stands up with a small curl, flops right
+    "left":  ["..hhh...........", ".hhhhh..........", "...hhhhhh......."],
+    "up":    [".......hh.......", "......hhhh......", "......hhhhh....."],
+    "right": ["...........hhh..", "..........hhhhh.", ".......hhhhhh..."],
+}
+_HAT_BODY = [            # rows 4-13: cone (lit left, shaded right), violet band with a gold buckle, wide brim
+    "......hhhd......",
+    "......hhhd......",
+    ".....hhhhdd.....",
+    ".....hhhhdd.....",
+    "....hhhhhddd....",
+    "....hhhhhddd....",
+    "...UUUUGGuuuu...",
+    "...uuuuGGuuuu...",
+    ".hhhhhhhhdddddd.",
+    "dddddddddddddddd",
+]
+
+
 def witch_hat_frames():
-    """4 frames: a witch's hat with a gold buckle; the tip wobbles and the buckle glints."""
+    """4 frames: a witch's hat with a gold buckle; the tip of the hat goes left, up, right, up."""
     frames = []
-    for k in range(4):
-        g = _grid()
-        tip = (6, 7, 8, 7)[k]
-        for y in range(2, 12):                                        # cone, widening downward, tip leaning
-            half = (y - 1) // 2 + 1
-            cx = tip + (8 - tip) * (y - 2) / 9
-            for x in range(round(cx - half), round(cx + half)):
-                _put(g, x, y, "U")
-        for x in range(1, 15):                                        # brim
-            _put(g, x, 12, "U"); _put(g, x, 13, "u")
-        _put(g, 0, 13, "u"); _put(g, 15, 13, "u")
-        for x in range(4, 12):                                        # band
-            _put(g, x, 10, "u"); _put(g, x, 11, "u")
-        for x, y in ((7, 10), (8, 10), (7, 11), (8, 11)):
-            _put(g, x, y, "G" if k != 2 else "W")
-        _put(g, tip, 1, "U")
-        frames.append(_rows(g))
+    for pose in ("left", "up", "right", "up"):
+        rows = ["................"] + _HAT_TIPS[pose] + _HAT_BODY + ["................"] * 2
+        rows = [r[:16].ljust(16, ".") for r in rows]
+        frames.append(rows)
     return frames
 
 
@@ -488,21 +522,29 @@ def cauldron_frames():
     return frames
 
 
+_SPIDER_LEGS = (      # per side: one leg angled back, one straight out, one angled forward; (dx, dy) from the body's centre, two poses
+    (((3, -1), (4, -2), (5, -3)), ((3, 0), (4, 0), (5, 0)), ((3, 1), (4, 2), (5, 3))),
+    (((3, -1), (4, -2), (4, -3)), ((3, 0), (4, 1), (5, 1)), ((3, 1), (4, 2), (4, 3))),
+)
+
+
 def spider_frames():
-    """6 frames: a spider drops on its thread, pauses, and climbs back up."""
+    """6 frames: a spider drops on its thread, pauses, and climbs back up; its three pairs of legs (angled back, straight out,
+    angled forward) twitch between two poses."""
     frames = []
-    for k, drop in enumerate((2, 5, 8, 9, 6, 3)):
+    for k, drop in enumerate((3, 5, 8, 9, 6, 4)):
         g = _grid()
         for y in range(0, drop + 1):                                  # thread
             _put(g, 7, y, "s")
-        cy = drop + 2
+        cy = drop + 3
         _ell(g, 7, cy, 2, 1, "x")                                     # body
         _put(g, 7, cy - 1, "x"); _put(g, 7, cy + 1, "x")
         _put(g, 6, cy - 1, "R"); _put(g, 8, cy - 1, "R")              # eyes
-        legs = ((3, -1), (3, 0), (3, 1), (2, 2)) if k % 2 == 0 else ((3, -2), (3, -1), (3, 1), (2, 2))
-        for dx, dy in legs:
-            for sgn in (-1, 1):
-                _put(g, 7 + sgn * dx, cy + dy, "x"); _put(g, 7 + sgn * (dx + 1), cy + dy - 1, "x")
+        for leg in _SPIDER_LEGS[k % 2]:
+            for dx, dy in leg:
+                for sgn in (-1, 1):
+                    if 0 <= cy + dy < 16:
+                        _put(g, 7 + sgn * dx, cy + dy, "x")
         frames.append(_rows(g))
     return frames
 
@@ -563,15 +605,17 @@ def black_cat_frames():
 
 
 def moon_frames():
-    """8 frames: a full moon with clouds drifting across it and a few stars."""
+    """8 frames: a grey-white full moon with clouds drifting across it and a few stars."""
     frames = []
     for k in range(8):
         g = _grid()
         for x, y in ((1, 1), (13, 2), (2, 12), (14, 13)):
-            _put(g, x, y, "Y" if (k + x) % 3 else "W")
-        _ell(g, 8, 7, 4, 4, "Y")
-        for x, y in ((6, 5), (9, 8), (7, 9)):                         # craters
-            _put(g, x, y, "G")
+            _put(g, x, y, "S" if (k + x) % 3 else "W")
+        _ell(g, 8, 7, 4, 4, "S")                                      # grey-white moon
+        for x, y in ((6, 4), (7, 4), (5, 5)):                         # bright rim
+            _put(g, x, y, "W")
+        for x, y in ((6, 6), (9, 8), (7, 9), (10, 6)):                # craters
+            _put(g, x, y, "x")
         for cx, cy, w in ((k * 2 - 4, 6, 6), (k * 2 - 12, 10, 5)):    # two clouds crossing
             for x in range(cx, cx + w):
                 _put(g, x, cy, "s"); _put(g, x, cy + 1, "s")

@@ -4,6 +4,7 @@ binary PNGs. One character per pixel; see PALETTE.
 Colors are chosen for LEDs: saturated, nothing near-black except pure black
 (which means "off"), so everything survives the brightness cap and gamma.
 """
+import math
 
 PALETTE = {
     ".": (0, 0, 0),
@@ -351,12 +352,16 @@ _POTION = [
 
 
 def potion_frames():
-    """4-frame brew: two bubbles rise through the liquid."""
+    """7-frame brew: seven bubbles rise through the liquid and pop at the neck."""
+    bubbles = ((4, 0), (6, 2), (8, 5), (10, 1), (12, 3), (5, 4), (9, 6))     # (column, starting phase)
     frames = []
-    for i in range(4):
+    for k in range(7):
         g = [list(r) for r in _POTION]
-        g[13 - i][5] = "W"
-        g[13 - (i + 2) % 4][9] = "W"
+        for x, ph in bubbles:
+            y = 13 - (k + ph) % 7                       # rows 13 (bottom) up to 7 (the neck)
+            if y == 7 and not 5 <= x <= 10:
+                continue                                 # outside the neck: the bubble has already popped
+            g[y][x] = "W"
         frames.append(["".join(r) for r in g])
     return frames
 
@@ -894,21 +899,18 @@ _RAINBOW = "ROYNAEUM"      # red, orange, yellow, green, aqua, blue, violet, mag
 
 
 def burst_frames():
-    """8 frames: a four-point star of rainbow rings pours out of the middle and flashes white at the heart."""
+    """8 frames: a rainbow swirl that turns round and round and fills most of the grid (the name is kept from the old star burst)."""
     frames = []
     for t in range(8):
         g = _grid()
         for y in range(16):
             for x in range(16):
-                dx, dy = abs(x - 7.5), abs(y - 7.5)
-                d = (dx ** 0.6 + dy ** 0.6) ** (1 / 0.6)     # a concave four-point star: rings keep its shape
-                ring = int(d * 0.9)
-                if ring > 9 - (t % 2):                       # the whole star breathes in and out, so it flashes
-                    continue
-                g[y][x] = _RAINBOW[(ring - t) % 8]
-        if t % 2 == 0:
-            for x, y in ((7, 7), (8, 7), (7, 8), (8, 8)):
-                g[y][x] = "W"
+                dx, dy = x - 7.5, y - 7.5
+                r = math.hypot(dx, dy)
+                if r > 8.2:
+                    continue                                     # round off the corners
+                a = (math.atan2(dy, dx) / (2 * math.pi)) % 1.0    # 0..1 round the centre
+                g[y][x] = _RAINBOW[(int(8 * a + r * 0.9) - t) % 8]   # colour winds out from the middle; the shift turns it
         frames.append(_rows(g))
     return frames
 

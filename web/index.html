@@ -173,17 +173,29 @@
         <button id="boardOnBtn" class="btn btn-quiet" type="button" title="Light the panel and resume the sprite">Lights on</button>
         <button id="boardOffBtn" class="btn btn-quiet" type="button" title="Blank the panel; it stays dark until Lights on, even after a power cycle">Lights off</button>
         <button id="boardRefreshBtn" class="btn btn-quiet" type="button" aria-label="Refresh the list">Refresh</button>
-        <label class="field-inline" title="The board moves to the next stored sprite on its own, in list order. Kept across a power cycle.">Rotate
+        <label class="field-inline" title="The board moves to another stored sprite on its own: the next one in list order, or a random one (never the one already playing). Kept across a power cycle. Random needs firmware 16.">Rotate
           <select id="boardRotate">
             <option value="0">off</option>
-            <option value="10">every 10 s</option>
-            <option value="30">every 30 s</option>
-            <option value="60">every minute</option>
-            <option value="300">every 5 min</option>
-            <option value="900">every 15 min</option>
-            <option value="3600">every hour</option>
-            <option value="21600">every 6 hours</option>
-            <option value="86400">every day</option>
+            <optgroup label="In list order">
+              <option value="10">every 10 s</option>
+              <option value="30">every 30 s</option>
+              <option value="60">every minute</option>
+              <option value="300">every 5 min</option>
+              <option value="900">every 15 min</option>
+              <option value="3600">every hour</option>
+              <option value="21600">every 6 hours</option>
+              <option value="86400">every day</option>
+            </optgroup>
+            <optgroup label="In random order" id="boardRotateRandom">
+              <option value="r10">every 10 s</option>
+              <option value="r30">every 30 s</option>
+              <option value="r60">every minute</option>
+              <option value="r300">every 5 min</option>
+              <option value="r900">every 15 min</option>
+              <option value="r3600">every hour</option>
+              <option value="r21600">every 6 hours</option>
+              <option value="r86400">every day</option>
+            </optgroup>
           </select>
         </label>
         <label class="field-inline" id="boardBrightLbl" title="Play every stored sprite at this brightness, without sending them again. Needs firmware 19.">Brightness
@@ -195,11 +207,10 @@
             <option value="40">0.4</option>
           </select>
         </label>
-        <label class="check" id="boardShuffleLbl" title="Rotation picks a random sprite each time, never the one already playing, instead of the next in the list. Needs firmware 16."><input id="boardShuffle" type="checkbox" disabled> Random order</label>
       </div>
       <div class="btn-row" id="boardExamples" hidden>
         <button id="boardAddExBtn" class="btn btn-quiet" type="button" title="Store the original example sprites from the repo on the board. Never replaces a sprite that is already there.">Add examples</button>
-        <button id="boardRemoveExBtn" class="btn btn-quiet" type="button" title="Delete the example sprites from the board. Keeps any you changed or replaced.">Remove examples</button>
+        <button id="boardRemoveExBtn" class="btn btn-quiet" type="button" title="Delete the example sprites from the board, including older versions of them and examples that have been replaced. Keeps any you changed.">Remove examples</button>
       </div>
       <ul class="board-list" id="boardList" hidden></ul>
       <div class="board-pager" id="boardPager" hidden>
@@ -369,6 +380,7 @@
 <script src="js/import.js"></script>
 <script src="js/export.js"></script>
 <script src="js/examples_data.js"></script>
+<script src="js/examples_legacy.js"></script>
 <script src="js/board.js"></script>
 <script src="js/help.js"></script>
 <script src="js/tools.js"></script>

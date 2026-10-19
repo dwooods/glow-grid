@@ -357,18 +357,24 @@ class Smoke(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').selectedOptions[0].textContent"), 'every 45 s')
         self.pg.select_option('#boardRotate', '0'); self.pg.wait_for_timeout(400)
         self.assertEqual(self.pg.evaluate('window.__fakeRotate'), 0); self.assertIn('Rotation off', status())
-        # random order: greyed out on a board before firmware 16 (the INFO line has no shuffle field), then a checkbox that sends SHUFFLE and follows the board
-        self.assertTrue(self.pg.evaluate("document.getElementById('boardShuffle').disabled"))
-        self.assertIn('firmware 16', self.pg.evaluate("document.getElementById('boardShuffleLbl').title"))
+        # random order is part of Rotate: the "In random order" entries are greyed out on a board before firmware 16 (no shuffle field in INFO), then they send SHUFFLE 1 + ROTATE and follow the board
+        rnd = "Array.from(document.querySelectorAll('#boardRotateRandom option')).every((o) => o.disabled)"
+        self.assertTrue(self.pg.evaluate(rnd)); self.assertIn('firmware 16', self.pg.evaluate("document.getElementById('boardRotateRandom').title"))
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardShuffle')"), None, 'the old checkbox is gone')
         self.pg.evaluate('window.__fakeFw = 16'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
-        self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').disabled"))
-        self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').checked"))
-        self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400)
-        self.assertEqual(self.pg.evaluate('window.__fakeShuffle'), 1); self.assertIn('Random order on', status())
+        self.assertFalse(self.pg.evaluate("Array.from(document.querySelectorAll('#boardRotateRandom option')).some((o) => o.disabled)"))
+        self.pg.select_option('#boardRotate', 'r300'); self.pg.wait_for_timeout(400)
+        self.assertEqual((self.pg.evaluate('window.__fakeShuffle'), self.pg.evaluate('window.__fakeRotate')), (1, 300)); self.assertIn('in random order', status())
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), 'r300', 'follows what the board reports')
         self.pg.evaluate('window.__fakeShuffle = 0'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
-        self.assertFalse(self.pg.evaluate("document.getElementById('boardShuffle').checked"), 'follows what the board reports')
-        self.pg.check('#boardShuffle'); self.pg.wait_for_timeout(400); self.pg.uncheck('#boardShuffle'); self.pg.wait_for_timeout(400)
-        self.assertEqual(self.pg.evaluate('window.__fakeShuffle'), 0); self.assertIn('Random order off', status())
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), '300', 'the same interval in list order')
+        self.pg.select_option('#boardRotate', 'r300'); self.pg.wait_for_timeout(400); self.pg.select_option('#boardRotate', '300'); self.pg.wait_for_timeout(400)
+        self.assertEqual((self.pg.evaluate('window.__fakeShuffle'), self.pg.evaluate('window.__fakeRotate')), (0, 300)); self.assertIn('in list order', status())
+        self.pg.evaluate('window.__fakeShuffle = 1; window.__fakeRotate = 45'); self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').selectedOptions[0].textContent"), 'every 45 s', 'an unlisted random interval gets its own entry')
+        self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), 'r45')
+        self.pg.select_option('#boardRotate', '0'); self.pg.wait_for_timeout(400)
+        self.assertEqual(self.pg.evaluate('window.__fakeRotate'), 0); self.assertEqual(self.pg.evaluate("document.getElementById('boardRotate').value"), '0')
         # board brightness: greyed out before firmware 19, then a select that sends BRIGHT and follows the board
         self.assertTrue(self.pg.evaluate("document.getElementById('boardBright').disabled"))
         self.assertIn('firmware 19', self.pg.evaluate("document.getElementById('boardBrightLbl').title"))
@@ -487,6 +493,32 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         self.assertTrue(self.pager()['hidden'], 'no pager once disconnected')
 
+    def test_remove_examples_also_removes_older_versions(self):
+        """An example we redesigned (old copy on the board, same name) and one we retired (name no longer shipped) are
+        recognised from web/js/examples_legacy.js and removed; a sprite you changed is still kept. The legacy list is
+        patched in the page with fingerprints of bytes the test makes up, since the real old bytes are not in the repo."""
+        self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
+        self.pg.on('dialog', lambda d: d.accept())
+        self.connect(['mine'])
+        self.pg.evaluate("""() => {
+            const fp = (bytes) => [crc32(bytes).toString(16).padStart(8, '0'), bytes.length];
+            const old = ggExampleBytes(GG_EXAMPLES[0]).slice(); old[30] ^= 1;          // an earlier version of example 0
+            const retired = ggExampleBytes(GG_EXAMPLES[1]).slice(); retired[30] ^= 2;   // a retired example under a name nobody ships
+            const mine = ggExampleBytes(GG_EXAMPLES[2]).slice(); mine[30] ^= 4;        // your own edit: not in the list
+            GG_LEGACY_EXAMPLES.push([GG_EXAMPLES[0].name, ...fp(old)], ['retired_sprite', ...fp(retired)]);
+            window.__fakeStore.set(GG_EXAMPLES[0].name, old); window.__fakeStore.set('retired_sprite', retired);
+            window.__fakeStore.set(GG_EXAMPLES[2].name, mine);
+        }""")
+        self.pg.click('#boardRefreshBtn'); self.pg.wait_for_timeout(300)
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)     # the old copy is skipped by name and flagged
+        self.assertIn('1 of those is an older version', self.status())
+        self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(5000)
+        kept = self.pg.evaluate('GG_EXAMPLES[2].name')
+        self.assertEqual(self.store(), sorted(['mine', kept]))
+        self.assertEqual(self.status(), f'Removed 37 examples (2 older versions). Kept 1 you changed: {kept}.')
+        self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)     # now the new versions go in
+        self.assertEqual(self.pg.evaluate("GG_EXAMPLES.filter((e) => e.name !== GG_EXAMPLES[2].name).every((e) => { const b = window.__fakeStore.get(e.name); const w = ggExampleBytes(e); return b && b.length === w.length && b.every((v, i) => v === w[i]); })"), True)
+
     def test_add_and_remove_examples(self):
         self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()
         answer = {'ok': True}
@@ -521,7 +553,7 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(5000)
         kept = self.pg.evaluate('[GG_EXAMPLES[0].name, GG_EXAMPLES[1].name]')
         self.assertEqual(self.store(), sorted(['mine'] + kept))
-        self.assertEqual(self.status(), f'Removed {total - 2} examples. Kept 2 you changed: {kept[0]}, {kept[1]}.')
+        self.assertEqual(self.status(), f'Removed {total - 2} examples. Kept 2 you changed: {sorted(kept)[0]}, {sorted(kept)[1]}.')   # in the board's (alphabetical) order
         self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
         # add never replaces: the two changed ones stay as they are
         edited = self.pg.evaluate("Array.from(window.__fakeStore.get(GG_EXAMPLES[0].name))")

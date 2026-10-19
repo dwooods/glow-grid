@@ -265,6 +265,15 @@ function ggExampleBytes(ex) {         // exactly the bytes File ▸ Export for E
   return ggBytes(frames, 16, 16, ex.fps, GG_EXAMPLE_BRIGHTNESS, GG_EXAMPLE_GAMMA);
 }
 const ggExampleCrc = (ex) => crc32(ggExampleBytes(ex)).toString(16).padStart(8, '0');
+// What a board's copy of a sprite called `name` is, given its CRC and size: 'current' (exactly what this editor ships),
+// 'old' (an earlier version we shipped, or an example we have since retired; web/js/examples_legacy.js), or '' (not ours).
+function ggExampleVerdict(name, crc, size) {
+  const cur = GG_EXAMPLES.find((e) => e.name === name);
+  if (cur && crc === ggExampleCrc(cur) && size === ggExampleBytes(cur).length) return 'current';
+  if (typeof GG_LEGACY_EXAMPLES !== 'undefined' && GG_LEGACY_EXAMPLES.some((l) => l[0] === name && l[1] === crc && l[2] === size)) return 'old';
+  return '';
+}
+const ggLegacyNames = () => new Set(typeof GG_LEGACY_EXAMPLES === 'undefined' ? [] : GG_LEGACY_EXAMPLES.map((l) => l[0]));
 
 
 /* ---------- the card ---------- */
@@ -318,17 +327,19 @@ function boardNameHint() {             // says what Send will do with the name i
   if (!board) { el.textContent = ''; return; }
   el.textContent = boardNames.includes(name) ? `Send replaces “${name}” on the board (you are asked first). Change the Name to keep it and add a new sprite.` : `Send adds “${name}” as a new sprite.`;
 }
-function boardShowRotate(sec) {       // the select shows the board's own setting; an unlisted value gets its own entry
+let boardCanShuffle = false;          // the board reports shuffle= (firmware 16+), so the "random order" rotations can be chosen
+function boardShowRotate(sec, info) {  // the select shows the board's own setting (interval and list or random order); an unlisted value gets its own entry
   const sel = $('boardRotate');
-  const v = String(parseInt(sec, 10) || 0);
-  if (!Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `every ${v} s`; sel.appendChild(o); }
+  boardCanShuffle = info.shuffle !== undefined;
+  const group = $('boardRotateRandom');
+  for (const o of group.querySelectorAll('option')) o.disabled = !boardCanShuffle;
+  group.title = boardCanShuffle ? '' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
+  const n = parseInt(sec, 10) || 0;
+  const random = n > 0 && info.shuffle === '1';
+  const v = (random ? 'r' : '') + String(n);
+  if (!Array.from(sel.options).some((o) => o.value === v)) { const o = document.createElement('option'); o.value = v; o.textContent = `every ${n} s`; (random ? group : sel.querySelector('optgroup')).appendChild(o); }
   sel.value = v;
   sel.disabled = false;
-}
-function boardShowShuffle(info) {       // the checkbox shows the board's own setting; a board without the field cannot do it
-  const cb = $('boardShuffle'), can = info.shuffle !== undefined;
-  cb.checked = info.shuffle === '1'; cb.disabled = !can;
-  $('boardShuffleLbl').title = can ? 'Rotation picks a random sprite each time, never the one already playing, instead of the next in the list.' : `Random order needs firmware ${BOARD_SHUFFLE_FW} or later (this board has ${info.fw || 'an older one'}). Re-flash c3_player.ino from the repo.`;
 }
 function boardShowBright(info) {        // the select shows the board's own setting; a board without the field cannot do it
   const sel = $('boardBright'), can = info.bright !== undefined;
@@ -354,8 +365,7 @@ async function boardRefresh(showName) {            // showName: jump to the page
   $('boardFree').textContent = free == null ? '' : `${(free / 1024).toFixed(0)} KB free`;
   $('boardOnBtn').disabled = info.panel !== 'off';
   $('boardOffBtn').disabled = info.panel === 'off';
-  boardShowRotate(info.rotate);
-  boardShowShuffle(info);
+  boardShowRotate(info.rotate, info);
   boardShowBright(info);
   boardNameHint();
 }
@@ -497,7 +507,15 @@ async function boardAddExamples() {
       sent++;
     }
     if (before && before !== '-') { try { await board.show(before); } catch (err) { /* the old sprite is gone: leave the last example playing */ } }
-    boardSay(`Added ${sent} example${sent === 1 ? '' : 's'}` + (there ? `; ${there} already on the board were left alone` : '') + '.', 'ok');
+    let stale = 0;                                         // names we skipped whose copy on the board is an older version of the example
+    if (there && Number(boardFw) >= BOARD_CRC_FW) {
+      for (const e of GG_EXAMPLES) {
+        if (!have.has(e.name)) continue;
+        try { const got = await board.crc(e.name); if (ggExampleVerdict(e.name, got.crc, got.size) === 'old') stale++; } catch (err) { /* only a hint */ }
+      }
+    }
+    boardSay(`Added ${sent} example${sent === 1 ? '' : 's'}` + (there ? `; ${there} already on the board were left alone` : '') + '.' +
+      (stale ? ` ${stale} of those ${stale === 1 ? 'is an older version' : 'are older versions'}: press Remove examples, then Add examples, to get the new ${stale === 1 ? 'one' : 'ones'}.` : ''), 'ok');
     await boardRefresh();
   } catch (err) {
     if (board) { boardSay(`Board said: ${err.message}. Added ${sent} of ${todo.length}.`, 'err'); try { await boardRefresh(); } catch (e2) { /* link is gone */ } }
@@ -505,20 +523,24 @@ async function boardAddExamples() {
 }
 async function boardRemoveExamples() {
   if (!board) return;
-  const mine = GG_EXAMPLES.filter((e) => boardNames.includes(e.name));
+  const known = new Set([...GG_EXAMPLES.map((e) => e.name), ...ggLegacyNames()]);
+  const mine = boardNames.filter((n) => known.has(n));       // by name first; the CRC check below decides which are really ours
   if (!mine.length) { boardSay('No examples are on the board.', 'ok'); return; }
   if (!(Number(boardFw) >= BOARD_CRC_FW)) { boardSay(`Remove examples needs firmware ${BOARD_CRC_FW} or later (this board has ${boardFw || 'an older one'}), so it can tell your own sprites from the examples. Re-flash c3_player.ino from the repo.`, 'err'); return; }
-  if (!confirm(`Remove ${mine.length} example sprite${mine.length === 1 ? '' : 's'} from the board? Any you changed are kept.`)) { boardSay('Nothing removed.', ''); return; }
+  if (!confirm(`Check ${mine.length} sprite${mine.length === 1 ? '' : 's'} with an example's name and remove the ones that are still an example (this version or an older one)? Any you changed are kept.`)) { boardSay('Nothing removed.', ''); return; }
   boardBusy(true);
   const removed = [], kept = [];
+  let older = 0;
   try {
-    for (const e of mine) {
+    for (const name of mine) {
       boardSay(`Removing examples… ${removed.length + kept.length + 1} of ${mine.length}`, '');
-      const got = await board.crc(e.name);
-      if (got.crc === ggExampleCrc(e) && got.size === ggExampleBytes(e).length) { await board.del(e.name); removed.push(e.name); }
-      else kept.push(e.name);
+      const got = await board.crc(name);
+      const verdict = ggExampleVerdict(name, got.crc, got.size);
+      if (verdict) { await board.del(name); removed.push(name); if (verdict === 'old') older++; }
+      else kept.push(name);
     }
-    boardSay(`Removed ${removed.length} example${removed.length === 1 ? '' : 's'}.` + (kept.length ? ` Kept ${kept.length} you changed: ${kept.join(', ')}.` : ''), 'ok');
+    boardSay(`Removed ${removed.length} example${removed.length === 1 ? '' : 's'}` + (older ? ` (${older} older version${older === 1 ? '' : 's'})` : '') + '.' +
+      (kept.length ? ` Kept ${kept.length} you changed: ${kept.join(', ')}.` : ''), 'ok');
     await boardRefresh();
   } catch (err) {
     if (board) { boardSay(`Board said: ${err.message}. Removed ${removed.length} of ${mine.length}.`, 'err'); try { await boardRefresh(); } catch (e2) { /* link is gone */ } }
@@ -536,13 +558,11 @@ $('boardSendBtn').addEventListener('click', boardSend);
 $('boardOnBtn').addEventListener('click', () => boardAct(() => board.on(), 'Lights on.'));
 $('boardOffBtn').addEventListener('click', () => boardAct(() => board.off(), 'Lights off. The panel stays dark until Lights on, even after a power cycle.'));
 $('boardRotate').addEventListener('change', () => {
-  const sec = Number($('boardRotate').value);
+  const raw = $('boardRotate').value, random = raw[0] === 'r';
+  const sec = Number(random ? raw.slice(1) : raw);
   const label = $('boardRotate').selectedOptions[0].textContent;
-  boardAct(() => board.rotate(sec), sec ? `Rotating ${label}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
-});
-$('boardShuffle').addEventListener('change', () => {
-  const on = $('boardShuffle').checked;
-  boardAct(() => board.shuffle(on), on ? 'Random order on: each rotation picks a random sprite. The board remembers this after a power cycle.' : 'Random order off: rotation follows the list.');
+  boardAct(async () => { if (sec && boardCanShuffle) await board.shuffle(random); return board.rotate(sec); },
+    sec ? `Rotating ${label}${random ? ' in random order' : ' in list order'}. Each sprite keeps playing for the whole interval; the board remembers this after a power cycle.` : 'Rotation off; the board stays on one sprite.');
 });
 $('boardBright').addEventListener('change', () => {
   const pct = Number($('boardBright').value);

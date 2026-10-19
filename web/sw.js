@@ -1,10 +1,10 @@
 // Offline support for the installed app: serve from cache, refresh in the
 // background. Bump CACHE when the asset list changes.
-const CACHE = 'glow-grid-v65';
+const CACHE = 'glow-grid-v66';
 const FONTS = 'glow-grid-fonts'; // Google Fonts stylesheet and files, cached on first online visit; kept across app versions
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 const ASSETS = ['./', './index.html', './style.css', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png',
-  './js/core.js', './js/led.js', './js/editor.js', './js/loupe.js', './js/import.js', './js/export.js', './js/examples_data.js', './js/board.js', './js/help.js', './js/tools.js', './js/phone.js', './js/main.js'];
+  './js/core.js', './js/led.js', './js/editor.js', './js/loupe.js', './js/import.js', './js/export.js', './js/examples_data.js', './js/examples_legacy.js', './js/board.js', './js/help.js', './js/tools.js', './js/phone.js', './js/main.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
