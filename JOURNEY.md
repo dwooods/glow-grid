@@ -37,7 +37,7 @@ So the project never assumes. `probe.py` lights five raw indexes in distinct col
 | Green beside red, or above/below it | `COLUMN_MAJOR` |
 | Yellow next to white, or back on red's edge | `SERPENTINE` |
 
-A `check` pattern (white top-left, red along the top, green down the left, blue diagonal) confirms it. Until you press `k` in the menu to confirm, the menu shows a "wiring not checked yet" warning, so a scrambled image never becomes a mystery. WLED's 2D matrix settings ask for the same four facts, which was a nice confirmation that this is the right model.
+A `check` pattern (white top-left, red along the top, green down the left, blue diagonal) confirms it. Until you press `k` in the menu to confirm, the menu shows a "wiring not checked yet" warning, so a scrambled image never becomes a mystery. WLED's 2D matrix settings (I read its public docs; none of its code is used here) ask for the same four facts, which was a nice confirmation that this is the right model.
 
 ## Why a simulator at all
 
@@ -131,7 +131,7 @@ The lesson that stings: the symptom was a near-perfect match for three hardware 
 
 ## A case for the panel: two wrong starts and a cradle
 
-The panel wants a grid in front of it, or each LED is a soft dot instead of a pixel. The reference I started from, [Thingiverse 5737371](https://www.thingiverse.com/thing:5737371), is one print: a 165 × 165 × 8.5 mm cell grid with 1 mm walls on a 10 mm pitch and a 0.54 mm floor that becomes the diffuser (pause the print at layer 4 and swap to white). I measured it from the STL, because the point was to match its pitch, not to copy it.
+The panel wants a grid in front of it, or each LED is a soft dot instead of a pixel. The reference I started from, [Thingiverse 5737371](https://www.thingiverse.com/thing:5737371) (a remix of chummer's and The_Wrench_DIY's CC BY designs; credits in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)), is one print: a 165 × 165 × 8.5 mm cell grid with 1 mm walls on a 10 mm pitch and a 0.54 mm floor that becomes the diffuser (pause the print at layer 4 and swap to white). I measured it from the STL, because the point was to match its pitch, not to copy it.
 
 **Attempt 1 was the wrong shape.** I built a one-piece case with side lugs, because the reference has a separate back plate with keyholes and I mixed up which part was which. It was also the wrong idea for this desk: the LED panel, a C3 and its wiring all have to live somewhere, and that needs a frame with a back.
 
@@ -160,5 +160,4 @@ Splitting the grid and the cover gives up the reference's one-print trick, but e
 
 - Play a Glow Grid PNG saved at brightness 0.35 and check the printed "from the image" line matches.
 - Print holder v3 and its slide-in cap, check the slide and the hold, then reprint the frame (v6) and glue the holder in. Then wire it: jack, diode branch, buttons, DIN. See [`enclosure/`](enclosure/build.py).
-- A "WLED JSON" export, so the same art can run on an ESP32 with [WLED](https://kno.wled.ge/).
 - A current limiter that dims a frame based on its actual estimated draw rather than a flat cap.

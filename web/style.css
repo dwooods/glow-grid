@@ -31,8 +31,8 @@
   --tap: 44px;
 
   /* type */
-  --font-display: 'Sora', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+  --font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --fs-xs: 0.72rem; --fs-sm: 0.78rem; --fs-md: 0.84rem; --fs-lg: 1.05rem;
 
   /* tactile surfaces: raised keys catch light on top and have a dark lip underneath; pressed ones sink */

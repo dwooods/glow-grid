@@ -25,7 +25,7 @@ A sprite holds 1 to 16 frames (`GG_MAX_FRAMES`; the panel is for simple loops), 
 
 ## Install on the board
 
-1. Arduino IDE: board **ESP32C3 Dev Module**, **USB CDC On Boot: Enabled**, **Partition Scheme: Default 4MB with spiffs**. Library: **Adafruit NeoPixel**. (LittleFS and the serial port are part of the esp32 core.)
+1. Arduino IDE: board **ESP32C3 Dev Module**, **USB CDC On Boot: Enabled**, **Partition Scheme: Default 4MB with spiffs**. Library: **Adafruit NeoPixel** (LGPL-3.0; see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) if you sell boards with this firmware). (LittleFS and the serial port are part of the esp32 core.)
 2. Open `c3_player/c3_player.ino` (File > Open in the IDE, straight from the clone) and upload. The first start formats the flash storage (a few seconds). With nothing stored, LED 0 glows dim blue.
 3. Wiring for the bench: GPIO6 to DIN, the C3's G to the panel GND and the supply GND, panel 5V from the supply only, C3 on USB. Buttons: GPIO5 and GPIO7 to GND (optional for this test; the serial `SHOW` command does the same).
 

@@ -204,9 +204,9 @@ class Smoke(unittest.TestCase):
         self.assertIn('limit is 16', self.pg.evaluate("(() => { const b = ggBytes(Array.from({length: 16}, () => new Array(256).fill('#112233')), 16, 16, 6, 0.3, 2.2); b[6] = 17; b[7] = 0; try { ggDecode(b); return ''; } catch (e) { return e.message; } })()"))
 
     def test_sprite_names_never_double_the_tail_and_fit_the_board(self):
-        names = self.pg.evaluate("""() => ['red_ghost_sprite (2).png', 'cat_sprite_sprite.png', 'cat_sprite_8fps (3).png', 'my pic_x16.png', 'a'.repeat(60) + '.png', '___.png']
+        names = self.pg.evaluate("""() => ['blue_ghost_sprite (2).png', 'cat_sprite_sprite.png', 'cat_sprite_8fps (3).png', 'my pic_x16.png', 'a'.repeat(60) + '.png', '___.png']
             .map((n) => spriteNameFor({ name: n }))""")
-        self.assertEqual(names[:4], ['red_ghost_sprite', 'cat_sprite', 'cat_sprite', 'my_pic_sprite'])
+        self.assertEqual(names[:4], ['blue_ghost_sprite', 'cat_sprite', 'cat_sprite', 'my_pic_sprite'])
         self.assertEqual(names[5], 'sprite_sprite')
         self.assertEqual(len(names[4]), 31); self.assertTrue(names[4].endswith('_sprite'))
         for n in names: self.assertRegex(n, r'^[A-Za-z0-9_-]{1,31}$')
