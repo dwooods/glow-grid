@@ -14,10 +14,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sprites import (  # noqa: E402
     burst_frames, candle_frames, cat_frames, coin_frames, fish_frames, fox_frames, frog_frames, gem_frames,
     ghost_frames, heart_frames, key_frames, knight_frames, lantern_frames, owl_frames, potion_frames,
-    rocket_frames, slime_frames, to_image)
+    rocket_frames, to_image)
 from sprites2 import (  # noqa: E402
     bat_frames, black_cat_frames, campfire_frames, cauldron_frames, cow_frames, diamond_frames, duck_frames,
-    hedgehog_frames, jack_frames, laser_sword_frames, moon_frames, mushroom_frames, pig_frames, skull_frames,
+    fireworks_frames, hedgehog_frames, jack_frames, laser_sword_frames, moon_frames, mushroom_frames, pig_frames, skull_frames,
     spider_frames, tombstone_frames, tree_frames, turtle_frames, witch_hat_frames)
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "images")
@@ -27,7 +27,6 @@ BRIGHTNESS, GAMMA = 0.3, 2.2   # the editor's defaults
 EXAMPLES = {
     "knight_still": ([knight_frames()[0]], None),
     "knight": (knight_frames(), 4),
-    "slime": (slime_frames(), 3),
     "ghost": (ghost_frames(), 4),
     "gem": (gem_frames(), 4),
     "cat": (cat_frames(), 3),
@@ -62,6 +61,7 @@ EXAMPLES = {
     "moon": (moon_frames(), 3),
     "tombstone": (tombstone_frames(), 2),
     "burst": (burst_frames(), 8),
+    "fireworks": (fireworks_frames(), 6),
 }
 
 

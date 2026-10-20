@@ -16,6 +16,7 @@ const GG_LEGACY_EXAMPLES = [
   ["pig_sprite", "11dcb71b", 3084],
   ["potion_sprite", "d106837a", 3084],
   ["slime_sprite", "b7933251", 3084],
+  ["slime_sprite", "ff95f9df", 3084],
   ["spider_sprite", "27e4d7c4", 4620],
   ["sword_sprite", "b9933f2d", 3084],
   ["tree_sprite", "3094bb15", 4620],

@@ -1,6 +1,6 @@
 // Offline support for the installed app: serve from cache, refresh in the
 // background. Bump CACHE when the asset list changes.
-const CACHE = 'glow-grid-v74';
+const CACHE = 'glow-grid-v75';
 const ASSETS = ['./', './index.html', './style.css', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png',
   './js/core.js', './js/led.js', './js/editor.js', './js/loupe.js', './js/import.js', './js/export.js', './js/examples_data.js', './js/examples_legacy.js', './js/board.js', './js/help.js', './js/tools.js', './js/phone.js', './js/main.js'];
 

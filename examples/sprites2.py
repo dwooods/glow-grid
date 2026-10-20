@@ -526,6 +526,54 @@ def cauldron_frames():
     return frames
 
 
+_FW_RISE = (9, 7, 5, 3, 1)                                              # rocket head, rows below the burst centre
+_FW_AGE = {                                                             # spark colours by age, one set per shell
+    "gold": ("W", "Y", "G", "O", "O", "R", "r"),
+    "ice":  ("W", "C", "A", "A", "a", "E", "E"),
+}
+
+
+def _firework(g, t, cx, cy, tone):
+    """One shell at step t (0-15): rises, flashes, throws sixteen sparks that spread, fall and fade."""
+    if t < 5:                                                           # the rocket, with a short tail
+        y = cy + _FW_RISE[t]
+        _put(g, cx, y, "W"); _put(g, cx, y + 1, "Y"); _put(g, cx, y + 2, "r")
+    elif t == 5:                                                        # the flash
+        _put(g, cx, cy, "W")
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            _put(g, cx + dx, cy + dy, "Y")
+    elif t <= 12:
+        a = t - 6                                                       # spark age 0-6
+        col = _FW_AGE[tone][a]
+        r = min(a + 1, 4)
+        drop = max(0, a - 3)                                            # gravity pulls the late sparks down
+        d = max(1, int(r * 0.7 + 0.5))
+        spokes = [(r, 0), (-r, 0), (0, r), (0, -r), (d, d), (-d, d), (d, -d), (-d, -d)]
+        if r >= 3:                                                      # a second ring of sparks between the first
+            spokes += [(r, 1), (-r, 1), (r - 1, -2), (-(r - 1), -2), (1, r), (-1, r), (2, -(r - 1)), (-2, -(r - 1))]
+        for i, (dx, dy) in enumerate(spokes):
+            if a >= 5 and i % 2:                                        # thin out as they die
+                continue
+            _put(g, cx + dx, cy + dy + drop, col)
+    elif t <= 15:                                                       # a few dim embers drift down
+        e = t - 13
+        for dx, dy in ((-3, 3), (3, 3), (0, 4), (-2, 4), (2, 4)):
+            if (dx + e) % 2 == 0:
+                _put(g, cx + dx, cy + dy + 1 + e, "r")
+
+
+def fireworks_frames():
+    """16 frames: two shells fired half a loop apart, a gold one on the left and an ice-blue one on the right; each rises, flashes,
+    bursts into a ring of sparks that spread, fall and fade, and the rest of the grid stays dark."""
+    frames = []
+    for k in range(16):
+        g = _grid()
+        _firework(g, k, 4, 5, "gold")
+        _firework(g, (k + 8) % 16, 11, 6, "ice")
+        frames.append(_rows(g))
+    return frames
+
+
 _SPIDER_LEGS = (      # per side: one leg angled back, one straight out, one angled forward; (dx, dy) from the body's centre, two poses
     (((3, -1), (4, -2), (5, -3)), ((3, 0), (4, 0), (5, 0)), ((3, 1), (4, 2), (5, 3))),
     (((3, -1), (4, -2), (4, -3)), ((3, 0), (4, 1), (5, 1)), ((3, 1), (4, 2), (4, 3))),
