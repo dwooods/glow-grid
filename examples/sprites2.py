@@ -530,6 +530,7 @@ _FW_RISE = (9, 7, 5, 3, 1)                                              # rocket
 _FW_AGE = {                                                             # spark colours by age, one set per shell
     "gold": ("W", "Y", "G", "O", "O", "R", "r"),
     "ice":  ("W", "C", "A", "A", "a", "E", "E"),
+    "rose": ("W", "P", "P", "M", "M", "m", "m"),
 }
 
 
@@ -563,13 +564,15 @@ def _firework(g, t, cx, cy, tone):
 
 
 def fireworks_frames():
-    """16 frames: two shells fired half a loop apart, a gold one on the left and an ice-blue one on the right; each rises, flashes,
-    bursts into a ring of sparks that spread, fall and fade, and the rest of the grid stays dark."""
+    """16 frames: three shells fired a third of a loop apart, a gold one on the left, an ice-blue one on the right and a rose one
+    higher up in the middle; each rises, flashes, bursts into a ring of sparks that spread, fall and fade, and the rest of the
+    grid stays dark."""
     frames = []
     for k in range(16):
         g = _grid()
+        _firework(g, (k + 5) % 16, 8, 4, "rose")                         # the middle shell goes first so the side ones draw over it
         _firework(g, k, 4, 5, "gold")
-        _firework(g, (k + 8) % 16, 11, 6, "ice")
+        _firework(g, (k + 11) % 16, 11, 6, "ice")
         frames.append(_rows(g))
     return frames
 
