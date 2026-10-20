@@ -86,14 +86,14 @@ Uploads must be multipart: the ESP32 web server hands a raw POST body over as a 
 
 ## The editor on the board (firmware 12)
 
-Open `http://glowgrid.local/` (or the board's address) in any browser on your network and the board serves the Glow Grid editor itself: one gzipped page, about 58 KB, decoded from base64 text in the firmware while it is sent. Why: iPhone Safari refuses an https page (the GitHub Pages site) calling a plain-http board, but a page the board serves shares the board's origin, so there is nothing to refuse. The editor sees it was loaded from a non-local http address, fills the Network box with that address and connects at once. Build and flash:
+Open `http://glowgrid.local/` (or the board's address) in any browser on your network and the board serves the Glow Grid editor itself: one gzipped page, about 65 KB (comments and indentation are stripped by tools/minify.py; build_site.py stops above 72,000 bytes because the app partition has little room left), decoded from base64 text in the firmware while it is sent. Why: iPhone Safari refuses an https page (the GitHub Pages site) calling a plain-http board, but a page the board serves shares the board's origin, so there is nothing to refuse. The editor sees it was loaded from a non-local http address, fills the Network box with that address and connects at once. Build and flash:
 
 ```
 python3 tools/build_site.py            # writes c3_player/site_data.h and site_b64_*.h from ../web (git-ignored; run before flashing, and again after any change under web/)
 python3 tools/build_site.py --check    # exit 1 if they are missing or out of date
 ```
 
-then flash `c3_player.ino` as usual. The board's copy is only as new as the last build and flash; the GitHub Pages site updates on its own. The page carries `<meta name="gg-site" content="glow-grid-vNN">` (the service worker cache name it was built from). No service worker or PWA install over plain http, and the page is not cached (`Cache-Control: no-store`), so each load is about 58 KB over your Wi-Fi; the animation may hitch for a moment while it is sent. Tests: the page's exact bytes, length and CRC through the loopback server, the base64 decoder against Python's, a build with no generated files, and a browser smoke test (`tests/test_smoke_wifi.py`) of an editor served by the board connecting to it.
+then flash `c3_player.ino` as usual. The board's copy is only as new as the last build and flash; the GitHub Pages site updates on its own. The page carries `<meta name="gg-site" content="glow-grid-vNN">` (the service worker cache name it was built from). No service worker or PWA install over plain http, and the page is not cached (`Cache-Control: no-store`), so each load is about 65 KB over your Wi-Fi; the animation may hitch for a moment while it is sent. Tests: the page's exact bytes, length and CRC through the loopback server, the base64 decoder against Python's, a build with no generated files, and a browser smoke test (`tests/test_smoke_wifi.py`) of an editor served by the board connecting to it.
 
 ## Setup mode (firmware 13)
 
