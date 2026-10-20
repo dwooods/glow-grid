@@ -495,30 +495,35 @@ def witch_hat_frames():
 
 
 def cauldron_frames():
-    """6 frames: a black cauldron over coals; green brew bubbles and a bubble floats up and pops."""
+    """6 frames: a small black cauldron over coals; the green brew boils and six bubbles of different sizes rise, wobble and pop."""
     frames = []
+    bubbles = ((5, 0, "H"), (7, 2, "N"), (9, 4, "H"), (6, 3, "N"), (10, 1, "N"), (8, 5, "H"))   # (x, phase, colour)
     for k in range(6):
         g = _grid()
-        _ell(g, 7.5, 10, 6, 4, "x")
+        for y, (a, b) in zip(range(9, 14), ((3, 12), (2, 13), (2, 13), (3, 12), (4, 11))):   # pot belly
+            for x in range(a, b + 1):
+                _put(g, x, y, "x")
         for x in range(2, 14):
-            _put(g, x, 6, "x"); _put(g, x, 7, "s")                    # rim
-        for x in range(1, 15):
-            _put(g, x, 6, "s")
-        _put(g, 0, 7, "s"); _put(g, 15, 7, "s")
+            _put(g, x, 8, "s")                                        # rim
+        _put(g, 1, 10, "s"); _put(g, 14, 10, "s")                     # handles
+        _put(g, 3, 10, "s"); _put(g, 3, 11, "s")                      # lit edge on the left
         for x in range(3, 13):                                        # brew surface
-            _put(g, x, 7, "N" if (x + k) % 3 else "H")
-        for x, y in ((4, 14), (5, 15), (10, 14), (11, 15)):           # feet
+            _put(g, x, 8, "N" if (x + k) % 3 else "H")
+        for x, y in ((4, 14), (11, 14)):                              # feet
             _put(g, x, y, "x")
-        for x in range(3, 13):                                        # coals
+        for x in range(4, 12):                                        # coals
             _put(g, x, 15, "R" if (x + k) % 2 else "O")
-        bub = ((5, 5), (9, 4), (6, 3), (10, 2), (8, 1), None)[k]       # a rising bubble
-        if bub:
-            _put(g, bub[0], bub[1], "H")
-        if k == 5:
-            for x, y in ((7, 0), (9, 0), (8, 1)):
-                _put(g, x, y, "H")
-        for x, y in (((4, 7), (9, 7)), ((6, 7), (11, 7)), ((3, 7), (8, 7)))[k % 3]:   # surface bubbles
-            _put(g, x, y, "W")
+        for x, ph, col in bubbles:
+            t = (k + ph) % 6                                          # 0 = just formed on the surface, 5 = popping
+            y = 7 - t
+            sway = (1 if t % 2 else 0) if x % 2 else 0
+            if t == 5:                                                # pop: a little ring of specks
+                for dx, dy in ((-1, 0), (1, 0), (0, -1)):
+                    _put(g, x + dx, y + dy, "W")
+            else:
+                _put(g, x + sway, y, col)
+                if t in (2, 3) and col == "H":                        # bigger bubbles at mid height
+                    _put(g, x + sway + 1, y, col)
         frames.append(_rows(g))
     return frames
 

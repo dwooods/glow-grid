@@ -6,6 +6,7 @@ const GG_LEGACY_EXAMPLES = [
   ["bunny_sprite", "af395d77", 7692],
   ["burst_sprite", "7ecb2b60", 6156],
   ["candle_sprite", "059d5b10", 3084],
+  ["cauldron_sprite", "b3d05d30", 4620],
   ["chest_sprite", "ccf1e73d", 3084],
   ["heart_sprite", "33a3a28e", 3084],
   ["moon_sprite", "165181e8", 6156],
