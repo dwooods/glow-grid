@@ -7,17 +7,22 @@ board serves shares the board's origin, so the same editor works there.
     python3 c3/tools/build_site.py --check    exit 1 if the generated files are missing or differ from what web/ would give now
 
 What is packed: index.html with style.css and every js/*.js inlined, minus the service worker, manifest and icon links (a service worker
-cannot register on a plain-http page, and the board does not serve icons). Nothing is minified. The gzip is stored as base64 text in C string
+cannot register on a plain-http page, and the board does not serve icons). Comments and indentation are stripped from the JS and CSS (c3/tools/minify.py; nothing is renamed). The gzip is stored as base64 text in C string
 literals (two part files), and the firmware decodes it a piece at a time while sending it, so it needs no RAM for the page.
 The generated files are git-ignored. Run this script before flashing; without them the sketch still builds and the board answers / with a note.
 The board's copy is only as new as the last run of this script and the last flash: rebuild and re-flash when you want the board's editor updated.
 """
 import base64, gzip, os, re, sys, zlib
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import minify   # c3/tools/minify.py: drops comments and spaces only, never renames anything
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
 WEB = os.path.join(ROOT, 'web')
 SKETCH = os.path.join(ROOT, 'c3', 'c3_player')
+# The firmware's app partition has little spare room (about 27 KB at fw 22 with a 77 KB page). Past this size the build stops, so it fails here and not at flash time.
+GG_SITE_MAX = 72000
 PART_CHARS = 40000          # base64 characters per part file: keeps each file under about 42 KB so one push call carries one file
 LINE_CHARS = 76
 
@@ -44,7 +49,7 @@ def bundle_html():
         css = read(os.path.join(WEB, m.group(1)))
         if '</style' in css.lower():
             raise SystemExit(f'{m.group(1)} contains </style>')
-        return f'<style>\n{css}</style>'
+        return f'<style>\n{minify.css_minify(css)}</style>'
     html, n = re.subn(r'<link rel="stylesheet" href="(style\.css)">', inline_css, html)
     if n != 1:
         raise SystemExit('web/index.html changed: the style.css link was not found exactly once')
@@ -53,7 +58,7 @@ def bundle_html():
         js = read(os.path.join(WEB, m.group(1)))
         if '</script' in js.lower():
             raise SystemExit(f'{m.group(1)} contains </script>')
-        return f'<script>\n{js}</script>'
+        return f'<script>\n{minify.js_minify(js)}</script>'
     html, n = re.subn(r'<script src="(js/[^"]+)"></script>', inline_js, html)
     if n < 5:
         raise SystemExit('web/index.html changed: the script tags were not found')
@@ -65,6 +70,8 @@ def bundle_html():
 def build_files():
     """{file name: text} for everything this script writes."""
     gz = gzip.compress(bundle_html().encode('utf-8'), compresslevel=9, mtime=0)
+    if len(gz) > GG_SITE_MAX:
+        raise SystemExit(f'the packed editor is {len(gz)} bytes gzipped; the limit is {GG_SITE_MAX} (GG_SITE_MAX in build_site.py). Trim web/ or raise the limit after checking the sketch still fits.')
     b64 = base64.b64encode(gz).decode('ascii')
     parts = [b64[i:i + PART_CHARS] for i in range(0, len(b64), PART_CHARS)]
     files = {}
@@ -100,7 +107,7 @@ def main():
     for n, t in files.items():
         with open(os.path.join(SKETCH, n), 'w', encoding='utf-8', newline='\n') as f:
             f.write(t)
-    print(f'wrote {len(files)} files for build {build_marker()}')
+    print(f'wrote {len(files)} files for build {build_marker()} ({len(gzip.compress(bundle_html().encode("utf-8"), compresslevel=9, mtime=0))} bytes gzipped, limit {GG_SITE_MAX})')
     return 0
 
 

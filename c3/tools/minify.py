@@ -9,10 +9,11 @@ dropped) so automatic semicolon insertion works the same as in the source. The e
 """
 import re
 
-_IDENT = re.compile(r'[A-Za-z0-9_$\u0080-￿]')
+_IDENT = re.compile('[A-Za-z0-9_$' + chr(0x80) + '-' + chr(0xffff) + ']')   # word characters, including non-ASCII
 # a '/' after one of these starts a regular expression, not a division
 _REGEX_AFTER_WORDS = {'return', 'typeof', 'case', 'in', 'of', 'delete', 'void', 'throw', 'new', 'else', 'do', 'instanceof', 'yield', 'await'}
 _REGEX_AFTER_PUNCT = set('(,=:[!&|?{};+-*%<>~^')
+_SPACE = ' \t\r\f\v' + chr(0xa0) + chr(0xfeff)   # blanks (plain, no-break space, byte-order mark); newlines are handled separately
 
 
 def _skip_string(s, i, q):
@@ -118,7 +119,7 @@ def js_minify(s):
 
     while i < n:
         c = s[i]
-        if c in ' \t\r\f\v ﻿':
+        if c in _SPACE:
             if not pending_ws:
                 pending_ws = ' '
             i += 1
