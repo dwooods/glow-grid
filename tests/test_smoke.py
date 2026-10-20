@@ -651,16 +651,27 @@ class Smoke(unittest.TestCase):
         # File > Open .gg sprite: from a file on the computer, named after the file
         blob = self.pg.evaluate("Array.from(ggBytes([new Array(256).fill('#abcdef')], 16, 16, 9, 0.3, 2.2))")
         self.pg.evaluate("() => { state.frames = [new Array(256).fill('#000000')]; state.currentFrame = 0; afterFrameChange(); }")
-        self.assertTrue(self.pg.evaluate("!!document.getElementById('menuOpenGg')"))
-        self.pg.set_input_files('#ggInput', files=[{'name': 'my sprite.gg', 'mimeType': 'application/octet-stream', 'buffer': bytes(blob)}])
+        # one Open picker: no separate Import / Open .gg entries
+        self.assertTrue(self.pg.evaluate("!!document.getElementById('menuOpen') && !document.getElementById('menuImport') && !document.getElementById('menuOpenGg')"))
+        self.pg.set_input_files('#openInput', files=[{'name': 'my sprite.gg', 'mimeType': 'application/octet-stream', 'buffer': bytes(blob)}])
         self.pg.wait_for_timeout(500)
         self.assertEqual(self.pg.evaluate("[state.name, state.fps, state.frames[0][7], sim.brightness]"), ['my_sprite', 9, '#abcdef', 0.3])
         toast = lambda: self.pg.evaluate("document.getElementById('statusEl').textContent")
         self.assertIn('Loaded my_sprite from the file', toast())
         # a file that is not a sprite is refused and the drawing stays
-        self.pg.set_input_files('#ggInput', files=[{'name': 'notes.gg', 'mimeType': 'application/octet-stream', 'buffer': b'hello world, not a sprite'}])
+        self.pg.set_input_files('#openInput', files=[{'name': 'notes.gg', 'mimeType': 'application/octet-stream', 'buffer': b'hello world, not a sprite'}])
         self.pg.wait_for_timeout(400)
         self.assertIn('not a Glow Grid sprite', toast()); self.assertEqual(self.pg.evaluate("state.name"), 'my_sprite')
+        # a sprite whose name was changed (no .gg ending) still opens by its "GG" header
+        self.pg.set_input_files('#openInput', files=[{'name': 'renamed.bin', 'mimeType': 'application/octet-stream', 'buffer': bytes(blob)}])
+        self.pg.wait_for_timeout(400)
+        self.assertIn('Loaded renamed from the file', toast())
+        # a picture through the same picker goes to the picture import (a PNG that is not a sprite sheet opens the crop window)
+        import base64
+        png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR4nGP8z8Dwn4GBgYGJAQoAHhgCAh6X4CYAAAAASUVORK5CYII=')
+        self.pg.set_input_files('#openInput', files=[{'name': 'pic.png', 'mimeType': 'image/png', 'buffer': png}])
+        self.pg.wait_for_timeout(600)
+        self.assertTrue(self.pg.evaluate("document.getElementById('photoDlg').open"))
 
     def test_load_resizes_the_grid_undo_restores_it_and_fps_rounds(self):
         self.fresh_page(f'({FAKE_BOARD})()'); self.board_helpers()

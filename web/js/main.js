@@ -31,8 +31,14 @@ fileMenu.addEventListener('beforetoggle', (e) => {
 });
 fileMenu.addEventListener('toggle', (e) => fileBtn.setAttribute('aria-expanded', e.newState === 'open'));
 fileBtn.addEventListener('click', () => { if (fileMenu.togglePopover) fileMenu.togglePopover(); });
-$('menuImport').addEventListener('click', () => { fileMenu.hidePopover(); $('imageInput').click(); });
-$('menuOpenGg').addEventListener('click', () => { fileMenu.hidePopover(); $('ggInput').click(); });
+// File > Open…: one picker. A .gg sprite (by name, or by its "GG" header if the name was changed) loads exactly as saved; anything else goes to the picture import.
+$('menuOpen').addEventListener('click', () => { fileMenu.hidePopover(); $('openInput').click(); });
+$('openInput').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  let head = [];
+  try { head = new Uint8Array(await f.slice(0, 2).arrayBuffer()); } catch (err) { head = []; }
+  if (/\.gg$/i.test(f.name) || (head[0] === 0x47 && head[1] === 0x47)) openGgFile(f); else importImageFile(f);
+});
 $('menuExport').addEventListener('click', () => { fileMenu.hidePopover(); updateCmd(); if (exportDlg.showModal) exportDlg.showModal(); else exportDlg.setAttribute('open', ''); });
 $('exportClose').addEventListener('click', () => exportDlg.close());
 exportDlg.addEventListener('click', (e) => { if (e.target === exportDlg) exportDlg.close(); });

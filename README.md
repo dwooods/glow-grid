@@ -51,9 +51,9 @@ New targets (BLE upload) go in `export.js`; new drawing tools go in `tools.js`. 
 - **Clear frame** blanks the current frame. **Start over** throws away every frame and the shared layer and leaves one blank frame; so does *Delete frame* on the last remaining frame. Undo brings them back. The page always opens on one blank frame; what you had last time is kept in this browser and the **Restore last session** link (on the hint line under the frame strip, shown while the frame is blank) brings it back. Undo goes back to blank. The *Frame n / N* readout appears once there are two or more frames, because a single frame already shows its number on the thumbnail.
 - **Palette** holds ten fixed colors plus the last eight you used; a recent color that is almost the same as one already shown is skipped. **In this picture** lists the colors already in your frames, most used first, so touch-ups use the exact same values.
 
-## Import image
+## Open (pictures and saved sprites)
 
-*Import image…* turns any picture into a 16×16 design. A sprite sheet or one of the simulator's own saved frames loads directly; any other picture opens the import dialog. On a phone the file picker offers the camera too.
+*Open…* (in the File menu) turns any picture into a 16×16 design. A sprite sheet or one of the simulator's own saved frames loads directly; any other picture opens the import dialog. On a phone the file picker offers the camera too.
 
 - **Crop and zoom:** drag the photo to move it, pinch or scroll to zoom. *Fit whole photo* shows everything (letterboxed); *Fill grid* crops to the grid's shape. The faint lines are one LED each, and the small picture is the result.
 - **Exact pixels:** for small pixel art, tick *Exact pixels (pixel art, no averaging)*. Each LED takes the color at the middle of its cell, with no averaging or dithering. It is on by default for images no larger than twice the grid.
@@ -117,7 +117,7 @@ The *Move and layers* card (under *Tools* on a desktop, below the frame strip on
 
 ### Export: choose what it is for
 
-The top bar has **File ▾** (*Import image…*, *Export…*) and **Help**. *Export…* opens a dialog with the sprite's name, an *Export for* choice and one **Save** button (a bottom sheet on a phone). The name starts as the imported file's name plus `_sprite` (`cat.png` becomes `cat_sprite`) and can be edited. In Chrome and Edge on desktop, Save opens a Save-as dialog so you choose the folder and file name; other browsers download straight to the Downloads folder. The File menu is a native `popover` and the dialog a native `<dialog>`, so there is no UI library.
+The top bar has **File ▾** (*Open…*, *Export…*) and **Help**. *Export…* opens a dialog with the sprite's name, an *Export for* choice and one **Save** button (a bottom sheet on a phone). The name starts as the imported file's name plus `_sprite` (`cat.png` becomes `cat_sprite`) and can be edited. In Chrome and Edge on desktop, Save opens a Save-as dialog so you choose the folder and file name; other browsers download straight to the Downloads folder. The File menu is a native `popover` and the dialog a native `<dialog>`, so there is no UI library.
 
 - **Raspberry Pi:** 16×16 per frame, one pixel per LED, which is exactly what the Pi plays. Copy it to the Pi with `scp` (the command is in Help and below).
 - **View or share (PNG):** a sharp, enlarged copy (8×, 16× or 32×; each pixel becomes a block) named `_x16` etc., to look at or send to someone. Don't copy it to the Pi: a scaled still plays the same on the panel, but a scaled animation plays as one squashed still because it isn't 16 px tall.

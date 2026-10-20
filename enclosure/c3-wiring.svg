@@ -2,9 +2,9 @@
 <rect width="1240" height="1212" fill="#fff"/>
 <text x="30" y="40" font-size="24" font-weight="700" fill="#111">Glow Grid wiring: power, data, buttons (C3 build)</text>
 <text x="30" y="64" font-size="14" fill="#444">Thick = panel current (up to ~4.7 A at brightness 0.3). Thin = C3 branch (well under 0.3 A).</text>
-<text x="30" y="84" font-size="14" fill="#444">Pin map checked against the SuperMini pinout (2026-10-14). Bench-tested: USB flashing, Wi-Fi, onboard RGB LED (GPIO8, unused here), 16x16 panel from GPIO6 (c3_panel_test.ino).</text>
-<text x="30" y="104" font-size="14" fill="#444">Frame v6 puts the jack just above the C3 holder and the two buttons in a row beside it; the pin-tip wires leave through the gap in the left wall's lip.</text>
-<text x="30" y="122" font-size="12" fill="#666">Not wired or tested yet: the two buttons (ordered). The 1 A C3-branch fuse and optional 5 A main fuse are recommendations, not yet fitted. The C3 has 2 RMT TX channels: one for the panel, the onboard LED only if one is left.</text>
+<text x="30" y="84" font-size="14" fill="#444">Pin map checked against the SuperMini pinout (2026-10-14). Bench-tested: USB flashing, Wi-Fi, both buttons, onboard RGB LED (GPIO8, unused here), 16x16 panel from GPIO6 (c3_panel_test.ino).</text>
+<text x="30" y="104" font-size="14" fill="#444">Frame v7 puts the jack just above the C3 holder and the two buttons in a row beside it; the pin-tip wires leave through the gap in the left wall's lip.</text>
+<text x="30" y="122" font-size="12" fill="#666">The C3 has 2 RMT TX channels: one for the panel, the onboard LED only if one is left.</text>
 
 <g transform="translate(0,22)"><!-- supply -->
 <rect x="30" y="130" width="170" height="130" rx="8" fill="#eef2f7" stroke="#333" stroke-width="2"/>
@@ -19,7 +19,7 @@
 <text x="365" y="174" font-size="12" text-anchor="middle" fill="#444">in the frame back (5 A rated)</text>
 <circle cx="460" cy="205" r="7" fill="#d62d20"/><text x="395" y="209" font-size="14" font-weight="700">+5V</text>
 <circle cx="460" cy="240" r="7" fill="#111"/><text x="395" y="244" font-size="14" font-weight="700">GND</text>
-<path d="M200 205 H270" stroke="#d62d20" stroke-width="6"/><rect x="214" y="196" width="42" height="18" rx="4" fill="#fff" stroke="#d62d20" stroke-width="2.5" stroke-dasharray="5 3"/><path d="M220 205 H250" stroke="#d62d20" stroke-width="1.5"/><text x="235" y="190" font-size="12" font-weight="700" text-anchor="middle" fill="#d62d20">5 A fuse</text><text x="235" y="228" font-size="11" text-anchor="middle" fill="#444">optional</text><path d="M200 240 H270" stroke="#111" stroke-width="6"/>
+<path d="M200 205 H270" stroke="#d62d20" stroke-width="6"/><path d="M200 240 H270" stroke="#111" stroke-width="6"/>
 
 <!-- panel -->
 <rect x="880" y="130" width="330" height="190" rx="8" fill="#eaf6ea" stroke="#333" stroke-width="2"/>
@@ -67,10 +67,6 @@
 <line x1="408" y1="358" x2="432" y2="358" stroke="#d62d20" stroke-width="3"/>
 <text x="440" y="346" font-size="12" font-weight="700" fill="#d62d20">Schottky diode (1N5819)</text>
 <text x="440" y="362" font-size="12" fill="#333">bar toward the C3; stops supply and USB fighting</text>
-<!-- C3 branch fuse -->
-<rect x="412" y="368" width="16" height="28" rx="4" fill="#fff" stroke="#d62d20" stroke-width="2.5"/><path d="M420 372 V392" stroke="#d62d20" stroke-width="1.5"/>
-<text x="440" y="380" font-size="12" font-weight="700" fill="#d62d20">1 A fuse on the C3 branch</text>
-<text x="440" y="396" font-size="12" fill="#333">covers the thin 22 AWG wire and diode</text>
 <!-- data -->
 <path d="M660 495 H800 V290 H880" fill="none" stroke="#2a6fd6" stroke-width="3"/>
 <text x="810" y="400" font-size="14" font-weight="700" fill="#2a6fd6">Data: GPIO6 to panel DIN</text>
@@ -101,10 +97,10 @@
 <rect x="30" y="838" width="1180" height="26" fill="#e8ecf1"/>
 <text x="46" y="856" font-weight="700">#</text><text x="90" y="856" font-weight="700">From</text><text x="400" y="856" font-weight="700">To</text><text x="760" y="856" font-weight="700">Wire / part</text><text x="1160" y="856" font-weight="700">Done</text>
 <rect x="30" y="864" width="1180" height="26" fill="#fff"/><text x="46" y="882">1</text><text x="90" y="882">Flash the C3 over USB (bench, nothing else wired)</text><text x="400" y="882">BOOT + RST only if it will not appear on the computer</text><text x="760" y="882">USB-C cable</text><rect x="1160" y="870" width="14" height="14" fill="#fff" stroke="#333"/>
-<rect x="30" y="890" width="1180" height="26" fill="#f6f8fa"/><text x="46" y="908">2</text><text x="90" y="908">Supply barrel plug</text><text x="400" y="908">FILSHU 5.5x2.5 mm panel jack (10.8 mm hole, 5 A / 30 V)</text><text x="760" y="908">red = +, black = GND; optional 5 A fuse; check polarity</text><rect x="1160" y="896" width="14" height="14" fill="#fff" stroke="#333"/>
+<rect x="30" y="890" width="1180" height="26" fill="#f6f8fa"/><text x="46" y="908">2</text><text x="90" y="908">Supply barrel plug</text><text x="400" y="908">5.5x2.5 mm panel jack (10.8 mm hole, 5 A)</text><text x="760" y="908">red = +, black = GND; check polarity</text><rect x="1160" y="896" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="916" width="1180" height="26" fill="#fff"/><text x="46" y="934">3</text><text x="90" y="934">Jack +5V</text><text x="400" y="934">Panel 5V lead</text><text x="760" y="934">18 AWG or thicker, short, red</text><rect x="1160" y="922" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="942" width="1180" height="26" fill="#f6f8fa"/><text x="46" y="960">4</text><text x="90" y="960">Jack GND</text><text x="400" y="960">Panel GND lead</text><text x="760" y="960">18 AWG or thicker, short, black</text><rect x="1160" y="948" width="14" height="14" fill="#fff" stroke="#333"/>
-<rect x="30" y="968" width="1180" height="26" fill="#fff"/><text x="46" y="986">5</text><text x="90" y="986">Jack +5V  via diode</text><text x="400" y="986">C3 5V pin</text><text x="760" y="986">22 AWG; 1 A fuse + diode (bar toward C3)</text><rect x="1160" y="974" width="14" height="14" fill="#fff" stroke="#333"/>
+<rect x="30" y="968" width="1180" height="26" fill="#fff"/><text x="46" y="986">5</text><text x="90" y="986">Jack +5V  via diode</text><text x="400" y="986">C3 5V pin</text><text x="760" y="986">22 AWG; diode (bar toward C3)</text><rect x="1160" y="974" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="994" width="1180" height="26" fill="#f6f8fa"/><text x="46" y="1012">6</text><text x="90" y="1012">Jack GND</text><text x="400" y="1012">C3 G pin</text><text x="760" y="1012">22 AWG, black</text><rect x="1160" y="1000" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="1020" width="1180" height="26" fill="#fff"/><text x="46" y="1038">7</text><text x="90" y="1038">C3 GPIO6</text><text x="400" y="1038">Panel DIN</text><text x="760" y="1038">22-26 AWG, short; 74AHCT125 only if flicker</text><rect x="1160" y="1026" width="14" height="14" fill="#fff" stroke="#333"/>
 <rect x="30" y="1046" width="1180" height="26" fill="#f6f8fa"/><text x="46" y="1064">8</text><text x="90" y="1064">Button Next: GPIO5</text><text x="400" y="1064">GND (same ground)</text><text x="760" y="1064">2 wires to a 12 mm panel button</text><rect x="1160" y="1052" width="14" height="14" fill="#fff" stroke="#333"/>

@@ -53,8 +53,7 @@ function spriteNameFor(file) {
 }
 function setSpriteName(file) { setNameField(spriteNameFor(file)); saveState(); }
 // One import path. Sprite sheets (and single frames saved from here) load straight in; everything else opens the crop dialog.
-$('imageInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+async function importImageFile(file) {
   let raw = null, meta = {};
   try { raw = readPngText(await file.arrayBuffer(), LIGHT_KEY); meta = JSON.parse(raw) || {}; } catch (err) { meta = {}; }
   const url = URL.createObjectURL(file), img = new Image();
@@ -91,7 +90,8 @@ $('imageInput').addEventListener('change', async (e) => {
     if (raw && applySavedLight(raw)) setStatus($('statusEl').textContent + ` Loaded its light settings: brightness ${sim.brightness}, gamma ${sim.gamma}.`);
   };
   img.src = url;
-});
+}
+$('imageInput').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) importImageFile(f); });
 
 
 /* ---------- photo to grid: crop, zoom, background-off, dither ---------- */

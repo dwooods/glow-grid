@@ -25,10 +25,10 @@
     </div>
   </div>
   <div id="fileMenu" class="menu" popover role="menu" aria-label="File">
-    <button class="menu-item" id="menuImport" type="button" role="menuitem">Import image…<small>Sprite sheet, single frame, photo or GIF</small></button>
-    <button class="menu-item" id="menuOpenGg" type="button" role="menuitem">Open .gg sprite…<small>A file saved for the ESP32-C3 board</small></button>
+    <button class="menu-item" id="menuOpen" type="button" role="menuitem">Open…<small>A saved sprite, a picture, a photo or a GIF</small></button>
     <button class="menu-item" id="menuExport" type="button" role="menuitem">Export…<small>Save for the Pi, or a PNG to view or share</small></button>
   </div>
+  <input id="openInput" type="file" accept="image/*,.gg" hidden>
   <input id="imageInput" type="file" accept="image/*" hidden>
   <input id="ggInput" type="file" accept=".gg" hidden>
 </header>

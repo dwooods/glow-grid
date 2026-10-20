@@ -71,6 +71,16 @@ $('helpBody').innerHTML = `
             <li><strong>Forget the setup network on your phone</strong> (Wi-Fi settings, the <code>GlowGrid-Setup-…</code> entry, <em>Forget This Network</em>). The name and the password change every time, so a phone that saved an earlier one cannot rejoin it: if a join fails with "incorrect password", forget every old <code>GlowGrid-Setup-…</code> entry and join the one with the digits now showing on the panel. Saved entries do no harm, but they pile up.</li>
           </ol>
           <p class="hint"><strong>iPhone and Safari</strong> cannot reach the board from this https page. Open the board's own address in Safari instead, <code>http://glowgrid.local/</code> (or <code>http://</code> and its IP): the board serves this same editor. Only USB and the Wi-Fi setup need a computer.</p>
+          <h3>Guide: Open and Export</h3>
+          <p class="hint"><strong>File ▸ Open…</strong> brings a file into the editor and <strong>File ▸ Export…</strong> sends your drawing out. There is one Open because the editor looks at the file and picks the right way to read it for you.</p>
+          <ul>
+            <li><strong>Open a Pi PNG or sprite sheet</strong> (made by Export): the frames, speed, brightness and gamma come back exactly as saved.</li>
+            <li><strong>Open a <code>.gg</code> sprite</strong> (made by Export for the ESP32-C3, or read back from the board): it loads exactly as saved, with no cropping or resizing.</li>
+            <li><strong>Open any other picture, a photo or a GIF:</strong> the crop-and-zoom window appears so you can fit it to the grid. Tick <em>Exact pixels</em> for pixel art.</li>
+            <li><strong>Export</strong> saves the drawing as a Pi PNG, an enlarged PNG to view or share, or a <code>.gg</code> file. Opening the Pi PNG or the <code>.gg</code> file later gives you the same drawing back.</li>
+            <li><strong>Don't use the enlarged "view or share" PNG as a keeper.</strong> It is a picture of the drawing (each pixel drawn big), so Open treats it as a photo and you lose the exact pixels and frames. Keep the Pi PNG or the <code>.gg</code> instead.</li>
+            <li><strong>Opening replaces the drawing.</strong> If you have art on the grid you are asked first, and <em>Undo</em> brings the old drawing back.</li>
+          </ul>
           <h3>Guide: saving, and why</h3>
           <figure class="help-fig">
             <svg viewBox="0 0 420 170" role="img" aria-label="One drawing exports three ways: Raspberry Pi PNG, enlarged PNG to view or share, and a .gg file for the ESP32-C3">
@@ -84,9 +94,9 @@ $('helpBody').innerHTML = `
           </figure>
           <p class="hint">Open <strong>File ▸ Export…</strong>, type a <em>Name</em>, choose <em>Export for</em> and press <em>Save</em>. One frame saves a still; two or more save an animation.</p>
           <ul>
-            <li><strong>Raspberry Pi:</strong> a PNG with exactly one pixel per LED, so the Pi plays it pixel for pixel. Brightness, gamma, grid size, frame count and fps are stored inside, so the file name can be anything. Copy it to <code>~/glow-grid/images/</code> (see <em>Getting a picture onto the panel</em>). Use this as your keeper file too: <strong>File ▸ Import image</strong> brings it back as separate frames.</li>
+            <li><strong>Raspberry Pi:</strong> a PNG with exactly one pixel per LED, so the Pi plays it pixel for pixel. Brightness, gamma, grid size, frame count and fps are stored inside, so the file name can be anything. Copy it to <code>~/glow-grid/images/</code> (see <em>Getting a picture onto the panel</em>). Use this as your keeper file too: <strong>File ▸ Open…</strong> brings it back as separate frames.</li>
             <li><strong>View or share (PNG):</strong> an enlarged, sharp copy (<code>_x16</code> in the name) for looking at, a blog or a message. Pick the <em>Scale</em>. Do not put it on the Pi: an enlarged animation plays there as one squashed still.</li>
-            <li><strong>ESP32-C3 (.gg):</strong> a small file for the C3 player, 16×16 and up to 16 frames only. Pixels stay as drawn; the board applies the wiring, gamma and brightness cap itself. Reopen one with <strong>File ▸ Open .gg sprite</strong>.</li>
+            <li><strong>ESP32-C3 (.gg):</strong> a small file for the C3 player, 16×16 and up to 16 frames only. Pixels stay as drawn; the board applies the wiring, gamma and brightness cap itself. Reopen one with <strong>File ▸ Open…</strong>.</li>
             <li><strong>Straight to the board:</strong> with the Board card connected (USB or Wi-Fi), <em>Send to board</em> stores the current drawing under the <em>Name</em> beside it and plays it, with no file to copy. A new Name adds a sprite; a Name already on the board replaces it (you are asked first), so to save a changed copy, change the Name before Send. <em>Load</em> in the board's list brings a stored sprite back into the editor.</li>
             <li><strong>Where it goes:</strong> Chrome and Edge ask where to save; other browsers put the file in Downloads.</li>
           </ul>
@@ -115,7 +125,7 @@ Then build it:
           <ol>
             <li><strong>Answer its questions.</strong> Say the grid size you will use: <em>Cols</em> by <em>Rows</em> (a tall 8 by 32 panel is 8 columns, 32 rows).</li>
             <li><strong>Set the same size here first.</strong> Under <em>Panel settings</em>, type the <em>Cols</em> and <em>Rows</em> and press <em>Apply size</em>.</li>
-            <li><strong>Load it.</strong> <em>File ▸ Import image…</em> and pick the PNG. All the frames, the speed, the brightness and the gamma come in with it.</li>
+            <li><strong>Load it.</strong> <em>File ▸ Open…</em> and pick the PNG. All the frames, the speed, the brightness and the gamma come in with it.</li>
             <li><strong>If the crop window opens instead,</strong> the grid size here does not match the PNG, or the file lost its frame count and name tag. Set the size and import again.</li>
           </ol>
           <p class="hint">The AI cannot see your panel, so check the result: Play, look for the dashed outlines (Panel Check) and read the amps under Panel settings. Ask it for another version, or touch it up here.</p>
@@ -156,7 +166,7 @@ Then build it:
             <li><strong>The magnifier:</strong> while a finger or pen is painting or erasing, a close-up of the pixels around it floats beside your finger, with the pixel you are on outlined. It appears only for touch and pen, never for a mouse.</li>
           </ul>
           <h3>Getting a picture onto the panel</h3>
-          <p class="hint"><strong>File ▸ Import image</strong> loads everything: a sprite sheet or single frame saved from here comes back as separate frames; any other picture opens a crop-and-zoom editor. Tick <strong>Exact pixels</strong> for pixel art, or leave it off for photos. Both can remove the background. On a phone the picker offers the camera too.</p>
+          <p class="hint"><strong>File ▸ Open…</strong> loads everything: a sprite sheet or single frame saved from here comes back as separate frames; any other picture opens a crop-and-zoom editor. Tick <strong>Exact pixels</strong> for pixel art, or leave it off for photos. Both can remove the background. On a phone the picker offers the camera too.</p>
           <ul>
             <li><strong>Raspberry Pi</strong> makes one PNG with one pixel per LED. One frame saves a still, two or more save a sprite sheet. Brightness, gamma, grid size and (for an animation) frame count and fps go inside the file, so the name can stay plain.</li>
             <li><strong>Copy it to the Pi</strong> from your PC, then run <code>glow-grid</code>, press <code>r</code> to rescan and pick the file. In PowerShell: <code>scp "$HOME\\Downloads\\sprite.png" user@raspberrypi.local:~/glow-grid/images/</code> (change the file name and login to match yours).</li>
@@ -198,7 +208,7 @@ $('aiCopy').addEventListener('click', async () => {
 // The text above is untouched; the h3s stay (inside the fold's summary), so anything that reads them still works.
 (function () {
   const body = $('helpBody');
-  const short = { 'Guide: build a sprite': 'Guide: draw', 'Guide: Wi-Fi setup': 'Guide: Wi-Fi', 'Guide: saving, and why': 'Guide: saving', 'Guide: make a sprite with AI': 'Guide: AI', 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Edit all frames: move and shared layer': 'All frames',
+  const short = { 'Guide: build a sprite': 'Guide: draw', 'Guide: Wi-Fi setup': 'Guide: Wi-Fi', 'Guide: Open and Export': 'Guide: Open/Export', 'Guide: saving, and why': 'Guide: saving', 'Guide: make a sprite with AI': 'Guide: AI', 'Works well': 'Works well', 'Animation files: sheet, fps and names': 'Animation files', 'Edit all frames: move and shared layer': 'All frames',
     'Drawing tools': 'Drawing', 'Drawing on a phone': 'Phone', 'Getting a picture onto the panel': 'To the panel', 'Watch out for': 'Watch out' };
   const chips = document.createElement('nav');
   chips.className = 'help-chips'; chips.setAttribute('aria-label', 'Help sections');

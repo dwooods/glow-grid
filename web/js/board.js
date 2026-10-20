@@ -504,7 +504,7 @@ async function boardSend() {
   if (state.cols !== 16 || state.rows !== 16) { boardSay(`The C3 player is 16×16; this picture is ${state.cols}×${state.rows}.`, 'err'); return; }
   if (n > GG_MAX_FRAMES) { boardSay(`The C3 player takes up to ${GG_MAX_FRAMES} frames; this has ${n}.`, 'err'); return; }
   const flat = state.frames.map(flatten);
-  if (flat.every((f) => f.every((h) => h === '#000000'))) { boardSay('The drawing is blank; nothing sent. Draw something or File ▸ Import image first.', 'err'); return; }
+  if (flat.every((f) => f.every((h) => h === '#000000'))) { boardSay('The drawing is blank; nothing sent. Draw something or File ▸ Open first.', 'err'); return; }
   let bytes;
   try { bytes = ggBytes(flat, state.cols, state.rows, state.fps, sim.brightness, sim.gamma); }
   catch (err) { boardSay(`Can’t send: ${err.message}.`, 'err'); return; }
