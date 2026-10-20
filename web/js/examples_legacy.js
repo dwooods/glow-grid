@@ -11,6 +11,7 @@ const GG_LEGACY_EXAMPLES = [
   ["fireworks_sprite", "27aae03f", 12300],
   ["heart_sprite", "33a3a28e", 3084],
   ["jack_sprite", "a775b4a2", 3084],
+  ["meteors_sprite", "458db2bd", 12300],
   ["moon_sprite", "165181e8", 6156],
   ["moon_sprite", "9e216c0d", 6156],
   ["mushroom_sprite", "788e99e3", 3084],

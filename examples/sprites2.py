@@ -577,29 +577,27 @@ def fireworks_frames():
     return frames
 
 
-# ---- meteor shower: streaks with fading tails cross a starry sky ----
-_METEORS = (            # (x at u=0, y at u=0, dx per step, dy per step, offset into the 20-step loop)
-    (-2, 0, 1.0, 0.7, 0),
-    (18, 2, -0.9, 0.9, 7),
-    (-3, 7, 1.0, 0.5, 13),
+# ---- meteor shower: two streaks with fading tails cross a starry sky ----
+_METEORS = (            # (x, y at u=0, dx per step down the line, offset in frames); dy is always +1, so the line is a clean diagonal
+    (-3, 0, 1, 0),      # down and to the right
+    (19, 4, -1, 8),     # down and to the left, half a loop later
 )
-_TAIL = ("W", "Y", "G", "O", "r")
-_STARS = ((2, 1), (12, 2), (6, 5), (14, 8), (3, 10), (9, 12), (13, 14), (5, 15))
+_TAIL = ("W", "C", "c", "a")
+_STARS = ((2, 2), (13, 1), (6, 6), (14, 9), (3, 12), (10, 14))
 
 
 def meteor_frames():
-    """16 frames: three meteors with fading tails streak across a dark sky of twinkling stars, each on its own line and timing."""
+    """16 frames: two meteors, each a white head with a short pale-blue tail on a clean diagonal, streak across a dark sky one
+    after the other; a handful of steady stars sit behind them and one at a time dims for a moment."""
     frames = []
     for k in range(16):
         g = _grid()
-        for i, (x, y) in enumerate(_STARS):                              # twinkling stars
-            ph = (k + 3 * i) % 8
-            if ph < 5:
-                _put(g, x, y, "s" if ph in (0, 1, 4) else "S")
-        for x0, y0, dx, dy, off in _METEORS:
-            u = (k * 20 / 16 + off) % 20 - 3                             # a 20-step loop: 16 steps on screen and a few for the tail
+        for i, (x, y) in enumerate(_STARS):                              # steady stars, one dimmed at a time
+            _put(g, x, y, "." if (k // 2) % 6 == i and k % 2 == 0 else "s")
+        for x0, y0, dx, off in _METEORS:
+            u = 2 * ((k + off) % 16) - 8                                 # head steps 2 cells a frame along its diagonal, then waits off-screen
             for j, col in enumerate(_TAIL):
-                _put(g, round(x0 + dx * (u - j)), round(y0 + dy * (u - j)), col)
+                _put(g, x0 + dx * (u - j), y0 + (u - j), col)
         frames.append(_rows(g))
     return frames
 
