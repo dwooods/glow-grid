@@ -437,7 +437,7 @@ def tree_frames():
 
 # ---- jack o'lantern ----
 def jack_frames():
-    """4 frames: a carved pumpkin whose candle flickers and whose grin widens."""
+    """4 frames: a carved pumpkin whose candle flickers: the carved face stays the same and only its glow changes colour."""
     frames = []
     for k in range(4):
         g = _grid()
@@ -453,13 +453,11 @@ def jack_frames():
         for x, y in ((3, 7), (4, 7), (5, 7), (4, 6), (5, 6), (5, 5), (10, 7), (11, 7), (12, 7), (10, 6), (11, 6), (10, 5)):   # eyes
             _put(g, x, y, glow)
         _put(g, 7, 9, glow); _put(g, 8, 9, glow); _put(g, 7, 10, glow); _put(g, 8, 10, glow)                        # nose
-        wide = k in (1, 2)
-        for x in range(4 - wide, 12 + wide):                                # grin, black gaps are teeth
+        for x in range(3, 13):                                        # grin (fixed shape), black gaps are teeth
             _put(g, x, 12, "." if x in (6, 9) else glow)
         for x in range(5, 11):
-            _put(g, x, 13, "." if x in (7, 8) and k != 3 else glow)
-        if wide:
-            _put(g, 3 - (k == 2), 11, glow); _put(g, 12 + (k == 2), 11, glow)
+            _put(g, x, 13, "." if x in (7, 8) else glow)
+        _put(g, 3, 11, glow); _put(g, 12, 11, glow)                   # grin corners
         frames.append(_rows(g))
     return frames
 
