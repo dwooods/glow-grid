@@ -276,6 +276,8 @@ for pg in ([_txt] if _txt.geom_type=='Polygon' else list(_txt.geoms)):
 slab_feet.extend(_emb)
 cradle=clean(union(blocks+slab_feet,engine='manifold'))
 report('cradle (two feet joined by a curved bar)',cradle); cradle.export(OUT+'glow-grid_desk_cradle_v15.stl')
+cradle_plain=clean(union(blocks+[slab_feet[0]],engine='manifold'))      # the same cradle without the raised "PIXEL ART" lettering on the bar
+report('cradle, plain bar (no lettering)',cradle_plain); cradle_plain.export(OUT+'glow-grid_desk_cradle_v15_plain.stl')
 print('base: feet',2*FOOT_HALF_W,'x',round(SLAB_U1-SLAB_U0,1),'mm r',FOOT_R,'; bar',BAR_W,'mm wide bowing',BAR_BOW,'mm forward; fillet r',FILLET_R)
 
 # ---------------- checks ----------------
