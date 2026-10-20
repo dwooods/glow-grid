@@ -552,7 +552,7 @@ class Smoke(unittest.TestCase):
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(5000)
         kept = self.pg.evaluate('GG_EXAMPLES[2].name')
         self.assertEqual(self.store(), sorted(['mine', kept]))
-        self.assertEqual(self.status(), f'Removed 37 examples (2 older versions). Kept 1 you changed: {kept}.')
+        self.assertEqual(self.status(), f'Removed 39 examples (2 older versions). Kept 1 you changed: {kept}.')
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)     # now the new versions go in
         self.assertEqual(self.pg.evaluate("GG_EXAMPLES.filter((e) => e.name !== GG_EXAMPLES[2].name).every((e) => { const b = window.__fakeStore.get(e.name); const w = ggExampleBytes(e); return b && b.length === w.length && b.every((v, i) => v === w[i]); })"), True)
 
@@ -561,7 +561,7 @@ class Smoke(unittest.TestCase):
         answer = {'ok': True}
         self.pg.on('dialog', lambda d: d.accept() if answer['ok'] else d.dismiss())
         total = self.pg.evaluate('GG_EXAMPLES.length')
-        self.assertEqual(total, 37)
+        self.assertEqual(total, 39)
         self.assertTrue(self.pg.evaluate("document.getElementById('boardExamples').hidden"), 'hidden until connected')
         self.connect(['mine'])
         self.assertFalse(self.pg.evaluate("document.getElementById('boardExamples').hidden"))
@@ -574,7 +574,7 @@ class Smoke(unittest.TestCase):
         self.assertEqual(len(self.store()), total + 1)
         self.assertEqual(self.pg.evaluate("GG_EXAMPLES.every((e) => { const b = window.__fakeStore.get(e.name); const w = ggExampleBytes(e); return b && b.length === w.length && b.every((v, i) => v === w[i]); })"), True)
         self.assertEqual(self.pg.evaluate('window.__fakeCurrent'), 'mine')
-        self.assertEqual(self.pager()['info'], '1–5 of 38', 'the examples page like everything else')
+        self.assertEqual(self.pager()['info'], '1–5 of 40', 'the examples page like everything else')
         # add again: nothing is sent
         before = self.puts()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
@@ -695,14 +695,14 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate('window.__fakeFw = 6')
         self.connect()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(6500)
-        n = len(self.store()); self.assertEqual(n, 37)
+        n = len(self.store()); self.assertEqual(n, 39)
         self.pg.click('#boardRemoveExBtn'); self.pg.wait_for_timeout(400)
         self.assertIn('newer board software', self.status()); self.assertEqual(len(self.store()), n)
         self.assertEqual(self.pg.evaluate("window.__fakeLog.filter((l) => l.startsWith('CRC') || l.startsWith('DEL')).length"), 0)
         self.pg.click('#boardDisconnectBtn'); self.pg.wait_for_timeout(300)
         # a board with no room for all of them: nothing is sent, and the message says why
         self.pg.evaluate("() => { window.__fakeFw = 7; window.__fakeStore.clear(); }")
-        self.pg.evaluate(self.SEED, [f'p{i:02d}' for i in range(70)])       # 70 + 37 examples > the 96 slots
+        self.pg.evaluate(self.SEED, [f'p{i:02d}' for i in range(70)])       # 70 + 39 examples > the 96 slots
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         before = self.puts()
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(400)
@@ -712,7 +712,7 @@ class Smoke(unittest.TestCase):
         self.pg.evaluate("() => { window.__fakeStore.clear(); window.__fakeBreak = 'full'; }")
         self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(600)
         self.pg.click('#boardAddExBtn'); self.pg.wait_for_timeout(800)
-        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 37', self.status())
+        self.assertIn('not enough space', self.status()); self.assertIn('Added 0 of 39', self.status())
         self.assertFalse(self.pg.evaluate("document.getElementById('boardAddExBtn').disabled"), 'buttons come back after an error')
         self.assertFalse(self.pg.evaluate("document.getElementById('boardSendBtn').disabled"))
 

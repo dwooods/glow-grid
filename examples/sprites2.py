@@ -577,6 +577,83 @@ def fireworks_frames():
     return frames
 
 
+# ---- meteor shower: streaks with fading tails cross a starry sky ----
+_METEORS = (            # (x at u=0, y at u=0, dx per step, dy per step, offset into the 20-step loop)
+    (-2, 0, 1.0, 0.7, 0),
+    (18, 2, -0.9, 0.9, 7),
+    (-3, 7, 1.0, 0.5, 13),
+)
+_TAIL = ("W", "Y", "G", "O", "r")
+_STARS = ((2, 1), (12, 2), (6, 5), (14, 8), (3, 10), (9, 12), (13, 14), (5, 15))
+
+
+def meteor_frames():
+    """16 frames: three meteors with fading tails streak across a dark sky of twinkling stars, each on its own line and timing."""
+    frames = []
+    for k in range(16):
+        g = _grid()
+        for i, (x, y) in enumerate(_STARS):                              # twinkling stars
+            ph = (k + 3 * i) % 8
+            if ph < 5:
+                _put(g, x, y, "s" if ph in (0, 1, 4) else "S")
+        for x0, y0, dx, dy, off in _METEORS:
+            u = (k * 20 / 16 + off) % 20 - 3                             # a 20-step loop: 16 steps on screen and a few for the tail
+            for j, col in enumerate(_TAIL):
+                _put(g, round(x0 + dx * (u - j)), round(y0 + dy * (u - j)), col)
+        frames.append(_rows(g))
+    return frames
+
+
+# ---- lightning storm: a dark cloud, rain, and two strikes ----
+_CLOUD = (
+    "...ssssss...",
+    ".sssssssssss",
+    "ssssssssssss",
+    ".ssssssssss.",
+)
+_BOLT_A = ((8, 4), (8, 5), (7, 6), (7, 7), (8, 8), (8, 9), (7, 10), (6, 11), (6, 12), (5, 13))
+_FORK_A = ((8, 7), (9, 8), (10, 9), (10, 10))
+_BOLT_B = ((3, 4), (3, 5), (4, 6), (3, 7), (3, 8), (2, 9), (2, 10))
+_RAIN_COLS = (0, 2, 4, 6, 10, 12, 14, 15)
+
+
+def lightning_frames():
+    """16 frames: a small dark cloud with rain falling past it; a forked bolt strikes and lights the cloud, then a second smaller
+    bolt strikes on the left, with quiet gaps in between."""
+    frames = []
+    for k in range(16):
+        g = _grid()
+        strike = {4: "lead", 5: "full", 6: "dim", 10: "small", 11: "dim2"}.get(k)
+        lit = strike in ("full", "dim", "small")
+        for y, row in enumerate(_CLOUD):                                 # the cloud, brighter in the flash
+            for x, c in enumerate(row):
+                if c != ".":
+                    _put(g, 2 + x, y, ("S" if lit else "s"))
+        for i, x in enumerate(_RAIN_COLS):                               # rain: two-pixel streaks falling one row a frame
+            y = (k + 5 * i) % 16
+            for d, col in ((0, "a"), (-1, "E")):
+                yy = y + d
+                if 5 <= yy <= 15 and g[yy][x] == ".":
+                    _put(g, x, yy, col)
+        if strike == "lead":
+            for x, y in _BOLT_A[:4]:
+                _put(g, x, y, "Y")
+        elif strike == "full":
+            for x, y in _BOLT_A + _FORK_A:
+                _put(g, x, y, "W")
+        elif strike == "dim":
+            for x, y in _BOLT_A[:7]:
+                _put(g, x, y, "Y")
+        elif strike == "small":
+            for x, y in _BOLT_B:
+                _put(g, x, y, "W")
+        elif strike == "dim2":
+            for x, y in _BOLT_B[:4]:
+                _put(g, x, y, "Y")
+        frames.append(_rows(g))
+    return frames
+
+
 _SPIDER_LEGS = (      # per side: one leg angled back, one straight out, one angled forward; (dx, dy) from the body's centre, two poses
     (((3, -1), (4, -2), (5, -3)), ((3, 0), (4, 0), (5, 0)), ((3, 1), (4, 2), (5, 3))),
     (((3, -1), (4, -2), (4, -3)), ((3, 0), (4, 1), (5, 1)), ((3, 1), (4, 2), (4, 3))),
