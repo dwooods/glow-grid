@@ -4,7 +4,7 @@ Usage:  python3 build.py [output_dir]      (default: ./out)
 Needs:  pip install numpy trimesh manifold3d shapely
 
 All sizes are millimetres and live in the 'shared dimensions' block and next to each part.
-Frame v5, holder v2 and cap v2 were printed 2026-10-15; v6/v3 (long lip notches, bracket clearance, slide-in cap, open cable slot) are not yet printed; v7/cradle v15 (2026-10-18) add 3 mm of depth (ZL 23 -> 26) and the cradle slot follows.
+Frame v5, holder v2 and cap v2 were printed 2026-10-15; v6/v3 (long lip notches, bracket clearance, slide-in cap, open cable slot) are not yet printed; v7/cradle v15 (2026-10-18) add 3 mm of depth (ZL 23 -> 26) and the cradle slot follows; v8 (2026-10-20) has thicker spring fingers (1.6 -> 2.0 mm), same lip.
 """
 import os, sys
 import numpy as np, trimesh
@@ -33,15 +33,16 @@ WALL=2.0; OUTER=166.0; INNER=OUTER-2*WALL        # 162 pocket
 HO=OUTER/2; HI=INNER/2                            # 83, 81
 BACK=3.0                                          # back plate
 ZL=26.0                                           # v7 (2026-10-18): 23 -> 26, 3 mm more wiring room behind the panel (23.0 in v5/v6); everything below follows from it
-LIP_DROP=2.0                                      # lip top sits this far behind ZL: a backstop, so the stack can't fall back past it
+LIP_DROP=2.0                                      # lip top sits this far behind ZL: a backstop, so the stack can't fall back past it (unchanged since v6: lip is 11.6 mm from the front)
 LIPZ=ZL-LIP_DROP                                  # 24.0 (v7)
 LIP_W=3.0                                         # how far the lip overlaps the panel edge
 # (v6: the separate 25 mm panel-tail notch on the left wall, y -10..15, is gone; the panel tail must leave through the one gap below, or get its own entry in LIP_NOTCHES)
 # v6 (2026-10-17): the lip over the C3 blocked the wires soldered to the pin tips, so the left wall has ONE gap: (side, y0, y1), from 20 mm below the
 # holder to 8 mm above it. The lip on the other three walls is continuous (David, 2026-10-17: the right wall is not a wiring problem).
 LIP_NOTCHES=[('left',-62.0,-7.4)]   # top end 11 mm past the holder's edge (y -18.4): backs the panel beside the jack without crowding the C3 wires (David, 2026-10-17)
-FING_T=1.6; FING_W=10.0; FING_PRELOAD=0.8         # printed spring fingers: thickness, width, how far they are compressed when the cover is on
+FING_T=2.0; FING_W=10.0; FING_PRELOAD=0.8         # printed spring fingers: thickness, width, how far they are compressed when the cover is on
 FING_TIP=(ZL+FING_PRELOAD)                        # free height of the finger tip above the back plate
+# v8 (2026-10-20): fingers 1.6 -> 2.0 mm thick. The v7 arms are 3 mm longer (21.3 vs 18.3 mm), about 1.6x softer, so the panel sank onto the lip; 2.0 mm is about 1.95x stiffer, net ~1.2x the v6 stiffness
 PANEL_T=1.6; GRID_H=8.0
 H=ZL+PANEL_T+GRID_H                               # 35.6 frame rim height (v7; 32.6 in v6)
 GRID_OUT=161.0                                    # grid outer (walls on +/-80 centres, 1 mm thick)
@@ -170,7 +171,7 @@ for k in ('next','onoff'):
     cuts.append(Cz(HOLE_XS[k],HOLE_Y,6.15,-1,BACK+1))              # two 12 mm panel-mount push buttons (next image, on/off)
 cuts.append(B(-38,3,-72.5,-59.5,BACK-0.4,BACK+0.5))                # 0.4 mm recess marking the flat spot for the 40 x 12 mm stick-on antenna
 frame=clean(difference([frame]+cuts,engine='manifold'))
-report('frame',frame); frame.export(OUT+'glow-grid_frame_v7.stl')
+report('frame',frame); frame.export(OUT+'glow-grid_frame_v8.stl')
 
 # ---------------- 2. GRID (separate print, black) ----------------
 bars=[]
