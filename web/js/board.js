@@ -304,7 +304,8 @@ function boardServedBy() {
   if (window.__ggBoardOrigin) return window.__ggBoardOrigin;
   return location.protocol === 'http:' && !/^(localhost|127\.|\[::1\])/.test(location.hostname) ? location.host : '';
 }
-function boardSavedHost() { const own = boardServedBy(); if (own) return own; try { return localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; } catch (e) { return BOARD_HOST_DEFAULT; } }
+// A stored glowgrid.local is from before firmware 23 (every board was called that) and no longer answers: treat it as nothing saved.
+function boardSavedHost() { const own = boardServedBy(); if (own) return own; try { const h = localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; return h === 'glowgrid.local' ? '' : h; } catch (e) { return BOARD_HOST_DEFAULT; } }
 function boardSaveHost(h) { try { localStorage.setItem(BOARD_HOST_KEY, h); } catch (e) { /* private window: just forget it */ } }
 // Accepts glowgrid-1a2b.local, 192.168.1.50, or either with http:// or a trailing slash pasted in. Returns '' for something that cannot be an address.
 function boardCleanHost(raw) {
@@ -496,7 +497,15 @@ async function boardAttach(b) {
     const fwNote = boardFw ? `Board software version ${boardFw}.` : 'The board software is very old: update it.';
     boardSay(`Connected${b.via === 'wifi' ? ` over Wi-Fi (${b.host})` : ''}. ${fwNote}` + (b.via === 'wifi' && Number(boardFw) && Number(boardFw) < BOARD_WIFI_FW ? ' (Wi-Fi needs newer board software, so this will not last.)' : ''), 'ok');
   } catch (err) { boardSay(`Board said: ${err.message}`, 'err'); }
+  await boardLearnHost(b);
   netSync();
+}
+// A board on USB that is already on Wi-Fi tells us its name (firmware 23: glowgrid-XXXX.local); keep it as the Wi-Fi address, so a saved
+// glowgrid.local from an older firmware, or an empty box on a new install, becomes the right name without a Save-to-board round.
+const BOARD_NAMED_FW = 23;
+async function boardLearnHost(b) {
+  if (b.via !== 'usb' || Number(boardFw) < BOARD_NAMED_FW || !boardInfo.wifi || ['-', 'off'].includes(boardInfo.wifi)) return;
+  try { const st = await b.wifiStatus(); if (st.state === 'connected' && st.host) { boardSaveHost(st.host); $('netHost').value = st.host; } } catch (e) { /* an old board, or busy: leave the box alone */ }
 }
 async function boardSend() {
   if (!board) return;

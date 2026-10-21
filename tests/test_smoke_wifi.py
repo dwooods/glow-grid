@@ -389,6 +389,21 @@ class SmokeWifi(unittest.TestCase):
         self.assertIn('k7m2xq9p4d', el('netStatus'))
         self.assertEqual(self.errors, [])
 
+    def test_a_board_already_on_wifi_tells_the_editor_its_name(self):
+        """Firmware 23 over USB with Wi-Fi joined: the editor asks WIFI STATUS and keeps the board's own name (glowgrid-XXXX.local) as the
+        Wi-Fi address, replacing a glowgrid.local saved by an older version; a stored glowgrid.local on its own is treated as nothing saved."""
+        self.fresh_page(f'({FAKE_BOARD})()', "localStorage.setItem('ggBoardHost', 'glowgrid.local');"); self.board_helpers()
+        el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertEqual(el('netHost', 'value'), '', "the pre-firmware-23 name is not offered")
+        self.pg.click('#netClose'); self.pg.wait_for_timeout(100)
+        self.pg.evaluate("window.__fakeFw = 23; window.__fakeWifi = { state: 'connected', ip: '192.168.50.6', ssid: 'Home Net', polls: 0 }")
+        self.pg.click('#boardConnectBtn'); self.pg.wait_for_timeout(800)
+        self.assertEqual(self.pg.evaluate("localStorage.getItem('ggBoardHost')"), 'glowgrid-5e6f.local')
+        self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
+        self.assertEqual(el('netHost', 'value'), 'glowgrid-5e6f.local')
+        self.assertEqual(self.errors, [])
+
     def test_send_is_refused_when_the_board_is_full(self):
         """At 96 sprites (the fw 19 limit) a new name is refused in the editor with the reason, before anything is sent; replacing a name still works."""
         hb = FakeHttpBoard(fw=13)
