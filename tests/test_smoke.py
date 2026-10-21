@@ -78,7 +78,7 @@ FAKE_BOARD = """() => {
         case 'WIFI': { const w = window.__fakeWifi;
           if (window.__fakeFw < 9) return say('ERR unknown command');
           if (a1 === 'STATUS') { if (w.state === 'connecting' && ++w.polls >= 2) { w.state = 'connected'; w.ip = '192.168.50.6'; }
-            return say('OK wifi=' + w.state + ' ip=' + w.ip + ' rssi=-40 host=glowgrid.local ssid=' + w.ssid); }
+            return say('OK wifi=' + w.state + ' ip=' + w.ip + ' rssi=-40 host=glowgrid-5e6f.local ssid=' + w.ssid); }
           if (a1 === 'SCAN') { if (window.__fakeFw < 10) return say('ERR usage: WIFI STATUS | WIFI SET <ssid hex> <password hex or -> | WIFI CLEAR');
             const hx = (s) => Array.from(new TextEncoder().encode(s), (b) => b.toString(16).padStart(2, '0')).join('');
             for (const n of (window.__fakeScan || [])) say('NET ' + hx(n.ssid) + ' ' + n.rssi + ' ' + (n.secure ? 1 : 0));

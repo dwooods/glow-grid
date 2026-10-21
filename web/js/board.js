@@ -160,11 +160,11 @@ class GgBoard {
     if (bytes.length !== Number(m[2]) || crc32(bytes).toString(16).padStart(8, '0') !== m[1]) throw new Error('the sprite came through damaged; try Load again');
     return bytes;
   }
-  async wifiStatus() {                // firmware 9 and later: "OK wifi=connected ip=192.168.1.50 rssi=-40 host=glowgrid.local ssid=<name>"
+  async wifiStatus() {                // firmware 9 and later: "OK wifi=connected ip=192.168.1.50 rssi=-40 host=glowgrid-1a2b.local ssid=<name>" (the name is per board from firmware 23; it was glowgrid.local before)
     const line = await this.cmd('WIFI STATUS', ['OK']);
-    const m = /wifi=(\w+) ip=(\S+)/.exec(line);
+    const m = /wifi=(\w+) ip=(\S+)(?:.*? host=(\S+))?/.exec(line);
     if (!m) throw new Error(`unexpected reply: ${line}`);
-    return { state: m[1], ip: m[2] === '-' ? '' : m[2] };
+    return { state: m[1], ip: m[2] === '-' ? '' : m[2], host: m[3] || '' };
   }
   // The name and password go as hex, so spaces and symbols survive the command line. The password is never echoed by the board.
   async wifiSet(ssid, password) {
@@ -296,8 +296,8 @@ const BOARD_KEY_FW = 18;           // firmware 18 to 20: GlowGrid-Setup is WPA2 
 const BOARD_PANELKEY_FW = 21;      // firmware 21 on: the setup network is WPA3, new each time (GlowGrid-Setup-NNNN), and its 8-digit key is shown on the panel; no typed key
 const boardNeedsKey = (fw) => Number(fw) >= BOARD_KEY_FW && Number(fw) < BOARD_PANELKEY_FW;
 const BOARD_HOST_KEY = 'ggBoardHost';
-const BOARD_HOST_DEFAULT = 'glowgrid.local';
-// The editor also runs from the board itself (firmware 12 serves it at http://glowgrid.local/ or its IP address). Then the page and the board
+const BOARD_HOST_DEFAULT = '';      // every board has its own name from firmware 23 (glowgrid-1a2b.local), so there is no default to offer
+// The editor also runs from the board itself (firmware 12 serves it at http://glowgrid-1a2b.local/ or its IP address). Then the page and the board
 // share an origin, so even iPhone Safari may call it (it refuses an https page calling a plain-http board). That address is the board's.
 // Tests set window.__ggBoardOrigin to stand in for it; localhost and 127.x are the developer's own server, never a board.
 function boardServedBy() {
@@ -306,7 +306,7 @@ function boardServedBy() {
 }
 function boardSavedHost() { const own = boardServedBy(); if (own) return own; try { return localStorage.getItem(BOARD_HOST_KEY) || BOARD_HOST_DEFAULT; } catch (e) { return BOARD_HOST_DEFAULT; } }
 function boardSaveHost(h) { try { localStorage.setItem(BOARD_HOST_KEY, h); } catch (e) { /* private window: just forget it */ } }
-// Accepts glowgrid.local, 192.168.1.50, or either with http:// or a trailing slash pasted in. Returns '' for something that cannot be an address.
+// Accepts glowgrid-1a2b.local, 192.168.1.50, or either with http:// or a trailing slash pasted in. Returns '' for something that cannot be an address.
 function boardCleanHost(raw) {
   const h = String(raw || '').trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
   return /^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?$/.test(h) ? h : '';
@@ -383,7 +383,7 @@ function boardShowSched(info) {        // the box shows the board's own schedule
   else hint.textContent = /^\d{4}$/.test(info.clock || '') ? '' : 'The board has no time yet: it learns it over Wi-Fi shortly after joining, and a schedule waits until then.';
   hint.hidden = !hint.textContent;
 }
-function boardLinkUpdate() {           // "· Wi-Fi glowgrid.local", or "· USB" plus the board's address once it has joined a network
+function boardLinkUpdate() {           // "· Wi-Fi glowgrid-1a2b.local", or "· USB" plus the board's address once it has joined a network
   const ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
   $('boardLink').textContent = boardVia === 'wifi' ? `· Wi-Fi ${board.host}` : boardVia === 'usb' ? '· USB' + (ip ? ` · address ${ip}` : '') : '';
 }
@@ -476,7 +476,7 @@ async function boardConnect() {
 }
 async function boardConnectWifi(rawHost) {
   const host = boardCleanHost(rawHost || boardSavedHost());
-  if (!host) { boardSay('That does not look like a board address. Use glowgrid.local or the IP address, like 192.168.1.50.', 'err'); return false; }
+  if (!host) { boardSay('Type the board\'s address in Network first: its name (glowgrid-1a2b.local) or its IP address, like 192.168.1.50.', 'err'); return false; }
   const b = new HttpBoard(host);
   boardSay(`Looking for the board at ${host}…`, '');
   $('boardWifiBtn').disabled = true;
@@ -665,7 +665,7 @@ function netOpen() {
 }
 async function netConnect() {
   const host = boardCleanHost($('netHost').value);
-  if (!host) { netSay('Not an address. Try glowgrid.local or 192.168.1.50.', 'err'); return; }
+  if (!host) { netSay('Not an address. Try glowgrid-1a2b.local or 192.168.1.50.', 'err'); return; }
   $('netConnectBtn').disabled = true;
   netSay(`Looking for the board at ${host}…`, '');
   const ok = await boardConnectWifi(host);
@@ -691,9 +691,9 @@ async function netSave() {
       st = await b.wifiStatus();
       if (st.state === 'connected') break;
     }
-    if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); }
+    if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); if (st.host) { boardSaveHost(st.host); $('netHost').value = st.host; } }
     if (st.state === 'connected') netResetForm();
-    if (st.state === 'connected') netSay(`Joined ${ssid}, address ${st.ip}. Unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
+    if (st.state === 'connected') netSay(`Joined ${ssid}, address ${st.ip}${st.host ? ` (${st.host})` : ''}. Unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
     else netSay(`Saved, not joined (${st.state || 'no answer'}). Check name, password, 2.4 GHz.`, 'err');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }

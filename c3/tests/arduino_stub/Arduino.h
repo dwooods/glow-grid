@@ -91,6 +91,7 @@ class String {
   int lastIndexOf(char c) const { size_t p = s.rfind(c); return p == std::string::npos ? -1 : (int)p; }
   String substring(unsigned from) const { return String(s.substr(from)); }
   String substring(unsigned from, unsigned to) const { return String(s.substr(from, to - from)); }
+  void replace(const String& from, const String& to) { if (from.s.empty()) return; size_t k = 0; while ((k = s.find(from.s, k)) != std::string::npos) { s.replace(k, from.s.size(), to.s); k += to.s.size(); } }
   void toUpperCase() { for (auto& ch : s) ch = (char)toupper((unsigned char)ch); }
   String operator+(const String& o) const { return String(s + o.s); }
   String operator+(const char* o) const { return String(s + o); }

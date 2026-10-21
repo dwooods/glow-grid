@@ -137,10 +137,10 @@ class SmokeWifi(unittest.TestCase):
         self.pg.on('dialog', lambda d: (dialogs.append(d.message), d.accept()))
         el = lambda i, prop='textContent': self.pg.evaluate(f"document.getElementById('{i}').{prop}")
         self.assertTrue(el('boardConnectBtn', 'disabled')); self.assertFalse(el('boardWifiBtn', 'disabled'))
-        # the Network dialog: the default address, and the Wi-Fi form is off until a firmware 9 board is on USB
+        # the Network dialog: no default address (every board has its own name from firmware 23), and the Wi-Fi form is off until a firmware 9 board is on USB
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertTrue(self.pg.evaluate("document.getElementById('netDlg').open"))
-        self.assertEqual(el('netHost', 'value'), 'glowgrid.local')
+        self.assertEqual(el('netHost', 'value'), ''); self.assertIn('glowgrid-', el('netHost', 'placeholder'))
         self.assertTrue(el('netSaveBtn', 'disabled')); self.assertIn('over USB first', el('netSetupHint'))
         # a bad address is refused without a request; an unreachable one says what to check
         self.pg.fill('#netHost', 'not an address!'); self.pg.click('#netConnectBtn'); self.pg.wait_for_timeout(200)
@@ -228,7 +228,8 @@ class SmokeWifi(unittest.TestCase):
         line = self.pg.evaluate("window.__fakeLog.find((l) => l.startsWith('WIFI SET'))")
         self.assertRegex(line, r'^WIFI SET [0-9a-f]+ [0-9a-f]+$'); self.assertNotIn('p@ss', line)
         self.assertEqual(el('netPass', 'value'), '')
-        self.assertIn("Joined My Home Net, address 192.168.50.6", el('netStatus'))
+        self.assertIn("Joined My Home Net, address 192.168.50.6 (glowgrid-5e6f.local)", el('netStatus'))
+        self.assertEqual(el('netHost', 'value'), 'glowgrid-5e6f.local', "the Network box is filled with the board's own name")
         self.assertIn('My Home Net, address 192.168.50.6', el('netSaved')); self.assertFalse(el('netClearBtn', 'hidden'))
         # an open network sends "-" for the password; Forget network clears
         self.pg.fill('#netSsid', 'Cafe'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)

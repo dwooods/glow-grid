@@ -12,7 +12,8 @@
 enum wl_status_t { WL_IDLE_STATUS = 0, WL_NO_SSID_AVAIL = 1, WL_CONNECTED = 3, WL_DISCONNECTED = 6 };
 enum arduino_event_id_t { ARDUINO_EVENT_WIFI_AP_STACONNECTED = 1, ARDUINO_EVENT_WIFI_AP_STADISCONNECTED = 2 };
 struct arduino_event_info_t { struct { int reason; } wifi_ap_stadisconnected; };
-struct EspStub { unsigned getFreeHeap() { return 123456; } };
+// getEfuseMac(): MAC 1a:2b:3c:4d:5e:6f, first byte in the lowest byte as on the chip, so the board is named glowgrid-5e6f in the tests.
+struct EspStub { unsigned getFreeHeap() { return 123456; } uint64_t getEfuseMac() { return 0x6F5E4D3C2B1AULL; } };
 static EspStub ESP;
 struct IPAddress { String toString() const { return String("127.0.0.1"); } };
 class WiFiStub {

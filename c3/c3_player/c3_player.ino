@@ -41,8 +41,8 @@
 //   INFO                       -> OK fw=<n> current=<name> ... rotate=<seconds> shuffle=<0|1> schedule=<HHMM-HHMM|off> clock=<HHMM|-> wifi=<off|connecting|connected> ip=<address or -> gap_ms=<n>
 //                                 (gap_ms: the longest the main loop went without running since the last INFO; fw 9)
 //   WIFI SET <ssid hex> <password hex, or -> for none>  -> OK wifi saved; joining. Stored in the chip's NVS, joined at every start (fw 9).
-//                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid.local
-//   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid.local ssid=<name>   (never the password)
+//                                 gg_tool.py hex-encodes for you. 2.4 GHz networks only; the board is then http://glowgrid-<4 hex>.local (fw 23)
+//   WIFI STATUS                -> OK wifi=<state> ip=<address> rssi=<dBm> host=glowgrid-<4 hex>.local ssid=<name>   (never the password)
 //   WIFI CLEAR                 -> OK wifi cleared
 //   WIFI SETUP                 -> OK setup mode ...: the board leaves its network and opens "GlowGrid-Setup-NNNN" for 5 minutes (fw 13). From
 //                                 fw 21 the network is WPA3 and its 8-digit password is shown on the panel, new every time (no WIFI KEY any more)
@@ -60,7 +60,7 @@
 #include <time.h>
 #include "gg_core.h"
 #include "setup_page.h"
-// The editor page for http://glowgrid.local/ comes from tools/build_site.py (git-ignored output). Without it the sketch still builds.
+// The editor page for http://glowgrid-<4 hex>.local/ comes from tools/build_site.py (git-ignored output). Without it the sketch still builds.
 #if !defined(GG_NO_SITE) && __has_include("site_data.h")
 #include "site_data.h"
 #define GG_HAS_SITE 1
@@ -70,7 +70,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 96           // the list lives in RAM; PUT refuses a new name once it is full (64 until fw 19; 37 examples ship)
-#define GG_FW_VERSION 22          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 23          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode is "GlowGrid-Setup-NNNN" (random NNNN each time, fw 21)
 #define SETUP_KEY_LEN 8                        // digits shown on the panel; WPA needs at least 8 characters
@@ -555,7 +555,14 @@ const char* putCommit(const String& name, size_t size) {
 // No password on the API for now (David, 2026-10-15): anyone on the home network can list, send and delete sprites. Add a token before
 // this goes beyond a home network. What fw 18 adds (security review, 2026-10-17): a web page on another site cannot drive the board
 // (Origin and Host are checked on every route, see httpGuard) and the one route that opens a network, POST /setup, only starts setup mode: joining it needs the 8 digits shown on the panel (fw 21; fw 18 to 20 asked for a stored key here).
-#define HOSTNAME "glowgrid"
+// The board's network name (fw 23): "glowgrid-" plus the last two bytes of its MAC address in hex, e.g. glowgrid-a1b2 (http://glowgrid-a1b2.local/).
+// Every board is named differently, so two boards on one network cannot fight over one mDNS name (before fw 23 all of them were "glowgrid").
+// ESP.getEfuseMac() holds the MAC with its first byte in the lowest byte, so bytes 4 and 5 (the last two) are at bits 32 and 40.
+const char* hostName() {
+  static char name[16] = "";
+  if (!name[0]) { uint64_t m = ESP.getEfuseMac(); snprintf(name, sizeof name, "glowgrid-%02x%02x", (unsigned)((m >> 32) & 0xFF), (unsigned)((m >> 40) & 0xFF)); }
+  return name;
+}
 WebServer server(80);
 Preferences prefs;
 bool serverUp = false, mdnsUp = false, wifiWasUp = false;
@@ -570,7 +577,7 @@ String setupScanText;                          // the last scan, served to the s
 
 void wifiBegin() {
   WiFi.mode(WIFI_STA);
-  WiFi.setHostname(HOSTNAME);
+  WiFi.setHostname(hostName());
   WiFi.setAutoReconnect(true);
   WiFi.setTxPower(WIFI_POWER_8_5dBm);          // the usual fix for the weak-Wi-Fi SuperMini batches (the probe ran fine at this setting)
   WiFi.begin(wifiSsid.c_str(), wifiPass.length() ? wifiPass.c_str() : NULL);
@@ -658,7 +665,7 @@ String opWifi(const char* rest) {
   if (n >= 1 && s == "STATUS") {
     String ip = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : String("-");
     int rssi = (wifiSsid.length() && WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : 0;
-    return sfmt("OK wifi=%s ip=%s rssi=%d host=" HOSTNAME ".local ssid=%s", wifiState().c_str(), ip.c_str(), rssi, wifiSsid.c_str());
+    return sfmt("OK wifi=%s ip=%s rssi=%d host=%s.local ssid=%s", wifiState().c_str(), ip.c_str(), rssi, hostName(), wifiSsid.c_str());
   }
   if (n >= 1 && s == "SCAN") return wifiScanText();
   if (n >= 1 && s == "CLEAR") {
@@ -694,7 +701,7 @@ String opWifi(const char* rest) {
 // pre-flight a browser sends before a request from the https editor page to a private address is answered (Access-Control-Allow-Private-Network).
 //
 // Who may call (fw 18; before this every page on the internet could, with CORS "*" and a multipart POST that needs no pre-flight):
-//   * Host must be this board's name (glowgrid.local, glowgrid) or an IP address: a name an attacker controls that was re-pointed at the
+//   * Host must be this board's own name (glowgrid-<4 hex>.local or glowgrid-<4 hex>, fw 23) or an IP address: a name an attacker controls that was re-pointed at the
 //     board (DNS rebinding) arrives with its own name in Host and is refused.
 //   * Origin, when a browser sends one, must be the hosted editor, this board's own page, or the developer's localhost. curl, gg_tool.py
 //     and a same-origin GET send none and pass. Checked before any POST does anything, so a cross-site form cannot delete or upload.
@@ -713,7 +720,10 @@ bool httpHostOk() {
     if (!((c >= '0' && c <= '9') || c == '.')) numeric = false;
   }
   name[n] = 0;
-  return numeric || strcmp(name, HOSTNAME ".local") == 0 || strcmp(name, HOSTNAME) == 0;
+  if (numeric) return true;
+  const char* mine = hostName();
+  size_t ml = strlen(mine);
+  return strcmp(name, mine) == 0 || (strncmp(name, mine, ml) == 0 && strcmp(name + ml, ".local") == 0);
 }
 
 bool httpOriginOk(const String& o) {
@@ -894,7 +904,7 @@ void wifiTick() {
   if (up && !wifiWasUp) {
     WiFi.setSleep(false);                       // no modem sleep: steadier latency (the probe's setting)
     if (mdnsUp) MDNS.end();
-    mdnsUp = MDNS.begin(HOSTNAME);
+    mdnsUp = MDNS.begin(hostName());
     if (mdnsUp) MDNS.addService("http", "tcp", 80);
     if (!serverUp) { httpBegin(); serverUp = true; }
   }
@@ -931,7 +941,9 @@ void setupLog(const char* what) { Serial.printf("setup: %s %s, heap=%u\n", what,
 void setupPage() {
   setupLog("page");
   setupServer.sendHeader("Cache-Control", "no-store");
-  setupServer.send(200, "text/html", SETUP_PAGE);
+  String page(SETUP_PAGE);
+  page.replace("@@HOST@@", String(hostName()) + ".local");    // the page tells the user the address to open once the board has joined
+  setupServer.send(200, "text/html", page);
 }
 
 void setupScanSend() {

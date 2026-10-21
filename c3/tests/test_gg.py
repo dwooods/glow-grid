@@ -899,14 +899,14 @@ class Board(unittest.TestCase):
         self.assertTrue(self.board.wifi_set(ssid, pw).startswith("OK wifi saved"))
         st = self.wait_for(lambda: "wifi=connected" in self.board.wifi_status() and self.board.wifi_status(), "joining")
         self.assertIn("ip=127.0.0.1", st)
-        self.assertIn("host=glowgrid.local", st)
+        self.assertIn("host=glowgrid-5e6f.local", st)
         self.assertTrue(st.endswith("ssid=" + ssid))
         self.assertNotIn("p@ss", st, "the password is never printed")
         self.assertNotIn("p@ss", self.board.simple("INFO"))
         log = self.wifi_log()
         self.assertIn(f"begin {ssid} {pw}", log)
-        self.assertIn("hostname glowgrid", log)
-        self.assertIn("mdns begin glowgrid", log)
+        self.assertIn("hostname glowgrid-5e6f", log)
+        self.assertIn("mdns begin glowgrid-5e6f", log)
         self.assertIn("mdns service http.tcp 80", log)
         self.assertIn("wifi=connected ip=127.0.0.1", self.board.simple("INFO"))
         self.assertRegex(self.board.simple("INFO"), r"gap_ms=\d+")
@@ -1097,17 +1097,17 @@ class Board(unittest.TestCase):
         self.assertIn("panel=on", self.board.simple("INFO"))
         self.assertIn("rotate=0", self.board.simple("INFO"))
         # DNS rebinding: the page's own name arrives in Host
-        for host in ("evil.example", "evil.example:80", "glowgrid.local.evil.example", "localhost", "[::1]", "a" * 60):
+        for host in ("evil.example", "evil.example:80", "glowgrid-5e6f.local.evil.example", "glowgrid.local", "glowgrid", "glowgrid-0000.local", "glowgrid-5e6f.localx", "localhost", "[::1]", "a" * 60):
             st, _, out = self.http("GET", "/list", headers={"Host": host})
             self.assertEqual(st, 403, host)
             self.assertEqual(self.http("POST", "/del?name=keep", b"", {"Host": host})[0], 403, host)
-        for host in ("glowgrid.local", "GlowGrid.local:80", "glowgrid", "192.168.50.6", "192.168.50.6:80"):
+        for host in ("glowgrid-5e6f.local", "GlowGrid-5E6F.local:80", "glowgrid-5e6f", "192.168.50.6", "192.168.50.6:80"):
             self.assertEqual(self.http("GET", "/ping", headers={"Host": host})[0], 200, host)
-        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "https://dwooods.github.io", "Host": "glowgrid.local"})[0], 200)
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "https://dwooods.github.io", "Host": "glowgrid-5e6f.local"})[0], 200)
         # the same Origin as the board's own page (the editor served by the board) works from any address the board has
         self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://192.168.50.6", "Host": "192.168.50.6"})[0], 200)
-        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://glowgrid.local", "Host": "glowgrid.local"})[0], 200)
-        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://192.168.50.6", "Host": "glowgrid.local"})[0], 403)
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://glowgrid-5e6f.local", "Host": "glowgrid-5e6f.local"})[0], 200)
+        self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://192.168.50.6", "Host": "glowgrid-5e6f.local"})[0], 403)
         self.assertEqual(self.http("GET", "/list")[2].decode().splitlines()[0].split()[:3], ["FILE", "keep", str(len(small))], "and nothing changed")
 
     FONT_PIXELS = [12, 8, 11, 11, 9, 11, 12, 7, 13, 12]   # lit pixels in each digit of the 3x5 font
@@ -1298,6 +1298,8 @@ class Board(unittest.TestCase):
             self.assertEqual(st, 200, path)
             self.assertTrue(hd["Content-Type"].startswith("text/html"))
             self.assertIn(b"Glow Grid Wi-Fi setup", body)
+            self.assertIn(b"http://glowgrid-5e6f.local/", body, "the page names this board's own address (fw 23)")
+            self.assertNotIn(b"@@HOST@@", body)
         self.assertLess(len(body), 5000, "the setup page stays small")
         self.assertIn(b"closes in", body, "the page counts the close down after Save")
         # the scan the page shows, in the same text form WIFI SCAN uses (name as hex)

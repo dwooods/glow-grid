@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Packs the Glow Grid editor (../web) into one gzipped page and writes it into the firmware sketch folder, so the board can serve the
-editor itself at http://glowgrid.local/ (firmware 12). iPhone Safari will not let the https editor call a plain-http board; a page the
+editor itself at http://glowgrid-XXXX.local/ (firmware 12; per-board name since firmware 23). iPhone Safari will not let the https editor call a plain-http board; a page the
 board serves shares the board's origin, so the same editor works there.
 
     python3 c3/tools/build_site.py            rebuild c3/c3_player/site_data.h and site_b64_*.h from web/

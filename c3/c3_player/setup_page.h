@@ -35,7 +35,7 @@ static const char SETUP_PAGE[] =
   " try{const r=await fetch('/save',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'s='+hex(s)+'&p='+(p?hex(p):'-')});\n"
   "  const t=(await r.text()).trim();\n"
   "  if(!r.ok){say(t.replace(/^ERR\\s*/,''));return}\n"
-  "  let n=8;const tick=()=>{say(n>0?'Saved. This setup network closes in '+n+' s and the board joins '+s+'. When it closes, reconnect your phone to your home Wi-Fi and open http://glowgrid.local/ . If the panel shows digits again about 30 seconds later, the name or password was wrong: join the new GlowGrid-Setup network (new name, new 8 digits on the panel) and retry.':'Closed. Reconnect your phone to your home Wi-Fi and open http://glowgrid.local/ . If the panel shows digits again after about 30 seconds, the name or password was wrong: join the new GlowGrid-Setup network (new name, new 8 digits on the panel) and retry.');if(n-->0)setTimeout(tick,1000)};tick()}\n"
-  " catch(e){say('The connection dropped. If you had just pressed Save it went through: reconnect to your home Wi-Fi and open http://glowgrid.local/')}};\n"
+  "  let n=8;const tick=()=>{say(n>0?'Saved. This setup network closes in '+n+' s and the board joins '+s+'. When it closes, reconnect your phone to your home Wi-Fi and open http://@@HOST@@/ . If the panel shows digits again about 30 seconds later, the name or password was wrong: join the new GlowGrid-Setup network (new name, new 8 digits on the panel) and retry.':'Closed. Reconnect your phone to your home Wi-Fi and open http://@@HOST@@/ . If the panel shows digits again after about 30 seconds, the name or password was wrong: join the new GlowGrid-Setup network (new name, new 8 digits on the panel) and retry.');if(n-->0)setTimeout(tick,1000)};tick()}\n"
+  " catch(e){say('The connection dropped. If you had just pressed Save it went through: reconnect to your home Wi-Fi and open http://@@HOST@@/')}};\n"
   "scan(0);\n"
   "</script>";

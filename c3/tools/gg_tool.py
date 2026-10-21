@@ -20,8 +20,8 @@ Wi-Fi (firmware 9). Set it up once over USB, then the same commands work over th
     python3 gg_tool.py wifi scan                              # the networks the board can hear (firmware 10)
     python3 gg_tool.py wifi status                            # connected? which address?
     python3 gg_tool.py wifi clear
-    python3 gg_tool.py --host glowgrid.local list            # or the board's address, e.g. --host 192.168.1.50
-    python3 gg_tool.py --host glowgrid.local put lantern.gg  # every command except wifi works this way
+    python3 gg_tool.py --host glowgrid-a1b2.local list       # the board's own name (WIFI STATUS prints it), or its address, e.g. --host 192.168.1.50
+    python3 gg_tool.py --host glowgrid-a1b2.local put lantern.gg  # every command except wifi works this way
     python3 gg_tool.py wifi key                               # the stored setup key (firmware 18 to 20 only; firmware 21 shows a new key on the panel instead); over USB only
 The network side has no password yet: anyone on your home network can change the sprites (other websites cannot, from firmware 18).
 
@@ -308,7 +308,7 @@ def sched_args(times):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port")
-    ap.add_argument("--host", help="use Wi-Fi instead of USB: glowgrid.local or the board's address")
+    ap.add_argument("--host", help="use Wi-Fi instead of USB: the board's name (glowgrid-XXXX.local, from WIFI STATUS) or its address")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
     sub.add_parser("info")
