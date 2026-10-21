@@ -288,6 +288,7 @@ let boardPage = 0;                 // 0-based page of the list
 let boardCurrent = '';             // the sprite playing, from INFO
 let boardVia = '';                 // 'usb' or 'wifi' while connected
 let boardInfo = {};                // the last INFO, parsed (the Network dialog shows the board's Wi-Fi state from it)
+let boardHostName = '';            // the board's own network name from WIFI STATUS (glowgrid-XXXX.local, firmware 23); INFO does not carry it
 const boardSupported = () => !!(window.__ggFakeSerial || navigator.serial);       // USB (Web Serial)
 const BOARD_WIFI_FW = 9;           // the first firmware with Wi-Fi
 const BOARD_SCAN_FW = 10;          // the first firmware that can list nearby networks (WIFI SCAN)
@@ -319,7 +320,7 @@ function boardSay(msg, kind) {
 function boardUi(connected) {
   $('boardConnectBtn').hidden = connected;
   $('boardWifiBtn').hidden = connected;
-  if (!connected) { boardVia = ''; boardInfo = {}; $('boardLink').textContent = ''; }
+  if (!connected) { boardVia = ''; boardInfo = {}; boardHostName = ''; $('boardLink').textContent = ''; }
   $('boardDisconnectBtn').hidden = !connected;
   $('boardTools').hidden = !connected;
   $('boardNameHint').hidden = !connected;
@@ -505,7 +506,7 @@ async function boardAttach(b) {
 const BOARD_NAMED_FW = 23;
 async function boardLearnHost(b) {
   if (b.via !== 'usb' || Number(boardFw) < BOARD_NAMED_FW || !boardInfo.wifi || ['-', 'off'].includes(boardInfo.wifi)) return;
-  try { const st = await b.wifiStatus(); if (st.state === 'connected' && st.host) { boardSaveHost(st.host); $('netHost').value = st.host; } } catch (e) { /* an old board, or busy: leave the box alone */ }
+  try { const st = await b.wifiStatus(); if (st.state === 'connected' && st.host) { boardHostName = st.host; boardSaveHost(st.host); $('netHost').value = st.host; } } catch (e) { /* an old board, or busy: leave the box alone */ }
 }
 async function boardSend() {
   if (!board) return;
@@ -649,7 +650,7 @@ function netSync() {                  // enable the Wi-Fi setup form only while 
   $('netScanHint').textContent = fw9 && !canScan ? 'Scanning needs newer board software. Type the name below.' : '';
   $('netConnectBtn').disabled = !!board && boardVia === 'wifi';
   const w = boardInfo.wifi && !['-', 'off'].includes(boardInfo.wifi) ? boardInfo.wifi : '', ip = boardInfo.ip && boardInfo.ip !== '-' ? boardInfo.ip : '';
-  $('netSaved').textContent = !usb ? 'Connect the board over USB to see or forget its saved network.' : !fw9 ? 'This board is too old to store a network.' : w ? `${w}${ip ? `, address ${ip}` : ', not joined'}` : 'None saved.';
+  $('netSaved').textContent = !usb ? 'Connect the board over USB to see or forget its saved network.' : !fw9 ? 'This board is too old to store a network.' : w ? `${w}${ip ? `, address ${ip}${boardHostName ? ` (${boardHostName})` : ''}` : ', not joined'}` : 'None saved.';
   $('netClearBtn').hidden = !usb || !fw9 || !w;
   const canSetup = !!board && boardVia === 'wifi' && Number(boardFw) >= BOARD_SETUP_FW;
   $('netSetupBtn').hidden = !canSetup;
@@ -692,7 +693,7 @@ async function netSave() {
   try {
     netSay(`Saving ${ssid} to the board…`, '');
     await b.wifiSet(ssid, pass);
-    boardInfo.wifi = ssid; boardInfo.ip = '';
+    boardInfo.wifi = ssid; boardInfo.ip = ''; boardHostName = '';
     $('netPass').value = '';
     let st = { state: '', ip: '' };
     for (let i = 0; i < 12 && board === b; i++) {
@@ -700,7 +701,7 @@ async function netSave() {
       st = await b.wifiStatus();
       if (st.state === 'connected') break;
     }
-    if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); if (st.host) { boardSaveHost(st.host); $('netHost').value = st.host; } }
+    if (st.state === 'connected') { boardInfo.ip = st.ip; boardLinkUpdate(); if (st.host) { boardHostName = st.host; boardSaveHost(st.host); $('netHost').value = st.host; } }
     if (st.state === 'connected') netResetForm();
     if (st.state === 'connected') netSay(`Joined ${ssid}, address ${st.ip}${st.host ? ` (${st.host})` : ''}. Unplug USB, power the board, then Connect over Wi-Fi.`, 'ok');
     else netSay(`Saved, not joined (${st.state || 'no answer'}). Check name, password, 2.4 GHz.`, 'err');
@@ -738,7 +739,7 @@ async function netClear() {
   $('netClearBtn').disabled = true;
   try {
     await b.wifiClear();
-    netResetForm(); boardInfo.wifi = ''; boardInfo.ip = '';
+    netResetForm(); boardInfo.wifi = ''; boardInfo.ip = ''; boardHostName = '';
     netSay(`Forgot ${was ? `"${was}"` : 'the saved network'}. Save a network here over USB, or power-cycle the board to open GlowGrid-Setup.`, 'ok');
   } catch (err) { if (board) netSay(`Board said: ${err.message}`, 'err'); }
   finally { netSync(); }
