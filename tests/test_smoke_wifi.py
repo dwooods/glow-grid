@@ -230,6 +230,7 @@ class SmokeWifi(unittest.TestCase):
         self.assertEqual(el('netPass', 'value'), '')
         self.assertIn("Joined My Home Net, address 192.168.50.6 (glowgrid-5e6f.local)", el('netStatus'))
         self.assertEqual(el('netHost', 'value'), 'glowgrid-5e6f.local', "the Network box is filled with the board's own name")
+        self.assertIn('(glowgrid-5e6f.local)', el('netSaved'), 'the saved-network line names the board after it joins')
         self.assertIn('My Home Net, address 192.168.50.6', el('netSaved')); self.assertFalse(el('netClearBtn', 'hidden'))
         # an open network sends "-" for the password; Forget network clears
         self.pg.fill('#netSsid', 'Cafe'); self.pg.click('#netSaveBtn'); self.pg.wait_for_timeout(500)
@@ -402,6 +403,7 @@ class SmokeWifi(unittest.TestCase):
         self.assertEqual(self.pg.evaluate("localStorage.getItem('ggBoardHost')"), 'glowgrid-5e6f.local')
         self.pg.click('#netBtn'); self.pg.wait_for_timeout(200)
         self.assertEqual(el('netHost', 'value'), 'glowgrid-5e6f.local')
+        self.assertIn('address 192.168.50.6 (glowgrid-5e6f.local)', el('netSaved'), 'the saved-network line names the board too')
         self.assertEqual(self.errors, [])
 
     def test_send_is_refused_when_the_board_is_full(self):
