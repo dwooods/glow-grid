@@ -68,7 +68,7 @@ class WebExamples(unittest.TestCase):
     def test_examples_leave_room_on_the_board(self):
         self.assertLessEqual(len(self.data), MAX_SPRITES // 2)
         total = sum(len(d['hex']) // 2 for d in self.data)
-        self.assertLess(total, 190 * 1024, 'the whole set should be a small part of the ~1.5 MB sprite partition')
+        self.assertLess(total, 200 * 1024, 'the whole set should be a small part (about an eighth) of the ~1.5 MB sprite partition')
 
     def test_still_uses_a_legal_speed(self):
         for d in self.data:

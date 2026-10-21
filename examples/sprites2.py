@@ -91,32 +91,40 @@ def mushroom_frames():
 
 # ---- laser sword: a green blade swinging left to right, glow changing ----
 def laser_sword_frames():
-    """12 frames: a green energy blade swings from the hilt at the bottom, and its glow pulses."""
+    """12 frames: a green energy blade swings with its hilt, the whole sword pivoting on the end of the hilt at the bottom, and its
+    glow pulses."""
     frames = []
     angles = (-60, -40, -20, 0, 20, 40, 60, 40, 20, 0, -20, -40)
     glow = ("K", "K", "k", "j", "k", "K", "K", "k", "j", "k", "K", "K")
+    px, py = 7.5, 15.0                                     # the pivot: the end of the hilt
+    rnd = lambda v: math.floor(v + 0.5)
     for ang, hal in zip(angles, glow):
         g = _grid()
         a = math.radians(ang)
+        ux, uy = math.sin(a), -math.cos(a)                 # along the sword, from the pivot toward the tip
+        vx, vy = math.cos(a), math.sin(a)                  # across the sword
         core = set()
-        for t in range(0, 45):
+        for t in range(12, 56):                            # blade from 3 px up the sword to the tip
             d = t / 4
-            core.add((round(7.5 + math.sin(a) * d), round(12.5 - math.cos(a) * d)))
+            core.add((rnd(px + ux * d), rnd(py + uy * d)))
         for x, y in core:                                  # halo first, then the white-green core on top
             for dx in (-1, 0, 1):
                 for dy in (-1, 0, 1):
                     _put(g, x + dx, y + dy, hal)
         for x, y in core:
             _put(g, x, y, "Z")
-        for y, row in zip(range(13, 16), ("SS", "ss", "GG")):          # hilt
-            _put(g, 7, y, row[0]); _put(g, 8, y, row[1])
+        for t in range(0, 12):                             # hilt, 2 px wide, turning with the blade: pommel, grip, guard
+            d = t / 4
+            c = "G" if d < 1 else ("s" if d < 2 else "S")
+            for w in (-0.5, 0.5):
+                _put(g, rnd(px + ux * d + vx * w - 0.01), rnd(py + uy * d + vy * w - 0.01), c)
         frames.append(_rows(g))
     return frames
 
 
 # ---- campfire ----
 def campfire_frames():
-    """4 frames: logs on the ground and a fire that flickers, with sparks."""
+    """4 frames: logs on the ground and a fire that flickers, with sparks; the fire burns right down between the logs."""
     logs = ["...ww......ww...", "....Lw....wL....", ".....LLwwLL.....", ".TTLLLLLLLLLLTT.", ".TToooooooooTT.."]
     heights = (
         (2, 4, 6, 8, 7, 5, 3, 2),
@@ -125,20 +133,26 @@ def campfire_frames():
         (3, 4, 7, 9, 8, 5, 5, 2),
     )
     sparks = (((5, 1),), ((10, 2), (4, 3)), ((7, 0), (11, 3)), ((6, 1), (9, 0)))
+    embers = ("OYWWYO", "YWWYOY", "OYYWWY", "YWYWYO")   # row 11 between the logs, x 5..10
+    coals = ("YOOY", "OYYO", "YOYO", "OYOY")           # row 12, x 6..9
     frames = []
-    for hs, sp in zip(heights, sparks):
+    for k, (hs, sp) in enumerate(zip(heights, sparks)):
         g = _grid()
         base = 10
         for i, h in enumerate(hs):
             x = 4 + i
-            for k in range(h):                              # k = rows above the base
-                y = base - k
-                depth = h - k                               # 1 at the tip
+            for kk in range(h):                             # kk = rows above the base
+                y = base - kk
+                depth = h - kk                              # 1 at the tip
                 inner = 2 <= i <= 5
                 c = "R" if depth <= 2 else ("O" if depth <= 4 or not inner else "Y")
-                if inner and k <= 2:
-                    c = "W" if k <= 1 else "Y"
+                if inner and kk <= 2:
+                    c = "W" if kk <= 1 else "Y"
                 _put(g, x, y, c)
+        for j, c in enumerate(embers[k]):                   # fill the gap between the fire and the logs
+            _put(g, 5 + j, 11, c)
+        for j, c in enumerate(coals[k]):
+            _put(g, 6 + j, 12, c)
         _paste(g, logs, 0, 11)
         for x, y in sp:
             _put(g, x, y, "Y")
@@ -693,16 +707,25 @@ def _blast(g, cx, cy, u):
             _put(g, cx + dx, cy + dy, "r")
 
 
+_HIT = (9, 3, 12, 5)        # the missile that gets through: starts at x 9 on row 0, hits the building at x 3 (roof row 12), offset
+
+
 def missile_defense_frames():
-    """16 frames: a small skyline and a launcher at the bottom. A red-tailed missile comes down from the top left toward the left
-    city; a cyan interceptor rises from the launcher on a clean diagonal and meets it in a flash that grows into orange and red rings.
-    Half a loop later the same happens on the right. Both cities survive."""
+    """16 frames: a small skyline and a launcher at the bottom. Three red-tailed missiles come down. Cyan interceptors rise from the
+    launcher and catch two of them in flashes that grow into orange and red rings; the third gets through and explodes on a building
+    in the left city, which stays wrecked until the loop starts again."""
     frames = []
+    x0h, xh, yh, offh = _HIT
     for k in range(16):
         g = _grid()
+        uh = (k - offh) % 16                                             # the third missile's clock
+        wrecked = uh >= 8
         for x in range(16):                                              # ground, with the launcher in the middle
             _put(g, x, 15, "n")
         for x, h, wins in _SKYLINE:                                      # two small cities
+            if wrecked and abs(x - xh) <= 1:
+                _put(g, x, 14, "r" if (k + x) % 2 else "s")              # rubble, still glowing
+                continue
             for i in range(h):
                 _put(g, x, 14 - i, "Y" if i in wins else "a")
         _put(g, 7, 14, "G"); _put(g, 8, 14, "G"); _put(g, 9, 14, "G"); _put(g, 8, 13, "G")
@@ -721,6 +744,13 @@ def missile_defense_frames():
                         _put(g, 8 + step * t, 13 - t, col)
             if u >= 7:
                 _blast(g, xp, 7, u)
+        if uh <= 7:                                                      # the third missile, 1.5 rows a frame, no interceptor
+            for j, col in enumerate(("W", "R", "R", "r")):
+                y = round(1.5 * uh) - j
+                if 0 <= y <= yh:
+                    _put(g, x0h + round((xh - x0h) * y / yh), y, col)
+        if 8 <= uh <= 12:                                                # it explodes on the roof
+            _blast(g, xh, yh, uh - 1)
         frames.append(_rows(g))
     return frames
 
@@ -778,8 +808,9 @@ def skull_frames():
 
 
 def black_cat_frames():
-    """4 frames: a black cat arches its back high and bristles its tail, eyes glowing."""
+    """4 frames: a black cat arches its back high and bristles its tail, eyes glowing; the head stays still."""
     frames = []
+    hy = 9                                                            # the head does not move
     for k in range(4):
         g = _grid()
         arch = (0, 2, 4, 2)[k]
@@ -788,8 +819,7 @@ def black_cat_frames():
             top = 10 - lift
             for y in range(round(top), 13):
                 _put(g, x, y, "x")
-        _ell(g, 12.5, 9 - arch // 2, 2, 2, "x")                       # head rises a little with the arch
-        hy = 9 - arch // 2
+        _ell(g, 12.5, hy, 2, 2, "x")
         _put(g, 11, hy - 3, "x"); _put(g, 14, hy - 3, "x"); _put(g, 11, hy - 2, "x"); _put(g, 14, hy - 2, "x")   # ears
         eye = "H" if k % 2 == 0 else "Y"
         _put(g, 12, hy, eye); _put(g, 14, hy, eye)
@@ -808,18 +838,20 @@ def black_cat_frames():
 
 
 def moon_frames():
-    """8 frames: a light grey-white full moon, three dark clouds drifting across (they wrap round, so the loop is seamless), and six
-    yellow and gold stars that twinkle."""
+    """8 frames: a light grey-white full moon with three dark craters, three dark clouds drifting across (they wrap round, so the
+    loop is seamless), and six yellow and gold stars spread round the sky that twinkle."""
     frames = []
     for k in range(8):
         g = _grid()
-        for x, y in ((1, 1), (13, 1), (2, 12), (14, 13), (1, 7), (14, 5)):
+        for x, y in ((1, 1), (14, 1), (0, 8), (15, 9), (3, 14), (12, 15)):
             _put(g, x, y, "Y" if (k + x + y) % 3 else "G")            # twinkle between yellow and gold
         _ell(g, 8, 7, 4, 4, "z")                                      # moon
         for x, y in ((6, 4), (7, 4), (5, 5)):                         # bright rim
             _put(g, x, y, "W")
-        for x, y in ((6, 6), (9, 8), (7, 9), (10, 6)):                # craters
-            _put(g, x, y, "S")
+        for x, y in ((9, 4), (10, 4), (9, 5), (10, 5),                # three dark craters
+                     (5, 7), (6, 7), (5, 8), (6, 8),
+                     (9, 9), (10, 9), (9, 10)):
+            _put(g, x, y, "s")
         for off, cy, w in ((0, 6, 6), (8, 10, 5), (16, 2, 5)):        # three clouds, 3 px a frame: 8 frames = one 24 px lap
             cx = (3 * k + off) % 24 - 6
             for x in range(cx, cx + w):
@@ -829,30 +861,72 @@ def moon_frames():
     return frames
 
 
+_WAVE = (((13, 8), (14, 7), (14, 6), (14, 5)),       # arm up
+         ((13, 8), (14, 7), (15, 6), (15, 5)),       # tipped out
+         ((13, 8), (14, 7), (14, 6), (14, 5)),
+         ((13, 8), (14, 7), (13, 6), (13, 5)))       # tipped in
+
+
 def tombstone_frames():
-    """4 frames: a tombstone on a grassy mound; a ghost peeks up behind it."""
+    """4 frames: a small tombstone on a grassy mound; a ghost behind it waves one arm."""
     frames = []
     for k in range(4):
         g = _grid()
-        peek = (0, 1, 2, 1)[k]
-        if peek:
-            _ell(g, 12, 7 - peek, 2, 2, "C")
-            for x in range(10, 15):
-                _put(g, x, 8 - peek, "C")
-            _put(g, 11, 6 - peek, "E"); _put(g, 13, 6 - peek, "E")
-        _ell(g, 6.5, 6, 4, 3, "s")                                    # rounded top
-        for y in range(6, 14):
-            for x in range(2, 11):
+        _ell(g, 10.5, 6, 2, 2, "C")                                   # ghost: head, body, wavy hem
+        for y in range(6, 12):
+            for x in range(8, 14):
+                _put(g, x, y, "C")
+        for x in range(8, 14):
+            _put(g, x, 12, "C" if (x + k) % 2 else ".")
+        for y in range(6, 12):
+            _put(g, 13, y, "c")                                       # shadow side
+        _put(g, 9, 6, "E"); _put(g, 11, 6, "E")                       # eyes
+        _put(g, 10, 8, "P")                                           # mouth
+        for x, y in _WAVE[k]:                                         # the waving arm
+            _put(g, x, y, "C")
+        _ell(g, 5, 7, 3, 2, "s")                                      # tombstone in front: rounded top
+        for y in range(7, 14):
+            for x in range(2, 9):
                 _put(g, x, y, "s")
-        for x in (3, 10):
-            for y in range(6, 14):
-                _put(g, x, y, "x")
-        _put(g, 6, 7, "W"); _put(g, 7, 7, "W"); _put(g, 6, 8, "W"); _put(g, 7, 8, "W")   # R.I.P. cross
-        for x in range(5, 9):
-            _put(g, x, 9, "W")
-        for x in range(16):                                            # mound
+        for y in range(7, 14):
+            _put(g, 2, y, "x"); _put(g, 8, y, "x")
+        for y in range(8, 12):                                        # cross
+            _put(g, 5, y, "W")
+        _put(g, 4, 9, "W"); _put(g, 6, 9, "W")
+        for x in range(16):                                           # mound
             _put(g, x, 14, "n"); _put(g, x, 15, "n")
         for x in (1, 5, 9, 13):
             _put(g, x, 13, "N")
         frames.append(_rows(g))
     return frames
+
+
+# ---- pong: two paddles knock a ball back and forth across a dashed net ----
+def pong_frames():
+    """16 frames: classic pong in white. The ball crosses the court and back once a loop, bouncing off the bottom wall on the way
+    right and the top wall on the way back; each paddle (3 px) follows the ball up and down and meets it at its own edge."""
+    def ball(k):
+        tx = k / 8 if k <= 8 else (16 - k) / 8                       # across and back once in 16 frames
+        j = (k + 4) % 16
+        ty = j / 8 if j <= 8 else (16 - j) / 8                        # off the bottom wall going right, the top going left
+        return round(1 + 13 * tx), round(1 + 13 * ty)
+
+    def paddle(by, receiving):
+        """The paddle the ball is heading for follows half its height off the meeting row (8), so it is right there when the ball
+        arrives; the other one follows a quarter, drifting back to the middle."""
+        return round(8 + (by - 8) * (0.5 if receiving else 0.25))
+
+    frames = []
+    for k in range(16):
+        g = _grid()
+        for y in range(0, 16, 2):                                     # net
+            _put(g, 7, y, "s")
+        bx, by = ball(k)
+        left, right = paddle(by, k >= 8), paddle(by, k < 8)
+        for d in (-1, 0, 1):
+            _put(g, 0, left + d, "W"); _put(g, 15, right + d, "W")
+        _put(g, bx, by, "W")
+        frames.append(_rows(g))
+    return frames
+
+
