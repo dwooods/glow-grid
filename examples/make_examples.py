@@ -17,7 +17,7 @@ from sprites import (  # noqa: E402
     rocket_frames, to_image)
 from sprites2 import (  # noqa: E402
     bat_frames, black_cat_frames, campfire_frames, cauldron_frames, cow_frames, diamond_frames, duck_frames,
-    fireworks_frames, hedgehog_frames, jack_frames, laser_sword_frames, lightning_frames, meteor_frames, moon_frames, mushroom_frames, pig_frames, skull_frames,
+    fireworks_frames, hedgehog_frames, jack_frames, laser_sword_frames, lightning_frames, meteor_frames, missile_defense_frames, moon_frames, mushroom_frames, pig_frames, skull_frames,
     spider_frames, tombstone_frames, tree_frames, turtle_frames, witch_hat_frames)
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "images")
@@ -64,6 +64,7 @@ EXAMPLES = {
     "fireworks": (fireworks_frames(), 6),
     "meteors": (meteor_frames(), 8),
     "lightning": (lightning_frames(), 6),
+    "missile_defense": (missile_defense_frames(), 8),
 }
 
 

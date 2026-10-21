@@ -652,6 +652,79 @@ def lightning_frames():
     return frames
 
 
+# ---- missile defense: incoming missiles are caught by interceptors over a small skyline ----
+_BLASTS = (                                 # offsets for the blast rings, centre excluded
+    ((1, 0), (-1, 0), (0, 1), (0, -1)),                                                         # 0: the four cells around the centre
+    ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)),                     # 1: the full ring around the centre
+    ((2, 0), (-2, 0), (0, 2), (0, -2), (2, 1), (-2, 1), (2, -1), (-2, -1), (1, 2), (-1, 2), (1, -2), (-1, -2)),  # 2: a wider ring
+    ((3, 0), (-3, 0), (0, 3), (0, -3)),                                                         # 3: four far sparks
+    ((2, 2), (-2, 2), (2, -2), (-2, -2)),                                                       # 4: dying embers on the diagonals
+)
+_SKYLINE = (            # (x, building height, lit window rows from the top, counted down from the roof)
+    (1, 3, (1,)), (2, 2, ()), (3, 3, (0, 2)), (4, 2, (1,)), (5, 1, ()),
+    (10, 2, (1,)), (11, 3, (0, 2)), (12, 1, ()), (13, 3, (1,)), (14, 2, ()),
+)
+# (x where the incoming missile starts at row 0, its x at row 7 = where it is caught, the interceptor's step in x)
+_RAIDS = ((0, 2, -1, 0), (15, 14, 1, 8))          # the second raid runs half a loop (8 frames) after the first
+
+
+def _blast(g, cx, cy, u):
+    """Frame u (7-11) of a blast: a white flash, then rings that grow, turn orange then red and break up."""
+    if u == 7:
+        _put(g, cx, cy, "W")
+        for dx, dy in _BLASTS[0]:
+            _put(g, cx + dx, cy + dy, "Y")
+    elif u == 8:
+        _put(g, cx, cy, "Y")
+        for dx, dy in _BLASTS[1]:
+            _put(g, cx + dx, cy + dy, "O")
+    elif u == 9:
+        for dx, dy in _BLASTS[1]:
+            _put(g, cx + dx, cy + dy, "R")
+        for dx, dy in _BLASTS[2]:
+            _put(g, cx + dx, cy + dy, "O")
+    elif u == 10:
+        for dx, dy in _BLASTS[2]:
+            _put(g, cx + dx, cy + dy, "R")
+        for dx, dy in _BLASTS[3]:
+            _put(g, cx + dx, cy + dy, "r")
+    elif u == 11:
+        for dx, dy in _BLASTS[4]:
+            _put(g, cx + dx, cy + dy, "r")
+
+
+def missile_defense_frames():
+    """16 frames: a small skyline and a launcher at the bottom. A red-tailed missile comes down from the top left toward the left
+    city; a cyan interceptor rises from the launcher on a clean diagonal and meets it in a flash that grows into orange and red rings.
+    Half a loop later the same happens on the right. Both cities survive."""
+    frames = []
+    for k in range(16):
+        g = _grid()
+        for x in range(16):                                              # ground, with the launcher in the middle
+            _put(g, x, 15, "n")
+        for x, h, wins in _SKYLINE:                                      # two small cities
+            for i in range(h):
+                _put(g, x, 14 - i, "Y" if i in wins else "a")
+        _put(g, 7, 14, "G"); _put(g, 8, 14, "G"); _put(g, 9, 14, "G"); _put(g, 8, 13, "G")
+        for x0, xp, step, off in _RAIDS:
+            u = (k - off) % 16
+            if u <= 7:                                                   # the incoming missile: white head, red tail, one row a frame
+                for j, col in enumerate(("W", "R", "R", "r")):
+                    y = u - j
+                    if y >= 0:
+                        x = x0 + round((xp - x0) * y / 7)
+                        _put(g, x, y, col)
+            if 2 <= u <= 7:                                              # the interceptor: cyan head and a pale tail on a 45-degree line
+                for j, col in enumerate(("V", "C", "c")):
+                    t = u - 1 - j
+                    if t >= 1:
+                        _put(g, 8 + step * t, 13 - t, col)
+            if u >= 7:
+                _blast(g, xp, 7, u)
+        frames.append(_rows(g))
+    return frames
+
+
 _SPIDER_LEGS = (      # per side: one leg angled back, one straight out, one angled forward; (dx, dy) from the body's centre, two poses
     (((3, -1), (4, -2), (5, -3)), ((3, 0), (4, 0), (5, 0)), ((3, 1), (4, 2), (5, 3))),
     (((3, -1), (4, -2), (4, -3)), ((3, 0), (4, 1), (5, 1)), ((3, 1), (4, 2), (4, 3))),
