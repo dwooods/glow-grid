@@ -220,7 +220,11 @@ class HttpBoard:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 data = r.read()
         except urllib.error.HTTPError as e:                  # the board's own ERR text comes with the 4xx
-            raise RuntimeError(e.read().decode(errors="replace").strip() or f"HTTP {e.code}")
+            try:
+                text = e.read().decode(errors="replace").strip()
+            finally:
+                e.close()
+            raise RuntimeError(text or f"HTTP {e.code}")
         except (urllib.error.URLError, OSError) as e:
             raise TimeoutError(f"cannot reach the board at {self.base} ({getattr(e, 'reason', e)}). Is it on the same Wi-Fi? "
                                "Check with:  gg_tool.py wifi status  (over USB)")

@@ -71,6 +71,11 @@ def write_text(path, text):
         fh.write(text)
 
 
+def read_file(path, mode="r"):
+    with open(path, mode) as fh:
+        return fh.read()
+
+
 def build(out, *args, defs=()):
     cmd = ["g++", "-std=c++17", "-O1", *[f"-D{d}" for d in defs], *args, "-o", out]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -209,7 +214,7 @@ class IdeBuild(unittest.TestCase):
     a function may not be defined after its first use only by luck of the IDE. Mimic that rewrite and compile."""
 
     def test_compiles_with_generated_prototypes(self):
-        src = open(os.path.join(SKETCH, "c3_player.ino")).read()
+        src = read_file(os.path.join(SKETCH, "c3_player.ino"))
         import re
         protos = [m.group(1) + ";" for m in re.finditer(r"^((?:const char\*|void|bool|String|int)\s+\w+\([^)]*\))\s*\{", src, re.M)]
         self.assertGreater(len(protos), 10)
@@ -280,7 +285,7 @@ class PngToGg(unittest.TestCase):
         p = os.path.join(self.d, "alpha.png")
         img.save(p)
         out = self.conv.convert(p)
-        frames, fps, b, g = gg.unpack(open(out, "rb").read())
+        frames, fps, b, g = gg.unpack(read_file(out, "rb"))
         self.assertEqual(frames[0][3 * 16 + 3], (10, 20, 30))
         self.assertEqual(frames[0][0], (0, 0, 0))
         self.assertEqual(sum(1 for px in frames[0] if px != (0, 0, 0)), 1)
@@ -388,6 +393,9 @@ class Board(unittest.TestCase):
         return env
 
     def start(self, wifi=False):
+        if getattr(self, "proc", None) is not None and self.proc.poll() is None:
+            self.proc.kill()                     # a second start() in one test must not leave the first simulator running
+            self.proc.wait()
         self.wifi_sim = wifi
         self.fs = tempfile.mkdtemp(prefix="gg_fs_")
         self.led = os.path.join(self.fs + "_led.log")
@@ -861,7 +869,7 @@ class Board(unittest.TestCase):
     # ---- Wi-Fi (firmware 9) ----
     def wifi_log(self):
         p = self.fs + "_wifi.log"
-        return open(p).read() if os.path.exists(p) else ""
+        return read_file(p) if os.path.exists(p) else ""
 
     def wait_for(self, fn, what, timeout=6.0):
         end = time.time() + timeout
@@ -876,7 +884,7 @@ class Board(unittest.TestCase):
         """Waits until the board's HTTP server is up (the simulator writes its port to a file)."""
         def port():
             p = self.fs + "_port"
-            return open(p).read().strip() if os.path.exists(p) and open(p).read().strip() else None
+            return (read_file(p).strip() or None) if os.path.exists(p) else None
         return "127.0.0.1:" + self.wait_for(port, "the HTTP server to start")
 
     def http(self, method, path, body=None, headers=None, base=None):
@@ -887,7 +895,10 @@ class Board(unittest.TestCase):
             with urllib.request.urlopen(req, timeout=10) as r:
                 return r.status, r.headers, r.read()
         except urllib.error.HTTPError as e:
-            return e.code, e.headers, e.read()
+            try:
+                return e.code, e.headers, e.read()
+            finally:
+                e.close()
 
     def test_wifi_credentials_over_usb(self):
         self.start(wifi=True)
@@ -1093,7 +1104,7 @@ class Board(unittest.TestCase):
         h.update(evil)
         self.assertEqual(self.http("POST", "/put?name=other", body, h)[0], 403)
         self.assertEqual(sorted(os.listdir(self.fs)), ["keep.gg"], "no temp file, no new sprite")
-        self.assertEqual(open(os.path.join(self.fs, "keep.gg"), "rb").read(), small, "the sprite was not replaced")
+        self.assertEqual(read_file(os.path.join(self.fs, "keep.gg"), "rb"), small, "the sprite was not replaced")
         self.assertIn("panel=on", self.board.simple("INFO"))
         self.assertIn("rotate=0", self.board.simple("INFO"))
         # DNS rebinding: the page's own name arrives in Host
@@ -1176,7 +1187,7 @@ class Board(unittest.TestCase):
         self.assertTrue(hb.put(a).startswith("OK saved alpha"))
         files, summary = hb.list()
         self.assertEqual(files, [("alpha", 12 + 3 * 768)])
-        self.assertEqual(hb.get("alpha"), open(a, "rb").read())
+        self.assertEqual(hb.get("alpha"), read_file(a, "rb"))
         self.assertIn("fw=", hb.simple("INFO"))
         self.assertEqual(hb.simple("SHOW alpha"), "OK showing alpha")
         self.assertEqual(hb.simple("OFF"), "OK panel off")
@@ -1261,7 +1272,7 @@ class Board(unittest.TestCase):
     def setup_base(self):
         def port():
             p = self.fs + "_setupport"
-            return open(p).read().strip() if os.path.exists(p) and open(p).read().strip() else None
+            return (read_file(p).strip() or None) if os.path.exists(p) else None
         return "127.0.0.1:" + self.wait_for(port, "the setup page's server to start")
 
     def log_count(self, text):
