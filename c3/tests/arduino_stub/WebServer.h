@@ -170,6 +170,9 @@ class WebServer {
     if (lfd < 0) return;
     cfd = accept(lfd, NULL, NULL);
     if (cfd < 0) return;
+    // BSD/macOS: an accepted socket inherits O_NONBLOCK from the listener (Linux does not). Left non-blocking, recv() returns
+    // EAGAIN when the request has not arrived yet, the code below takes that for a closed peer and closes, and the client gets a reset.
+    fcntl(cfd, F_SETFL, fcntl(cfd, F_GETFL, 0) & ~O_NONBLOCK);
     timeval tv = {2, 0};
     setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
     std::string req;

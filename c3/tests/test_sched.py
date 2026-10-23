@@ -7,7 +7,6 @@ and time servers in the Wi-Fi log, and the zone string is checked against the re
 import calendar
 import os
 import re
-import subprocess
 import sys
 import time
 import unittest
@@ -22,6 +21,21 @@ TZ = "PST8PDT,M3.2.0,M11.1.0"
 def la_epoch(y, mo, d, h, mi, s=0, dst=True):
     """UNIX time of a Los Angeles wall-clock moment (the offset is passed in; dst=True is UTC-7, else UTC-8)."""
     return calendar.timegm((y, mo, d, h, mi, s)) + (7 if dst else 8) * 3600
+
+
+def c_library_local_time(epoch, fmt):
+    """Local time of a UNIX time under the firmware's zone string, via the C library (tzset/strftime): portable, unlike `date -d` (GNU only)."""
+    old = os.environ.get("TZ")
+    os.environ["TZ"] = TZ
+    time.tzset()
+    try:
+        return time.strftime(fmt, time.localtime(epoch))
+    finally:
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        time.tzset()
 
 
 class Sched(_tg.Board):
@@ -71,7 +85,7 @@ class Sched(_tg.Board):
     def test_clock_zone_and_ntp_start(self):
         # 2026-10-18 12:34 PDT and 2026-12-01 12:34 PST: the zone string gives the right local time in both seasons (checked with the real C library)
         for stamp, (y, mo, d), dst in (("1234", (2026, 10, 18), True), ("1234", (2026, 12, 1), False)):
-            out = subprocess.run(["date", "-d", f"@{la_epoch(y, mo, d, 12, 34, dst=dst)}", "+%H%M"], env=dict(os.environ, TZ=TZ), capture_output=True, text=True).stdout.strip()
+            out = c_library_local_time(la_epoch(y, mo, d, 12, 34, dst=dst), "%H%M")
             self.assertEqual(out, stamp)
         board = self.boot(epoch=la_epoch(2026, 12, 1, 12, 34, dst=False))
         time.sleep(1.5)
@@ -122,7 +136,7 @@ class Sched(_tg.Board):
 
     def test_command_names_fit_the_serial_buffer(self):
         # doCommand() reads the name with %7s into cmd[8]: a longer name is cut and never matches (SCHEDULE became SCHEDUL once)
-        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "c3_player", "c3_player.ino")).read()
+        src = _tg.read_file(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "c3_player", "c3_player.ino"))
         body = src[src.index("void doCommand(char* line)"):src.index("void handleSerial()")]
         size = int(re.search(r"char cmd\[(\d+)\]", body).group(1))
         self.assertIn("%" + str(size - 1) + "s", body, "the scanf width must be one less than the buffer")
