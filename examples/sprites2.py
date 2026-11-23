@@ -930,3 +930,24 @@ def pong_frames():
     return frames
 
 
+
+
+# ---- eyes in the dark: pairs of glowing eyes open one by one, blink, then all turn red and vanish ----
+_EYES = (          # (x of the left eye, y): the right eye sits two pixels to the right; every eye is red and one pixel high
+    (2, 2), (10, 1), (5, 6), (11, 8), (1, 11), (8, 13), (13, 4), (2, 8),
+)
+_OPENS = (0, 0, 3, 6, 6, 9, 12, 12)  # the frame each pair opens: two pairs, then one, two, one, two; once open it stays open
+
+
+def eyes_frames():
+    """16 frames of black with eight pairs of red eyes: they open in groups (two, one, two, one, two) three frames apart and each pair
+    stays lit to the last frame. Shown slowly (4 fps)."""
+    frames = []
+    for k in range(16):
+        g = _grid()
+        for i, (x, y) in enumerate(_EYES):
+            if k >= _OPENS[i]:
+                _put(g, x, y, "R")
+                _put(g, x + 2, y, "R")
+        frames.append(_rows(g))
+    return frames

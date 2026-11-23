@@ -16,7 +16,7 @@ from sprites import (  # noqa: E402
     heart_frames, key_frames, knight_frames, lantern_frames, owl_frames, potion_frames,
     rocket_frames, to_image)
 from sprites2 import (  # noqa: E402
-    bat_frames, black_cat_frames, campfire_frames, cauldron_frames, cow_frames, duck_frames,
+    bat_frames, black_cat_frames, campfire_frames, cauldron_frames, cow_frames, duck_frames, eyes_frames,
     fireworks_frames, hedgehog_frames, jack_frames, laser_sword_frames, lightning_frames, meteor_frames, missile_defense_frames, moon_frames, mushroom_frames, pig_frames, pong_frames, skull_frames,
     spider_frames, tombstone_frames, tree_frames, turtle_frames, witch_hat_frames)
 
@@ -64,6 +64,7 @@ EXAMPLES = {
     "lightning": (lightning_frames(), 6),
     "missile_defense": (missile_defense_frames(), 8),
     "pong": (pong_frames(), 8),
+    "eyes": (eyes_frames(), 4),
 }
 
 
