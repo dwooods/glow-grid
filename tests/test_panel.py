@@ -131,6 +131,19 @@ class PanelPackets(unittest.TestCase):
             rebuilt += w[15:]
         self.assertEqual(rebuilt, payload)
 
+    def test_saving_to_a_slot_and_the_slot_commands(self):
+        out = run_node("console.log(JSON.stringify([Array.from(P.gifWindows(Uint8Array.of(1,2,3), 7)[0]), Array.from(P.showSlotCmd(3)), Array.from(P.deleteSlotCmd(300))]));")
+        self.assertEqual(out[0][14], 7, 'the slot byte follows the GIF tail byte')
+        self.assertEqual(out[1], [7, 0, 8, 0x80, 1, 0, 3])
+        self.assertEqual(out[2], [7, 0, 2, 1, 1, 0, 300 & 255], 'a slot number is one byte')
+
+    def test_every_example_has_a_slot_gif(self):
+        sizes = run_node("""
+const fs = require('fs'); const src = fs.readFileSync(require('path').join(__dirname || '.', 'x'), 'utf8');
+""".replace("const fs", "const fs") if False else "const m = {exports:{}}; new Function('module', require('fs').readFileSync(" + json.dumps(os.path.join(ROOT, 'web', 'js', 'examples_data.js')) + ", 'utf8') + ';module.exports={GG_EXAMPLES};')(m); console.log(JSON.stringify(m.exports.GG_EXAMPLES.map((e) => P.exampleGif(e, hexToRgb).length)));")
+        self.assertGreaterEqual(len(sizes), 40)
+        self.assertTrue(all(0 < n < 20000 for n in sizes))
+
     def test_text_windows_use_the_text_header(self):
         w = bytes(run_node("console.log(JSON.stringify(Array.from(P.textWindows([new Array(32).fill(0x8001)], 5, 80, 0, [255, 32, 32])[0])));"))
         self.assertEqual(w[2:4], b'\x00\x01')

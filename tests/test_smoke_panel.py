@@ -83,12 +83,35 @@ class PanelCard(unittest.TestCase):
             # text, still effect: two cells
             pg.fill('#panelText', 'hi'); pg.select_option('#panelEffect', '5')
             before = len(pg.evaluate("window.__sent"))
-            pg.click('#panelSendText'); pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Sent')")
+            pg.click('#panelSendText'); pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Sent.') && !document.getElementById('panelStatus').textContent.includes('drawing')")
             sent = pg.evaluate("window.__sent")[before:]
             win = bytes(b for chunk in sent for b in chunk)
             self.assertEqual(win[2:4], b'\x00\x01', 'text window')
             self.assertEqual(win[15], 2, 'a still effect sends the whole text as two 16x32 cells')
             self.assertEqual(win[15 + 4], 5, 'effect Blink')
+            self.assertEqual(self.errors, [])
+            br.close()
+
+    def test_slots_save_show_delete_and_fill(self):
+        with sync_playwright() as pw:
+            br, pg = self.page(pw)
+            pg.goto(self.url + '?experimental=panel'); pg.wait_for_selector('#btPanelCard')
+            self.assertTrue(pg.locator('#panelSaveAll').is_disabled())
+            pg.click('#panelConnect'); pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Connected')")
+            pg.fill('#panelSlot', '4'); pg.click('#panelSaveSlot')
+            pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Saved to slot 4')")
+            win = bytes(b for chunk in pg.evaluate("window.__sent")[1:] for b in chunk)
+            self.assertEqual(win[14], 4, 'saved into slot 4')
+            n = len(pg.evaluate("window.__sent")); pg.click('#panelShowSlot')
+            pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Asked the panel to show slot 4')")
+            self.assertEqual(pg.evaluate("window.__sent")[n], [7, 0, 8, 0x80, 1, 0, 4])
+            n = len(pg.evaluate("window.__sent")); pg.click('#panelDeleteSlot')
+            pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Asked the panel to clear slot 4')")
+            self.assertEqual(pg.evaluate("window.__sent")[n], [7, 0, 2, 1, 1, 0, 4])
+            pg.fill('#panelSlot', '10'); pg.fill('#panelSlotCount', '3'); pg.click('#panelSaveAll')
+            pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Saved all 3 examples to slots 10 to 12')", timeout=20000)
+            pg.click('#panelTour')
+            pg.wait_for_function("document.getElementById('panelStatus').textContent.startsWith('Tour finished')", timeout=20000)
             self.assertEqual(self.errors, [])
             br.close()
 
