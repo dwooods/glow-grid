@@ -52,3 +52,16 @@ $('colsInput').value = state.cols; $('rowsInput').value = state.rows;
 $('fpsInput').value = state.fps; setNameField(state.name);
 buildLut(); buildGridDOM(); renderSwatches(); setColor(state.color, false); updateUndoBtns();
 afterFrameChange();
+
+/* ---------- experimental Bluetooth panel card (off unless switched on; see js/panel.js) ---------- */
+// Open the editor once with ?experimental=panel to switch it on in this browser; ?experimental=off switches it off again.
+// It needs a secure page and Web Bluetooth (Chrome or Edge on a computer), so the page the board serves never loads it.
+(() => {
+  try {
+    const q = new URLSearchParams(location.search).get('experimental'), key = 'glowgrid-experimental-panel';
+    if (q === 'panel') localStorage.setItem(key, '1');
+    if (q === 'off') localStorage.removeItem(key);
+    if (localStorage.getItem(key) !== '1' || !onWeb || !window.isSecureContext || !navigator.bluetooth) return;
+    const s = document.createElement('script'); s.src = 'js/panel.js'; document.head.appendChild(s);
+  } catch (e) { /* storage blocked: the card stays off */ }
+})();

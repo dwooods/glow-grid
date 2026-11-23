@@ -41,7 +41,19 @@ Licences below are as published by each project when this file was written. Chec
 
 ### Editor (web/)
 
-The editor is plain HTML, CSS and JavaScript with no bundled libraries, fonts or run-time requests to other sites. It uses each device's own system fonts (the installed UI and monospace fonts), so nothing is downloaded.
+The editor is plain HTML, CSS and JavaScript with no bundled libraries or run-time requests to other sites. It uses each device's own system fonts (the installed UI and monospace fonts), so nothing is downloaded.
+
+**Experimental Bluetooth panel card (`web/js/panel.js`, off by default).**
+
+| Source | Licence | Used for |
+|---|---|---|
+| [pypixelcolor](https://github.com/lucagoc/pypixelcolor) (Luca Goc) | MIT | Read as protocol documentation for the 32 x 32 "iPixel Color" Bluetooth panels (service, packet layout, text cells). No code was copied; the card's code is written from that description and checked on a real panel. Check the licence again before a release. |
+| [go-ipxl](https://yewolf.fr/projects/go-ipxl) | not checked | Read the same way, as a second description of the protocol. Nothing copied. |
+| Press Start 2P, Copyright 2012 The Press Start 2P Project Authors (cody@zone38.net) | SIL Open Font License 1.1 | Letter shapes, stored as bitmaps in `web/js/panel_fonts.js`. |
+| Jersey 15 and Jersey 20, Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jersey) | SIL Open Font License 1.1 | Letter shapes, stored as bitmaps in `web/js/panel_fonts.js`. |
+| DejaVu Sans Bold and DejaVu Sans Mono Bold, Copyright (c) 2003 Bitstream, Inc. and (c) 2006 Tavmjong Bah; DejaVu changes are in the public domain | Bitstream Vera licence (permissive) | Letter shapes, stored as bitmaps in `web/js/panel_fonts.js`. |
+
+The three fonts are not shipped as font files: `tools/make_panel_fonts.py` draws each letter once, without anti-aliasing, and `web/js/panel_fonts.js` holds only those bitmaps. The OFL fonts' licence text is at https://openfontlicense.org; the Press Start 2P name is a Reserved Font Name and is used here only to say where the shapes came from. If you change the font set, check each font's licence again. The Wingdings font is not used (it is Microsoft's and cannot be redistributed).
 
 ## 2. The enclosure descends from three CC BY designs
 
