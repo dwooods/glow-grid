@@ -1,4 +1,4 @@
-# Deploys web/ to GitHub Pages (https://dwooods.github.io/glow-grid/).
+# Deploys web/ to GitHub Pages (https://thewoodshed.dev/glow-grid/).
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
 name: Deploy simulator to GitHub Pages
 

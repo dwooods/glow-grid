@@ -5,7 +5,7 @@ One-time setup, about five minutes. You need a computer (Windows, Mac or Linux) 
 ## 1. Put the board on your Wi-Fi
 
 1. Plug the board into the computer with the USB cable. The panel may light up.
-2. In Chrome or Edge, open **https://dwooods.github.io/glow-grid/**.
+2. In Chrome or Edge, open **https://thewoodshed.dev/glow-grid/**.
 3. In the **Board** card, press **Connect over USB**. Pick the board in the list the browser shows and press Connect. The card should say "Connected. Firmware 10." (If it says a lower number, the board needs a newer program: ask whoever sent it.)
 4. Press **Network** at the top. Under "Set up the board's Wi-Fi", press **Scan for networks**. The panel freezes for a few seconds while the board listens; that is normal.
 5. Pick your Wi-Fi from **Networks found**, type its password, and press **Save to board**.
