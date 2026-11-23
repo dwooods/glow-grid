@@ -223,8 +223,10 @@
     return code;
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  let connected = false;
   function setConnected(on) {
-    for (const id of ['panelDisconnect', 'panelSendDrawing', 'panelSendText', 'panelSaveSlot', 'panelShowSlot', 'panelDeleteSlot', 'panelSaveAll', 'panelTour']) $p(id).disabled = !on;
+    connected = on; renderList();
+    for (const id of ['panelDisconnect', 'panelSendDrawing', 'panelSendText', 'panelSaveSlot', 'panelShowSlot', 'panelDeleteSlot', 'panelSaveAll', 'panelDelAll', 'panelTour']) $p(id).disabled = !on;
     $p('panelConnect').disabled = on;
   }
   async function connect() {
@@ -273,53 +275,100 @@
     say('Sent.' + note);
   }
 
-  /* ---------- panel slots (experimental test): save to the panel, play, clear, fill until something fails ---------- */
+  /* ---------- panel slots (experimental): stored sprites are picked by name; the slot number is handled here ---------- */
   let stopFlag = false;
   const slotNames = (() => { try { return JSON.parse(localStorage.getItem('glowgrid-panel-slots') || '{}'); } catch (e) { return {}; } })();
-  const rememberSlot = (n, name) => { slotNames[n] = name; try { localStorage.setItem('glowgrid-panel-slots', JSON.stringify(slotNames)); } catch (e) { /* the note is only a convenience */ } };
-  const slotNo = () => { const n = Math.floor(Number($p('panelSlot').value)); if (!(n >= 1 && n <= 255)) throw new Error('Slot must be a whole number from 1 to 255.'); return n; };
-  const countNo = () => Math.max(1, Math.min(255, Math.floor(Number($p('panelSlotCount').value)) || 40));
-  async function saveDrawingSlot() {
-    const n = slotNo(), fps = state.fps || 6, delay = Math.max(2, Math.round(100 / fps));
-    const gif = makeGif(state.frames.map((f) => toPanelFrame(f, state.cols, state.rows, hexToRgb)), W, H, delay);
-    say(`Saving the drawing to slot ${n} (${gif.length} bytes)…`);
-    const code = await sendWindows(gifWindows(gif, n));
-    rememberSlot(n, 'drawing');
-    say(`Saved to slot ${n}; the panel answered with code ${code}. Press Show slot ${n} to check it.`);
+  const saveNames = () => { try { localStorage.setItem('glowgrid-panel-slots', JSON.stringify(slotNames)); } catch (e) { /* the note is only a convenience */ } };
+  const PAGE = 5; let page = 0;
+  const usedSlots = () => Object.keys(slotNames).map(Number).sort((a, b) => a - b);
+  const slotOf = (name) => { const k = Object.keys(slotNames).find((x) => slotNames[x] === name); return k ? Number(k) : 0; };
+  function nextFree() { let n = 1; while (slotNames[n] && n < 256) n++; return n; }
+  const rememberSlot = (n, name) => { slotNames[n] = name; saveNames(); renderList(); };
+  // The panel cannot list what it holds, so this list is what this browser remembers saving. Play is one small command, no transfer.
+  function renderList() {
+    const ul = $p('panelList'); if (!ul) return;
+    const used = usedSlots(), pages = Math.max(1, Math.ceil(used.length / PAGE)), keep = $p('panelPick').value;
+    page = Math.min(Math.max(page, 0), pages - 1); ul.innerHTML = '';
+    $p('panelPick').innerHTML = '';
+    for (const n of used) $p('panelPick').add(new Option(slotNames[n], String(n)));
+    if (keep && slotNames[keep]) $p('panelPick').value = keep;
+    if (!used.length) { const li = document.createElement('li'); li.className = 'hint'; li.textContent = 'Nothing saved from this browser yet. Press Import examples, or Save drawing to panel.'; ul.appendChild(li); }
+    for (const n of used.slice(page * PAGE, (page + 1) * PAGE)) {
+      const li = document.createElement('li'); li.className = 'board-row';
+      const nm = document.createElement('span'); nm.className = 'board-name'; nm.textContent = slotNames[n]; nm.title = 'slot ' + n;
+      const play = document.createElement('button'); play.type = 'button'; play.className = 'btn btn-quiet'; play.textContent = 'Play'; play.disabled = !connected;
+      play.addEventListener('click', guarded(async () => { await writeAll(showSlotCmd(n)); say(`Playing ${slotNames[n]}.`); }));
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'btn btn-quiet danger'; del.textContent = 'Delete'; del.disabled = !connected;
+      del.addEventListener('click', guarded(() => removeSlot(n)));
+      li.append(nm, play, del); ul.appendChild(li);
+    }
+    $p('panelPager').hidden = used.length <= PAGE;
+    $p('panelPageInfo').textContent = `${page * PAGE + 1}–${Math.min((page + 1) * PAGE, used.length)} of ${used.length}`;
+    $p('panelPrev').disabled = page <= 0; $p('panelNext').disabled = page >= pages - 1;
   }
-  async function showSlot() { const n = slotNo(); await writeAll(showSlotCmd(n)); say(`Asked the panel to show slot ${n}. If it is empty the panel may cycle through what it has.`); }
-  async function deleteSlot() { const n = slotNo(); await writeAll(deleteSlotCmd(n)); delete slotNames[n]; say(`Asked the panel to clear slot ${n}.`); }
+  async function removeSlot(n) {
+    const name = slotNames[n];
+    if (!confirm(`Clear ${name} from the panel?`)) return;
+    await writeAll(deleteSlotCmd(n)); delete slotNames[n]; saveNames(); renderList(); say(`Cleared ${name}.`);
+  }
+  const picked = () => { const n = Number($p('panelPick').value); if (!n) throw new Error('Pick a saved sprite first.'); return n; };
+  async function saveDrawingSlot() {
+    const name = ($p('panelSlotName').value.trim() || 'drawing').slice(0, 40), had = slotOf(name);
+    if (had && !confirm(`${name} is already on the panel. Replace it?`)) { say('Not saved.'); return; }
+    const n = had || nextFree(); if (n > 255) throw new Error('All 255 panel slots are used. Delete one first.');
+    const fps = state.fps || 6, delay = Math.max(2, Math.round(100 / fps));
+    const gif = makeGif(state.frames.map((f) => toPanelFrame(f, state.cols, state.rows, hexToRgb)), W, H, delay);
+    say(`Saving ${name} to the panel (${gif.length} bytes)…`);
+    const code = await sendWindows(gifWindows(gif, n));
+    rememberSlot(n, name); $p('panelPick').value = String(n);
+    say(`Saved ${name} to the panel (slot ${n}; the panel answered with code ${code}). Press Play on its row to check it.`);
+  }
+  async function showSlot() { const n = picked(); await writeAll(showSlotCmd(n)); say(`Playing ${slotNames[n]}.`); }
+  async function deleteSlot() { await removeSlot(picked()); }
+  // Stores every shipped example the panel does not already have, each in the next free slot. Never replaces a sprite of the same name.
   async function saveAll() {
     if (typeof GG_EXAMPLES === 'undefined') throw new Error('The example sprites are not loaded.');
-    const first = slotNo(), list = GG_EXAMPLES.slice(0, countNo()); let total = 0, last = 0, codes = [];
-    stopFlag = false;
-    for (let i = 0; i < list.length; i++) {
-      const n = first + i;
-      if (n > 255) { say(`Stopped at slot 255 (the highest number). Saved ${i} example${i === 1 ? '' : 's'}, slots ${first} to ${last}.`); return; }
-      if (stopFlag) { say(`Stopped. Saved ${i} example${i === 1 ? '' : 's'}, slots ${first} to ${last}.`); return; }
-      const gif = exampleGif(list[i], hexToRgb);
-      say(`Saving ${list[i].name} to slot ${n} (${i + 1} of ${list.length}, ${gif.length} bytes; ${total} bytes so far)…`);
-      try {
-        codes.push(await sendWindows(gifWindows(gif, n)));
-      } catch (e) {
-        say(`Slot ${n} (${list[i].name}) failed: ${e.message}. Slots ${first} to ${last} were saved before that (${i} example${i === 1 ? '' : 's'}, ${total} bytes). Now press Tour slots to see which ones really play.`);
-        return;
+    const todo = GG_EXAMPLES.filter((e) => !slotOf(e.name));
+    if (!todo.length) { say(`All ${GG_EXAMPLES.length} examples are already on the panel.`); return; }
+    stopFlag = false; let total = 0, done = 0;
+    for (const ex of todo) {
+      const n = nextFree();
+      if (n > 255) { say(`The panel has no free slot left. Imported ${done} example${done === 1 ? '' : 's'}.`); return; }
+      if (stopFlag) { say(`Stopped. Imported ${done} example${done === 1 ? '' : 's'}.`); return; }
+      const gif = exampleGif(ex, hexToRgb);
+      say(`Importing ${ex.name} (${done + 1} of ${todo.length}, ${gif.length} bytes; ${total} bytes so far)…`);
+      try { await sendWindows(gifWindows(gif, n)); } catch (e) {
+        say(`${ex.name} failed: ${e.message}. ${done} example${done === 1 ? ' was' : 's were'} imported before that (${total} bytes). Press Tour to see which ones really play.`); return;
       }
-      rememberSlot(n, list[i].name); total += gif.length; last = n;
+      rememberSlot(n, ex.name); total += gif.length; done++;
       await sleep(250);
     }
-    say(`Saved all ${list.length} examples to slots ${first} to ${last} (${total} bytes); the panel answered every send. That does not prove they all stayed, so press Tour slots and watch.`);
+    say(`Imported ${done} example${done === 1 ? '' : 's'} (${total} bytes). The panel answered every send.`);
+  }
+  // Clears the shipped examples this browser remembers saving (matched by name; a sprite of yours saved under an example's name goes too).
+  async function deleteExamples() {
+    if (typeof GG_EXAMPLES === 'undefined') throw new Error('The example sprites are not loaded.');
+    const names = new Set(GG_EXAMPLES.map((e) => e.name)), mine = usedSlots().filter((n) => names.has(slotNames[n]));
+    if (!mine.length) { say('No examples are on the panel.'); return; }
+    if (!confirm(`Clear ${mine.length} example${mine.length === 1 ? '' : 's'} from the panel? Your own sprites stay.`)) { say('Not deleted.'); return; }
+    stopFlag = false; let done = 0;
+    for (const n of mine) {
+      if (stopFlag) break;
+      say(`Clearing examples… ${done + 1} of ${mine.length} (${slotNames[n]})`);
+      await writeAll(deleteSlotCmd(n)); delete slotNames[n]; saveNames(); done++;
+      await sleep(150);
+    }
+    renderList(); say(stopFlag ? `Stopped. Cleared ${done} example${done === 1 ? '' : 's'}.` : `Cleared ${done} example${done === 1 ? '' : 's'} from the panel. Your own sprites stay.`);
   }
   async function tour() {
-    const first = slotNo(), count = countNo(); stopFlag = false;
-    for (let i = 0; i < count; i++) {
-      const n = first + i;
-      if (n > 255 || stopFlag) break;
-      await writeAll(showSlotCmd(n));
-      say(`Showing slot ${n}${slotNames[n] ? ' (' + slotNames[n] + ')' : ''}. Watch the panel; ${i + 1} of ${count}. Press Stop to end.`);
-      await sleep(2500);
+    const used = usedSlots(); stopFlag = false;
+    if (!used.length) { say('Nothing saved from this browser yet.'); return; }
+    for (let i = 0; i < used.length && !stopFlag; i++) {
+      await writeAll(showSlotCmd(used[i]));
+      say(`Showing ${slotNames[used[i]]} (${i + 1} of ${used.length}). Press Stop to end.`);
+      await sleep(window.ggPanelTourMs || 2500);
     }
-    say(stopFlag ? 'Tour stopped.' : 'Tour finished. Note which slots showed the wrong picture, or the same one as another slot.');
+    say(stopFlag ? 'Tour stopped.' : 'Tour finished.');
   }
 
   function build() {
@@ -338,15 +387,19 @@
       '<label class="field-inline">Colour <input id="panelColor" type="color" value="#ff2020"></label>' +
       '<label class="field-inline" title="Still effects only. One line keeps a short word on one line; Auto picks the biggest letters.">Lines <select id="panelLines"><option value="1">One line</option><option value="0">Auto</option></select></label>' +
       '<button id="panelSendText" class="btn" type="button" disabled>Send text</button></div>' +
-      '<div class="btn-row"><span class="hint">Panel slots (test)</span>' +
-      '<label class="field-inline">Slot <input id="panelSlot" type="number" min="1" max="255" value="1" style="width:4.5em"></label>' +
-      '<button id="panelSaveSlot" class="btn" type="button" title="Store the drawing on the panel in this slot" disabled>Save drawing to slot</button>' +
-      '<button id="panelShowSlot" class="btn" type="button" disabled>Show slot</button>' +
-      '<button id="panelDeleteSlot" class="btn btn-quiet" type="button" disabled>Delete slot</button></div>' +
-      '<div class="btn-row"><label class="field-inline">How many <input id="panelSlotCount" type="number" min="1" max="255" value="40" style="width:4.5em"></label>' +
-      '<button id="panelSaveAll" class="btn" type="button" title="Save the shipped examples to consecutive slots starting at Slot, until one fails" disabled>Save examples from slot</button>' +
-      '<button id="panelTour" class="btn" type="button" title="Play each slot for a few seconds so you can see which ones are really there" disabled>Tour slots</button>' +
+      '<div class="btn-row"><span class="hint">Saved on the panel</span>' +
+      '<label class="field-inline">Name <input id="panelSlotName" type="text" value="drawing" maxlength="40" size="14" spellcheck="false" autocomplete="off"></label>' +
+      '<button id="panelSaveSlot" class="btn" type="button" title="Store the drawing on the panel under this name. The same name replaces it." disabled>Save drawing to panel</button>' +
+      '<button id="panelSaveAll" class="btn" type="button" title="Store the built-in example sprites on the panel. Never replaces one that is already there." disabled>Import examples</button>' +
+      '<button id="panelDelAll" class="btn btn-quiet" type="button" title="Clear the built-in example sprites from the panel. Your own sprites stay, unless you gave one an example\'s name." disabled>Delete examples</button></div>' +
+      '<div class="btn-row"><label class="field-inline">Sprite <select id="panelPick"></select></label>' +
+      '<button id="panelShowSlot" class="btn" type="button" disabled>Play</button>' +
+      '<button id="panelDeleteSlot" class="btn btn-quiet" type="button" disabled>Delete</button>' +
+      '<button id="panelTour" class="btn btn-quiet" type="button" title="Play every saved sprite for a few seconds each" disabled>Tour</button>' +
       '<button id="panelStop" class="btn btn-quiet" type="button">Stop</button></div>' +
+      '<ul class="board-list" id="panelList"></ul>' +
+      '<div class="board-pager" id="panelPager" hidden><button id="panelPrev" class="btn btn-quiet" type="button" aria-label="Previous page">‹ Prev</button>' +
+      '<span id="panelPageInfo" role="status"></span><button id="panelNext" class="btn btn-quiet" type="button" aria-label="Next page">Next ›</button></div>' +
       '<p class="hint board-status" id="panelStatus" role="status"></p>';
     after.parentNode.insertBefore(card, after.nextSibling);
     for (const n of FONT_NAMES) $p('panelFont').add(new Option(n, n));
@@ -359,8 +412,12 @@
     $p('panelShowSlot').addEventListener('click', guarded(showSlot));
     $p('panelDeleteSlot').addEventListener('click', guarded(deleteSlot));
     $p('panelSaveAll').addEventListener('click', guarded(saveAll));
+    $p('panelDelAll').addEventListener('click', guarded(deleteExamples));
     $p('panelTour').addEventListener('click', guarded(tour));
     $p('panelStop').addEventListener('click', () => { stopFlag = true; });
+    $p('panelPrev').addEventListener('click', () => { page--; renderList(); });
+    $p('panelNext').addEventListener('click', () => { page++; renderList(); });
+    renderList();
     say('Not connected.');
   }
   build();
