@@ -70,7 +70,7 @@
 #define BTN_NEXT 5
 #define BTN_OFF 7
 #define MAX_SPRITES 96           // the list lives in RAM; PUT refuses a new name once it is full (64 until fw 19; 37 examples ship)
-#define GG_FW_VERSION 23          // bump on every change pushed to the repo; INFO reports it
+#define GG_FW_VERSION 24          // bump on every change pushed to the repo; INFO reports it
 #define TMP_PATH "/upload.tmp"
 #define SETUP_SSID "GlowGrid-Setup"            // the network the board hosts in setup mode is "GlowGrid-Setup-NNNN" (random NNNN each time, fw 21)
 #define SETUP_KEY_LEN 8                        // digits shown on the panel; WPA needs at least 8 characters
@@ -730,6 +730,7 @@ bool httpOriginOk(const String& o) {
   if (o.length() == 0) return true;
   const char* s = o.c_str();
   if (strcmp(s, "https://dwooods.github.io") == 0) return true;      // the hosted editor (and the installed app)
+  if (strcmp(s, "https://thewoodshed.dev") == 0) return true;        // the same editor on its own domain
   if (strncmp(s, "http://", 7) != 0) return false;                   // also "null" (file:// pages, sandboxed frames)
   s += 7;
   size_t n = strcspn(s, ":");

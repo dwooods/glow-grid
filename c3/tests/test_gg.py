@@ -1002,6 +1002,16 @@ class Board(unittest.TestCase):
         self.assertEqual((st, body), (204, b""))
         self.assertEqual(hd["Access-Control-Allow-Private-Network"], "true")
         self.assertEqual(hd["Access-Control-Allow-Origin"], "https://dwooods.github.io")
+        # the same editor on its own domain is allowed, a look-alike or the plain-http form is not
+        domain = {"Origin": "https://thewoodshed.dev"}
+        st, hd, body = self.http("GET", "/ping", headers=domain)
+        self.assertEqual((st, body), (200, b"PONG\n"))
+        self.assertEqual(hd["Access-Control-Allow-Origin"], "https://thewoodshed.dev")
+        st, hd, body = self.http("OPTIONS", "/put?name=a", headers={"Origin": "https://thewoodshed.dev", "Access-Control-Request-Method": "POST",
+                                                                  "Access-Control-Request-Private-Network": "true"})
+        self.assertEqual((st, hd["Access-Control-Allow-Private-Network"]), (204, "true"))
+        for bad in ("http://thewoodshed.dev", "https://thewoodshed.dev.evil.example", "https://evil.thewoodshed.dev"):
+            self.assertEqual(self.http("GET", "/ping", headers={"Origin": bad})[0], 403, bad)
         self.assertEqual(self.http("GET", "/ping", headers={"Origin": "http://localhost:8000"})[0], 200, "a developer's local server")
         st, _, body = self.http("GET", "/info")
         self.assertEqual(st, 200)
