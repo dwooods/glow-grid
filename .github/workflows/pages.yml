@@ -1,5 +1,7 @@
 # Deploys web/ to GitHub Pages (https://thewoodshed.dev/glow-grid/).
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+# Two jobs, as in GitHub's own Pages template: build uploads the site, deploy (a separate job) publishes it. The
+# artifact lookup in deploy then never races the upload, and a failed deploy can be re-run without rebuilding.
 name: Deploy simulator to GitHub Pages
 
 on:
@@ -18,11 +20,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,5 +33,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
